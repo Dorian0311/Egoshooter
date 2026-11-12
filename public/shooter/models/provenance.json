@@ -1,0 +1,28 @@
+{
+  "source": "https://github.com/Kenton-GMI/muster-ww2",
+  "commit": "7d2fa86ebc3b999eaf085831cdcd5dccefea63d4",
+  "license": "MIT",
+  "models": [
+    {
+      "file": "kar98k.glb",
+      "sha256": "4552c9624d28349614a795e9f69d1812452b4b7f68a69a734116bc9c2c695ab9"
+    },
+    {
+      "file": "mp40.glb",
+      "sha256": "41e184ca0ba8458cc0a725f2adfdd6bded10b083a08deebd846e938f4e764a70"
+    },
+    {
+      "file": "m1-garand.glb",
+      "sha256": "21b2bb94ea97736499beb6ff3d9f43ff6dc8ef33a8869d44800a5e9a65647886"
+    },
+    {
+      "file": "thompson.glb",
+      "sha256": "2b8e68d739aa01fe2c520519fd60bb62350bd6ec29b80a7ed80a152977860663"
+    },
+    {
+      "file": "m40-helmet.glb",
+      "sha256": "6db41b01a3fa8e2101f30799f95b9b83fc9627de0053696c2b62623dc43eab9f"
+    }
+  ],
+  "derivation": "Exported from original procedural mesh builders; material parameters retained and shader restored at runtime. No game-ripped assets or account required."
+}

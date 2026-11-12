@@ -1,0 +1,11 @@
+{
+  "id": "deadpool",
+  "triangles": 32016,
+  "draws": 5,
+  "bones": 374,
+  "source": "User-provided archive; not a verified redistribution license",
+  "bytes": 2070836,
+  "sha256": "163ef752da23b80267e4e387daa033bf03763555d9449ccf8e49854036af4029",
+  "maxTextureSize": 1024,
+  "animation": "Source skinning retained; gameplay animation is procedural. No downloaded scripts executed."
+}

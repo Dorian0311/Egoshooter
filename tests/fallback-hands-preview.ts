@@ -1,0 +1,22 @@
+import * as T from 'three';
+import {createFallbackHands} from '../client/fallbackHands';
+import {createViewmodel} from '../client/viewmodel';
+const canvas=document.querySelector('canvas')!,renderer=new T.WebGLRenderer({canvas,antialias:true});
+renderer.toneMapping=T.ACESFilmicToneMapping;renderer.setPixelRatio(Math.min(1.5,devicePixelRatio));
+const scene=new T.Scene();scene.background=new T.Color('#354047');
+const camera=new T.PerspectiveCamera(65,1,.02,100);scene.add(camera);
+scene.add(new T.HemisphereLight(0xffffff,0x354047,1.5));const light=new T.DirectionalLight(0xffffff,3);light.position.set(-2,3,1);scene.add(light);
+const weapon=new T.Group();camera.add(weapon);
+const metal=new T.MeshStandardMaterial({color:0x303936,roughness:.5});
+const barrel=new T.Mesh(new T.BoxGeometry(.065,.07,.32),metal);barrel.position.set(.24,-.21,-.55);weapon.add(barrel);
+const grip=new T.Mesh(new T.BoxGeometry(.065,.2,.11),metal);grip.position.set(.24,-.34,-.42);grip.rotation.x=-.35;weapon.add(grip);
+const hands=createFallbackHands(weapon),viewmodel=createViewmodel(weapon);let previous=performance.now(),reloadUntil=0;
+document.querySelector('button')!.onclick=()=>{reloadUntil=performance.now()+2600;};
+function frame(now:number){
+ const dt=Math.min(.05,(now-previous)/1000);previous=now;
+ const index=Number(document.querySelector('select')!.value);hands.update(index,'fr','alpine',true);
+ barrel.scale.z=index===1?1:index===2?1.8:2.8;barrel.position.z=index===1?-.55:index===2?-.7:-.88;
+ const pose=viewmodel.update({dt,now,weaponIndex:index,aim:false,yaw:0,pitch:0,moving:0,sprinting:false,grounded:true,reloadRemainingMs:Math.max(0,reloadUntil-now),reloadDurationMs:2600,muzzleY:-.18});hands.animatePose(pose.reloadProgress);
+ renderer.setSize(canvas.clientWidth,canvas.clientHeight,false);camera.aspect=canvas.clientWidth/canvas.clientHeight;camera.updateProjectionMatrix();renderer.render(scene,camera);requestAnimationFrame(frame);
+}requestAnimationFrame(frame);
+window.addEventListener('pagehide',()=>{hands.dispose();viewmodel.dispose();barrel.geometry.dispose();grip.geometry.dispose();metal.dispose();renderer.dispose();});

@@ -1,0 +1,7 @@
+# Apply with the existing SupportHub Compose file (same environment on both stacks).
+services:
+  backend:
+    environment:
+      SHOOTER_ENABLED: ${SHOOTER_ENABLED:-false}
+      SHOOTER_PUBLIC_URL: ${SHOOTER_PUBLIC_URL:-}
+      SHOOTER_TICKET_SECRET: ${SHOOTER_TICKET_SECRET:-}

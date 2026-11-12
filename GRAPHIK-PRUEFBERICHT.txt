@@ -1,0 +1,64 @@
+GRAFIKPRÜFUNG – EGOSHOOTER / ALTSTADT 1945
+Stand: 12. November 2026
+
+UMGESETZTE ÜBERARBEITUNG
+- Variierte PBR-Putzfassaden, Sockelmauerwerk, Fensterlaibungen, Rahmen,
+  Fensterläden, Gesimse, Traufen und Schornsteinkronen.
+- Unregelmäßige konvexe Felsgeometrie mit PBR-Material. Darstellung, Treffer,
+  Bewegung und Landung verwenden dieselben Flächen; Protokollversion 7.
+- Anatomische Waffenhände, Haut-/Stoffmaterialien und gefaltete Ärmel.
+- Bildratenunabhängiger Rückstoß, geglättetes Zielen, Lauf-/Sprintbewegung,
+  Waffenwechsel und prozedurale Nachladebewegungen; bewegliches G36-Magazin.
+- Statische Waffen-/Weltteile werden nach Material gebündelt. Bewegliche Teile
+  bleiben unabhängig. Instanzierte Kisten und Vegetation reduzieren Draw Calls.
+- HDR-Beleuchtung, animiertes Wasser, Alpenkulisse, SMAA-Kantenglättung.
+
+EMPFOHLENE EINSTELLUNG
+Auto · Ziel 60 FPS ist der Standard. Für Full-HD-Oberfläche (1920 x 1080)
+verwendet die Szene maximal 1280 x 720 interne Pixel. Unter dauerhafter Last
+sinkt die interne Auflösung bis auf 960 x 540. Die Oberfläche bleibt scharf.
+Auto aktualisiert Schatten maximal mit 30 Hz; AO und Bloom sind deaktiviert.
+Die festen Stufen Flüssig, Hoch und Ultra bleiben manuell verfügbar.
+Die Auflösungsautomatik kann CPU-/Draw-Call-Engpässe nicht allein beheben.
+
+PRÜFVERFAHREN
+Lokale Grafikprüfung mit festen Kameras, Waffenwechsel, Nachladen und bis zu
+acht Figuren. Je Messfenster 120 requestAnimationFrame-Intervalle, nach fünf
+Sekunden Anlaufzeit. Dokumentiert werden Auflösung, FPS, P95 und Renderlast.
+Messungen im integrierten Browser sind keine allgemeine Hardwaregarantie.
+GEMESSENE GEMEINSAME VERSION
+- Full-HD-Viewport, Auto, Alpen, G36 und sieben bewegte Remote-Figuren.
+- Historische Figuren: 10 Fenster mit je 120 Bildern, 57–60 FPS; P95 17–33 ms.
+  Interne Auflösung durchgehend 1280 x 720. 304 Farb-Draws / 517 mit Schatten.
+  Vor Figurenbündelung: 722 / 1349 Draws, 46–52 FPS bei reduzierten 960 x 540.
+- Bonus-Mix (Deadpool, Harley, Rocket, Homer): 5 Fenster mit je 120 Bildern,
+  durchgehend gerundet 60 FPS, P95 17 ms, 1280 x 720 intern.
+  82 Farb-Draws / 144 mit Schatten. Der lokale Spieler ist in Egoansicht sichtbar.
+- Werte gelten für die beschriebenen Vorschau-Szenen im lokalen Testbrowser.
+  Keine Zusage stabiler 60 FPS auf unbekannter Hardware oder in jedem Gefecht.
+- 43 automatisierte Tests bestanden, einschließlich Figuren-/Waffenbündelung,
+  Animation, Auswahl/Synchronisierung, Fels-Raycasts und Bewegungsphysik.
+- TypeScript und Produktionsbuild erfolgreich. Vite meldet ein großes Hauptbundle
+  (ca. 369 kB gzip); Figuren-GLBs werden separat und bei Bedarf geladen.
+- Acht echte WebSocket-Clients: vollständiges beschleunigtes Match und Revanche,
+  Auth-Ablehnung, Countdown, Eingabeprüfung, Reconnect, 50–150 ms simulierte RTT.
+- Browserprüfung ohne gemeldete Warnungen/Fehler; Startauswahl aller vier Bonus-
+  Figuren vorhanden. Lokaler Einzelspielstart mit ausgewähltem Rocket geprüft.
+- Messdaten/Screenshots lokal in artifacts/benchmark-historical.json,
+  artifacts/benchmark-bonus.json und artifacts/realism-*.jpg (nicht im Git).
+
+GRENZEN
+Das Spiel bleibt ein grafischer Prototyp. Keine fotorealistische AAA-Produktion,
+kein Motion Capture, keine vollständig animierten Finger oder Magazinphysik.
+Fensterdetails liegen auf den vorhandenen Wandflächen; Gebäude besitzen keine
+vollständig neu modellierten Innenräume. Wasser nutzt Umgebungsreflexionen.
+Keine öffentliche Bereitstellung, kein Produktions-Login-/Datenbanktest und
+kein vollständiger zehnminütiger manueller Acht-Spieler-Kampftest.
+
+LOKAL STARTEN
+npm ci
+npm run preview:solo
+Spiel: http://127.0.0.1:5173/
+Grafikprüfung: http://127.0.0.1:5173/tests/graphics-preview.html
+GitHub-Ziel: https://github.com/Dorian0311/Egoshooter
+Die Vorschau bindet ausschließlich an Loopback. Keine Live-Veröffentlichung.

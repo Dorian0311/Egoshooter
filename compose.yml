@@ -1,0 +1,48 @@
+name: altstadt1940
+services:
+  game:
+    build: .
+    restart: unless-stopped
+    init: true
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: [no-new-privileges:true]
+    ports: ["127.0.0.1:2567:2567"]
+    environment:
+      PORT: 2567
+      SHOOTER_TICKET_SECRET: ${SHOOTER_TICKET_SECRET:?required}
+      SHOOTER_ORIGINS: ${SHOOTER_ORIGINS:?required}
+      DATABASE_URL: postgres://shooter:${POSTGRES_PASSWORD:?required}@db:5432/shooter
+    depends_on:
+      db: { condition: service_healthy }
+    mem_limit: 768m
+    cpus: 1.5
+    healthcheck:
+      test:
+        [
+          CMD,
+          node,
+          -e,
+          "fetch('http://127.0.0.1:2567/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    logging: { driver: json-file, options: { max-size: 10m, max-file: "3" } }
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: shooter
+      POSTGRES_DB: shooter
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?required}
+    volumes: [shooter-db:/var/lib/postgresql/data]
+    mem_limit: 512m
+    cpus: 0.5
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U shooter -d shooter]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+volumes:
+  shooter-db:

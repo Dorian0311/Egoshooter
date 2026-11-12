@@ -1,0 +1,11 @@
+{
+  "id": "rocket",
+  "triangles": 14758,
+  "draws": 3,
+  "bones": 49,
+  "source": "User-provided archive; not a verified redistribution license",
+  "bytes": 1485124,
+  "sha256": "08a213894be23c59daa122aa347c70af4fbce4b6f21553f71de12b18cd25d625",
+  "maxTextureSize": 1024,
+  "animation": "Source skinning retained; gameplay animation is procedural. No downloaded scripts executed."
+}

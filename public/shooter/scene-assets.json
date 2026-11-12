@@ -1,0 +1,78 @@
+[
+  {
+    "name": "wooden_military_crate",
+    "license": "CC0-1.0",
+    "source": "https://polyhaven.com/a/wooden_military_crate",
+    "files": [
+      {
+        "path": "shooter/models/wooden_military_crate/asset.gltf",
+        "source": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/wooden_military_crate/wooden_military_crate_1k.gltf",
+        "sha256": "e8d8d21d112fef04c8e9fd05a62dc7c94260bc230a43d86d0e1f4b5a888a9499"
+      },
+      {
+        "path": "shooter/models/wooden_military_crate/textures/wooden_military_crate_nor_gl_1k.jpg",
+        "source": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/wooden_military_crate/wooden_military_crate_nor_gl_1k.jpg",
+        "sha256": "89cc5ad94dd7ce425f2b9b04f37f2266778923369c77d8945101456f47579cf3"
+      },
+      {
+        "path": "shooter/models/wooden_military_crate/textures/wooden_military_crate_diff_1k.jpg",
+        "source": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/wooden_military_crate/wooden_military_crate_diff_1k.jpg",
+        "sha256": "aa6ace45bef9947586c07283cd11a2d737fe0783a18df69a76f77f59d4fb776d"
+      },
+      {
+        "path": "shooter/models/wooden_military_crate/textures/wooden_military_crate_arm_1k.jpg",
+        "source": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/wooden_military_crate/wooden_military_crate_arm_1k.jpg",
+        "sha256": "fe27fa628a9134f81958413c1a11deea8074fe40424c1a8a48ec459f2dde7955"
+      },
+      {
+        "path": "shooter/models/wooden_military_crate/wooden_military_crate.bin",
+        "source": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/4k/wooden_military_crate/wooden_military_crate.bin",
+        "sha256": "cf6fd469a476d834f9724f8b8f762630040d8e785e8697c5d7994ae3e840e727"
+      }
+    ]
+  },
+  {
+    "name": "barrel_03",
+    "license": "CC0-1.0",
+    "source": "https://polyhaven.com/a/barrel_03",
+    "files": [
+      {
+        "path": "shooter/models/barrel_03/asset.gltf",
+        "source": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/barrel_03/barrel_03_1k.gltf",
+        "sha256": "80e2faf48b7423bb522b573e459d99c5656a16763285ec8268e957fc7d41f9b8"
+      },
+      {
+        "path": "shooter/models/barrel_03/textures/barrel_03_diff_1k.jpg",
+        "source": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/barrel_03/barrel_03_diff_1k.jpg",
+        "sha256": "62feb27dfa9a0daf3f323fdc1ddc2d8e4a5996cf2c72fe50197b55c2b9cba7f3"
+      },
+      {
+        "path": "shooter/models/barrel_03/barrel_03.bin",
+        "source": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/4k/barrel_03/barrel_03.bin",
+        "sha256": "10f3202e9ac9acf8dd896f1562c64db58311ffef89efb402d8433e03ad486427"
+      },
+      {
+        "path": "shooter/models/barrel_03/textures/barrel_03_nor_gl_1k.jpg",
+        "source": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/barrel_03/barrel_03_nor_gl_1k.jpg",
+        "sha256": "ade97c52985047858a4f38226a9b8a888e3a766ba0434700b4618fb25424c4b6"
+      },
+      {
+        "path": "shooter/models/barrel_03/textures/barrel_03_arm_1k.jpg",
+        "source": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/barrel_03/barrel_03_arm_1k.jpg",
+        "sha256": "2cec2338b36d7322bef55e6a1d0884b223c5ed383cf986a58bfa461478c64c7e"
+      }
+    ]
+  },
+  {
+    "name": "kloppenheim_06_puresky",
+    "license": "CC0-1.0",
+    "source": "https://polyhaven.com/a/kloppenheim_06_puresky",
+    "files": [
+      {
+        "path": "shooter/environment/sky.hdr",
+        "source": "https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/kloppenheim_06_puresky_1k.hdr",
+        "sha256": "206c67e3a1b992282821cf06662bdd69bbb4915c1c4444a66338a40d6a7d4e34"
+      }
+    ]
+  }
+]

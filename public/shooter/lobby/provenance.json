@@ -1,0 +1,15 @@
+{
+  "tool": "built-in image_gen.imagegen",
+  "reference": "User-supplied lobby mockup codex-clipboard-2a745ed2-ac65-40a7-9946-23b0dceb8ce1.png",
+  "purpose": "Lobby concept artwork; not a representation of runtime character models or exact map geometry",
+  "assets": [
+    {
+      "file": "encampment-v1.png",
+      "prompt": "Edit target: the supplied game lobby screenshot. Produce the clean background artwork only for use behind real HTML controls. Remove ALL text, headings, logos, borders, buttons, map thumbnail cards and UI overlays, reconstructing the background naturally underneath. Preserve the exact cinematic WWII encampment scene, helmeted soldier on the RIGHT inspecting his equipment, tent, table, map, jeep, bridge silhouette on left, muted olive charcoal palette, atmospheric light beams, tiny orange embers. Preserve composition with dark quiet LEFT HALF for future interface overlay and figure on right. Wide landscape 16:9. No text or UI anywhere. Detailed realistic cloth, skin and equipment, no cartoon geometry. This is background concept art for the lobby, not a gameplay screenshot."
+    },
+    {
+      "file": "maps-v1.png",
+      "prompt": "Create a single landscape contact sheet for two realistic WWII game map thumbnails. Exactly two equal horizontal panels stacked vertically, no spacing, no divider, NO TEXT, NO UI, NO typography. Overall image aspect 2:1; each panel aspect4:1. TOP PANEL: cinematic photograph-style Cologne Hohenzollern railway bridge spanning the Rhine in 1945, dark iron truss arches on the RIGHT, stone riverbank, overcast olive charcoal palette, moody subdued contrast. BOTTOM PANEL: French Alpine Roche-la-Croix military fort inspired setting, snowy mountain pass, concrete low bunkers on the RIGHT, rugged peaks and snow, desaturated cold gray olive palette. Clear wide silhouettes visible in very small thumbnails, darkest space on LEFT for later HTML labels. No people, no flags, no insignia. Realistic detailed environment concept art, not cartoon."
+    }
+  ]
+}

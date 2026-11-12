@@ -1,0 +1,13 @@
+{
+  "source": "https://github.com/makehumancommunity/makehuman/tree/a8bc2d54ff0ac92e78ff71431b1023eda42bf482/makehuman/data",
+  "license": "CC0-1.0",
+  "changes": "Body extraction, uniform envelope, normalization to 1.78 m, top-four skin weights, triangulation",
+  "files": {
+    "base.obj": "8e761e6624b8f54536409135d1636da63b32486a90d4897f84e121d144f6fb4c",
+    "caucasian-male-young.target": "70e228ba7164737dae664454394536fc5935fa48d333c1a97d77e2dc6eacc5f5",
+    "default.mhskel": "99f179bce0aa850b45d4191a1d0d234c5851f881c057439470ded3bddf729a24",
+    "default_weights.mhw": "0f3641d651ae3d00ad6b4ccee43142edb109d3bd909d27d9e4139ef1beed8625",
+    "universal-male-young-averagemuscle-averageweight.target": "4ba5396ddabda448ece15650a566fbebfbb10239256ccb201e8f883429e12249"
+  },
+  "runtime_sha256": "98fec427d1ded476cbb499fd4b6b26b6d41a0c55c48fe7081041a553ae9d09e6"
+}

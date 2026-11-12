@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.env
+*.log
+backups/
+supporthub-check/
+
+research/
+deploy/release-source/
+artifacts/
+__pycache__/
+*.pyc
+deploy/*.jpg
+deploy/*.png

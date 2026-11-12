@@ -1,0 +1,11 @@
+{
+  "name": "German great coat uniform",
+  "author": "That one larry",
+  "uploader": "a.moreno",
+  "source": "https://sketchfab.com/3d-models/german-great-coat-uniform-aa65c341205d42b9be777d3c33614b97",
+  "download": "https://www.fab.com/listings/7dc1b8b5-70a7-4536-a5cf-8eb74ebf349f",
+  "license": "CC-BY-4.0 as declared on the Fab listing",
+  "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+  "archiveSha256": "f52f1529285507de0ba047d3b1bd588835b7f210280ccdeb5c5241de3008321c",
+  "modifications": "FBX meshes transformed to metres and attached to MakeHuman skeleton using transferred skin weights; cloth material roughness corrected. Head and headgear supplied separately. Original three meshes and embedded textures retained."
+}

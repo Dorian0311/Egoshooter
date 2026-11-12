@@ -1,0 +1,7 @@
+node_modules
+supporthub-check
+.git
+.env
+backups
+dist
+*.log

@@ -1,0 +1,26 @@
+{
+  "name": "rock_01",
+  "source": "https://polyhaven.com/a/rock_01",
+  "license": "CC0-1.0",
+  "license_url": "https://polyhaven.com/license",
+  "files": [
+    {
+      "channel": "albedo",
+      "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/rock_01/rock_01_diff_1k.jpg",
+      "bytes": 688083,
+      "sha256": "0b5f0418eb1e686190c5d33bb54c400b1f9ed58813b5e34aa5e573a5197302b5"
+    },
+    {
+      "channel": "normal",
+      "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/rock_01/rock_01_nor_gl_1k.jpg",
+      "bytes": 798807,
+      "sha256": "7a7146f51159a7667233c2c14c34ff18a9f4374cc8869d53a1162648d0941023"
+    },
+    {
+      "channel": "roughness",
+      "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/rock_01/rock_01_rough_1k.jpg",
+      "bytes": 383709,
+      "sha256": "e98b9c8ffb35513bd7b36a8730bf9745d05325376a85fae87ebf56a7c071a123"
+    }
+  ]
+}

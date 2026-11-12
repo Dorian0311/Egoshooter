@@ -1,0 +1,9 @@
+{
+  "source": "https://github.com/Kenton-GMI/muster-ww2",
+  "commit": "7d2fa86ebc3b999eaf085831cdcd5dccefea63d4",
+  "license": "MIT; see client/vendor/muster/LICENSE",
+  "derivation": "Anatomical gripHand meshes adapted to G36 grip positions; authored folded sleeve geometry; generated offline with scripts/export-viewmodel-hands.ts",
+  "bytes": 280004,
+  "triangles": 14832,
+  "sha256": "64b2e70662e2d3f9e6902e74f6e0d6b3e30f00b3a5a8bdfcfd954d15bd5eeb4f"
+}

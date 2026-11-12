@@ -1,0 +1,8 @@
+{
+  "sourceFile": "hk-g36.zip / source/g36.glb",
+  "source": "User-supplied archive",
+  "license": "Original author, source URL and redistribution license not supplied",
+  "processing": "Original GLB retained; orientation and muzzle attachment configured at runtime",
+  "materials": "Seven supplied PBR materials; archive contains no image textures",
+  "usage": "Modern bonus weapon, not a WWII historical weapon"
+}

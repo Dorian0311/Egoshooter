@@ -1,0 +1,11 @@
+{
+  "id": "homer",
+  "triangles": 1400,
+  "draws": 2,
+  "bones": 26,
+  "source": "User-provided archive; not a verified redistribution license",
+  "bytes": 108460,
+  "sha256": "a1fdd79aa51c7b3cdac2398fd9a25fccf619dcfd55ee47473d710b9464c6dfbd",
+  "maxTextureSize": 1024,
+  "animation": "Source skinning retained; gameplay animation is procedural. No downloaded scripts executed."
+}

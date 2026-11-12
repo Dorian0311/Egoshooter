@@ -1,0 +1,11 @@
+{
+  "id": "harley",
+  "triangles": 59868,
+  "draws": 1,
+  "bones": 68,
+  "source": "User-provided archive; not a verified redistribution license",
+  "bytes": 2706224,
+  "sha256": "c14f9bfffc46dcdd2106ad160ffe2dc8438d2cfc442ff24238f0ab4e8480f832",
+  "maxTextureSize": 1024,
+  "animation": "Source skinning retained; gameplay animation is procedural. No downloaded scripts executed."
+}
