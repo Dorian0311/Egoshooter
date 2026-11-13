@@ -1,0 +1,73 @@
+# Standalone file for the Portainer web editor; Docker downloads its build context from GitHub.
+name: altstadt1940
+services:
+  web:
+    build:
+      context: "${SHOOTER_BUILD_CONTEXT:-https://github.com/Dorian0311/Egoshooter.git#main}"
+      target: web
+    restart: unless-stopped
+    environment:
+      GAME_HOST: ${GAME_HOST:?set GAME_HOST or run npm run docker:configure -- your-domain}
+    ports: ["80:80", "443:443", "443:443/udp"]
+    volumes:
+      - shooter-caddy-data:/data
+      - shooter-caddy-config:/config
+    depends_on:
+      game: { condition: service_healthy }
+    mem_limit: 256m
+    logging: { driver: json-file, options: { max-size: 10m, max-file: "3" } }
+  game:
+    build:
+      context: "${SHOOTER_BUILD_CONTEXT:-https://github.com/Dorian0311/Egoshooter.git#main}"
+      target: game
+    restart: unless-stopped
+    init: true
+    read_only: true
+    tmpfs: [/tmp]
+    volumes: [shooter-users:/app/data]
+    security_opt: [no-new-privileges:true]
+    environment:
+      PORT: 2567
+      NODE_ENV: production
+      SHOOTER_TICKET_SECRET: ${SHOOTER_TICKET_SECRET:?required}
+      SHOOTER_ORIGINS: ${SHOOTER_ORIGINS:?required}
+      SHOOTER_PUBLIC_URL: https://${GAME_HOST:?required}/game
+      SHOOTER_ACCOUNTS_DB: /app/data/users.sqlite
+      DATABASE_URL: postgres://shooter:${POSTGRES_PASSWORD:?required}@db:5432/shooter
+    depends_on:
+      db: { condition: service_healthy }
+    mem_limit: 1536m
+    cpus: 1.5
+    healthcheck:
+      test:
+        [
+          CMD,
+          node,
+          -e,
+          "fetch('http://127.0.0.1:2567/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    logging: { driver: json-file, options: { max-size: 10m, max-file: "3" } }
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: shooter
+      POSTGRES_DB: shooter
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?required}
+    volumes: [shooter-db:/var/lib/postgresql/data]
+    mem_limit: 512m
+    cpus: 0.5
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U shooter -d shooter]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+volumes:
+  shooter-db:
+  shooter-users:
+  shooter-caddy-data:
+  shooter-caddy-config:

@@ -29,6 +29,30 @@ Keep the same `.env` and named volumes across updates. Update the code, then run
 results use `shooter-db`, and Caddy certificates use `shooter-caddy-data`.
 The project name remains `altstadt1940` to preserve existing root Compose volumes.
 
+## Portainer web editor
+
+Use the root `compose.portainer.yml` when pasting a stack into Portainer's web
+editor. Both build contexts point to the public GitHub repository's `main`
+branch, so the Dockerfile and application files are available without a local
+checkout. Docker on the target host must be able to reach GitHub and the image
+registries. `SHOOTER_BUILD_CONTEXT` can optionally pin a full Git commit URL.
+
+In Portainer's **Environment variables** panel outside the editor, set:
+
+| Name | Value |
+| --- | --- |
+| `GAME_HOST` | Public hostname without `https://`, for example `game.example.org` |
+| `SHOOTER_ORIGINS` | `https://game.example.org` |
+| `SHOOTER_TICKET_SECRET` | A random hexadecimal secret of at least 32 characters |
+| `POSTGRES_PASSWORD` | A different random hexadecimal password |
+
+The configuration helper does not execute automatically in Portainer. Variables
+may also be loaded from a private `.env` generated on another trusted machine.
+Keep existing port mappings and persistent volume paths when repairing a stack.
+If public HTTPS uses a forwarded host port, external port 443 must reach Caddy's
+container port 443. A TLS-terminating upstream proxy needs a separate matching
+proxy/TLS configuration; changing only the published port does not configure it.
+
 ## Checks
 
 The GitHub Actions workflow builds the actual containers on Linux, waits for

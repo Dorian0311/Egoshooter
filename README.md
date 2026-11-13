@@ -18,6 +18,12 @@ Sie bindet ausschließlich an Loopback und ist kein öffentlicher Spielserver.
 
 ## Mit Docker hosten
 
+**Portainer-Webeditor:** [compose.portainer.yml](compose.portainer.yml) verwenden.
+Diese Variante lädt den vollständigen Build-Kontext einschließlich Dockerfile
+direkt aus GitHub. Unterhalb des Editors die vier Umgebungsvariablen `GAME_HOST`,
+`SHOOTER_ORIGINS`, `SHOOTER_TICKET_SECRET` und `POSTGRES_PASSWORD` setzen.
+Die normale `compose.yml` setzt voraus, dass das Repository auf dem Server liegt.
+
 Der vollständige Compose-Stack enthält die Weboberfläche mit HTTPS, den
 Multiplayer-Server und PostgreSQL. Er benötigt Docker mit Compose v2; Node.js
 wird nur für die einmalige Erzeugung der Konfiguration benötigt.
