@@ -12,10 +12,21 @@ permissions:
 
 jobs:
   docker:
+    name: docker (${{ matrix.mode }})
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - mode: direct-https
+            compose: compose.portainer.yml
+            certificate_service: web
+          - mode: reverse-proxy
+            compose: compose.portainer.proxy.yml:compose.ci-proxy.yml
+            certificate_service: edge
     env:
-      COMPOSE_FILE: compose.portainer.yml
+      COMPOSE_FILE: ${{ matrix.compose }}
       SHOOTER_BUILD_CONTEXT: https://github.com/${{ github.repository }}.git#${{ github.sha }}
     steps:
       - uses: actions/checkout@v7
@@ -38,7 +49,7 @@ jobs:
         run: |
           mkdir -p artifacts/docker-ci
           for attempt in $(seq 1 30); do
-            if docker compose cp web:/data/caddy/pki/authorities/local/root.crt artifacts/docker-ci/root.crt 2>/dev/null; then
+            if docker compose cp ${{ matrix.certificate_service }}:/data/caddy/pki/authorities/local/root.crt artifacts/docker-ci/root.crt 2>/dev/null; then
               break
             fi
             sleep 1

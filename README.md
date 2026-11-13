@@ -24,6 +24,12 @@ direkt aus GitHub. Unterhalb des Editors die vier Umgebungsvariablen `GAME_HOST`
 `SHOOTER_ORIGINS`, `SHOOTER_TICKET_SECRET` und `POSTGRES_PASSWORD` setzen.
 Die normale `compose.yml` setzt voraus, dass das Repository auf dem Server liegt.
 
+**Wenn bereits ein HTTPS-Reverse-Proxy vorhanden ist:** stattdessen
+[compose.portainer.proxy.yml](compose.portainer.proxy.yml) verwenden. Der Proxy
+leitet HTTP und WebSockets an Server-Port **6080** weiter. In dieser Variante
+übernimmt der Spiel-Stack keine HTTPS-Zertifikate und keine HTTPS-Weiterleitung.
+`GAME_HOST` und `SHOOTER_ORIGINS` beschreiben weiterhin die öffentliche HTTPS-Domain.
+
 Der vollständige Compose-Stack enthält die Weboberfläche mit HTTPS, den
 Multiplayer-Server und PostgreSQL. Er benötigt Docker mit Compose v2; Node.js
 wird nur für die einmalige Erzeugung der Konfiguration benötigt.

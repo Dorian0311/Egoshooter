@@ -50,12 +50,35 @@ The configuration helper does not execute automatically in Portainer. Variables
 may also be loaded from a private `.env` generated on another trusted machine.
 Keep existing port mappings and persistent volume paths when repairing a stack.
 If public HTTPS uses a forwarded host port, external port 443 must reach Caddy's
-container port 443. A TLS-terminating upstream proxy needs a separate matching
-proxy/TLS configuration; changing only the published port does not configure it.
+container port 443.
+
+### Existing HTTPS reverse proxy
+
+For Nginx Proxy Manager, Traefik or another proxy that already terminates HTTPS,
+paste `compose.portainer.proxy.yml` into Portainer instead. This uses the
+`web-proxy` image target, serves plain HTTP on container port 80, and publishes
+it as host port 6080. Configure the existing proxy with:
+
+- Public hostname: the same value as `GAME_HOST`.
+- Upstream scheme: **HTTP**.
+- Upstream address: the Docker host's address reachable from that proxy.
+- Upstream port: **6080**.
+- WebSocket support enabled; keep the upstream connection timeout long enough
+  for persistent game connections.
+
+Keep `SHOOTER_ORIGINS=https://<public-hostname>`: browsers connect to the public
+HTTPS site, so session cookies stay Secure and game tickets use the same HTTPS
+origin. There is no port 6082/443 listener or second certificate issuer in this
+variant. `WEB_PORT` optionally changes 6080; `WEB_BIND_ADDRESS` can restrict the
+published address to a private interface or loopback when reachable by the
+proxy. Restrict direct access to that HTTP port to the intended proxy network.
+For proxies sharing a Docker network, `web:80` can instead be the upstream;
+attach the web container to that existing network explicitly.
 
 ## Checks
 
-The GitHub Actions workflow builds the actual containers on Linux, waits for
+The GitHub Actions workflow builds from GitHub source in both direct-HTTPS and
+upstream-proxy configurations on Linux, waits for
 PostgreSQL/game readiness, trusts the isolated stack's local certificate only
 for its test process and runs:
 

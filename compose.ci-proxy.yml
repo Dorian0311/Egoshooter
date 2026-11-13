@@ -1,0 +1,13 @@
+# Test-only HTTPS edge, simulating an existing reverse proxy in front of web-proxy.
+services:
+  edge:
+    image: caddy:2-alpine
+    ports: ["443:443"]
+    volumes:
+      - ./tests/fixtures/Caddyfile.edge:/etc/caddy/Caddyfile:ro
+      - ci-edge-data:/data
+      - ci-edge-config:/config
+    depends_on: [web]
+volumes:
+  ci-edge-data:
+  ci-edge-config:

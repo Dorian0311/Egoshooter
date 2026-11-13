@@ -17,6 +17,9 @@ FROM caddy:2-alpine AS web
 COPY --from=client-build /app/dist /srv
 COPY deploy/docker/Caddyfile /etc/caddy/Caddyfile
 
+FROM web AS web-proxy
+COPY deploy/docker/Caddyfile.proxy /etc/caddy/Caddyfile
+
 FROM node:22-alpine AS game
 WORKDIR /app
 COPY --from=dependencies /app/node_modules ./node_modules
