@@ -1,14 +1,27 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { parseGraphicsQuality, renderPixelRatio,ResolutionGovernor } from '../client/graphicsSettings.ts';
+import {addMilitaryRoofs} from '../client/militaryRoofs';
 import * as T from 'three';
 import { addFacadeDetails, addAlpineBackdrop, createRiver, batchStaticMeshes, instanceStaticModel } from '../client/scenery.ts';
 import { getWorld } from '../shared/world.ts';
 
 test('graphics preferences tolerate old or corrupt storage values', () => {
-  for (const value of [null, '', 'cinematic', '__proto__']) assert.equal(parseGraphicsQuality(value), 'auto');
+  for (const value of ['', 'cinematic', '__proto__']) assert.equal(parseGraphicsQuality(value), 'auto');
+  assert.equal(parseGraphicsQuality(null),'auto');
   assert.equal(parseGraphicsQuality('performance'), 'performance');
   assert.equal(parseGraphicsQuality('high'), 'high');
+});
+
+test('military roof details share a bounded number of draws without losing geometry',()=>{
+ const scene=new T.Scene(),materials=new Map<string,T.MeshStandardMaterial>();
+ const dispose=addMilitaryRoofs(scene,getWorld('storm').buildings,color=>{
+  if(!materials.has(color))materials.set(color,new T.MeshStandardMaterial({color}));return materials.get(color)!;
+ });
+ const root=scene.getObjectByName('military-roof-details')!;
+ assert.ok(root.children.length>0&&root.children.length<=6,`${root.children.length} roof draws`);
+ assert.ok(new T.Box3().setFromObject(root).getSize(new T.Vector3()).length()>100);
+ dispose();materials.forEach(material=>material.dispose());
 });
 
 test('adaptive resolution lowers cost under sustained load without chasing pauses',()=>{

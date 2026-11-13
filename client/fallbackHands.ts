@@ -2,6 +2,7 @@ import * as T from 'three';
 import {GLTFLoader} from 'three/examples/jsm/loaders/GLTFLoader.js';
 import {applyHandMaterials} from './handMaterials';
 import {reloadEnvelope} from './viewmodel';
+import {createViewmodelArms} from './viewmodelArms';
 
 /** Anatomical hands for the existing pistol / French weapon placeholders.
  * Parent is the camera's weapon group, so ADS/recoil/bob apply consistently.
@@ -12,6 +13,7 @@ export function createFallbackHands(weapon:T.Group){
   root.position.set(.24,-.23,-.4);root.rotation.y=Math.PI;weapon.add(root);
   let disposed=false,loaded=false,pending=false,index=0,reloadProgress=0;
   let cloth:T.MeshStandardMaterial|undefined;
+  let arms:ReturnType<typeof createViewmodelArms>|undefined,aimBlend=0;
   const parts:{object:T.Object3D;rest:T.Vector3;left:boolean}[]=[];
   function release(object:T.Object3D){
     const materials=new Set<T.Material>(),geometries=new Set<T.BufferGeometry>();
@@ -25,10 +27,11 @@ export function createFallbackHands(weapon:T.Group){
       if(disposed){release(scene);return;}
       cloth=applyHandMaterials(scene,0x292d30).cloth;
       scene.traverse(object=>{
+        object.layers.mask=weapon.layers.mask;
         if(object instanceof T.Mesh){object.castShadow=true;object.receiveShadow=true;}
         if(/^(hand-|view-sleeve-)[lr]$/.test(object.name))parts.push({object,rest:object.position.clone(),left:object.name.endsWith('-l')});
       });
-      root.add(scene);loaded=true;
+      arms=createViewmodelArms(scene);root.add(scene);loaded=true;
     }catch(error){console.warn('Fallback hands unavailable',error);}
     // A failed asset must not trigger a new HTTP request on every animation frame.
   }
@@ -41,6 +44,7 @@ export function createFallbackHands(weapon:T.Group){
       if(part.left){part.object.position.z-=index===2?.14:0;part.object.position.y-=reload*.16;}
       else if(index===1)part.object.position.z-=.05;
     }
+    arms?.update(aimBlend);
   }
   return {
     update(weaponIndex:number,team:'de'|'fr',map:string,visible:boolean){
@@ -50,7 +54,7 @@ export function createFallbackHands(weapon:T.Group){
       cloth?.color.setHex(team==='de'?0x292d30:map==='alpine'?0x303b4a:0x62624b);
       pose();return root.visible;
     },
-    animatePose(progress:number){reloadProgress=progress;pose();},
+    animatePose(progress:number,aim=0){reloadProgress=progress;aimBlend=aim;pose();},
     dispose(){disposed=true;root.visible=false;release(root);root.removeFromParent();parts.length=0;},
   };
 }

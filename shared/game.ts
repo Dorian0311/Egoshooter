@@ -1,7 +1,8 @@
+import {initialInteriors,interiorFixtures,interiorWorld,doorBox,type InteriorState} from './interiors';
 import {defaultUniform,validUniform,type UniformId} from './uniforms.ts';
-import { getWorld,validMap,ground,type World,type MapId } from "./world.ts";
+import { getWorld,validMap,ground,withinPlayArea,type World,type MapId } from "./world.ts";
 import {rockBlocks,rockSurface,rayRock} from './rocks.ts';
-export const VERSION = 7,
+export const VERSION = 11,
   STEP = 1 / 30;
 export type Team = "de" | "fr";
 export type Input = {
@@ -16,7 +17,7 @@ export type Input = {
   fire: boolean;
   reload: boolean;
   aim: boolean;
-  weapon: 0 | 1 | 2 | 3;
+  weapon: 0 | 1 | 2 | 3 | 4;
   time: number;
 };
 export type Player = {
@@ -37,9 +38,11 @@ export type Player = {
   ready: boolean;
   connected: boolean;
   seq: number;
-  weapon: 0 | 1 | 2 | 3;
+  weapon: 0 | 1 | 2 | 3 | 4;
   ammo: number;
-  ammoByWeapon: [number, number, number, number];
+  ammoByWeapon: [number, number, number, number, number];
+  powerUntil: number;
+  powerReadyAt: number;
   reserve: number;
   reloadAt: number;
   fireAt: number;
@@ -47,12 +50,17 @@ export type Player = {
   protectedUntil: number;
   grounded: boolean;
   crouching: boolean;
+  stamina: number;
+  sprintReadyAt: number;
+  sprintExhausted: boolean;
+  sprinting: boolean;
   departed?: boolean;
 };
 export type Snapshot = {
   version: number;
   mapId: MapId;
   training:boolean;
+  interiors?:InteriorState;
   roomCode: string;
   matchId: string;
   phase: "waiting" | "countdown" | "playing" | "finished";
@@ -67,7 +75,7 @@ export type Snapshot = {
   persistence: "pending" | "saved" | "failed" | "practice";
 };
 export type GameEvent = {
-  type: "shot" | "hit" | "kill";
+  type: "shot" | "melee" | "hit" | "kill" | "glass";
   id: string;
   target?: string;
   weapon?: number;
@@ -75,12 +83,19 @@ export type GameEvent = {
   damage?: number;
   point?:[number,number,number];
 };
+export const SAW_POWER_MS = 2200, SAW_RECOVERY_MS = 7000;
+export const SPRINT_DURATION_MS=3200,SPRINT_RECHARGE_MS=4000,SPRINT_REST_MS=900;
 export const weapons = [
-  { name: "Repetiergewehr", mag: 5, damage: 65, interval: 1100, reload: 2600 },
-  { name: "Pistole", mag: 8, damage: 28, interval: 310, reload: 1600 },
-  { name: "Maschinenpistole", mag: 30, damage: 24, interval: 100, reload: 2400 },
-  { name: "HK G36 (modern)", mag: 30, damage: 30, interval: 100, reload: 2600 },
+  { name: "Repetiergewehr", mag: 5, damage: 65, interval: 1100, reload: 2600, spread: .001, recoil: .026, range: 90 },
+  { name: "Pistole", mag: 8, damage: 28, interval: 310, reload: 1600, spread: .004, recoil: .018, range: 22 },
+  { name: "Maschinenpistole", mag: 30, damage: 24, interval: 85, reload: 2400, spread: .009, recoil: .012, range: 20 },
+  { name: "HK G36 (modern)", mag: 30, damage: 27, interval: 130, reload: 2600, spread: .003, recoil: .022, range: 55 },
+  { name: "Kettensäge", mag: 1, damage: 38, interval: 320, reload: 0, spread: 0, recoil: 0, range: 2.2 },
 ];
+export function weaponDamage(index:number,distance:number){
+  const w=weapons[index];
+  return w.damage*Math.max(.5,1-Math.max(0,distance-w.range)/(w.range*2));
+}
 export function validInput(v: unknown): v is Input {
   if (!v || typeof v !== "object") return false;
   const i = v as Input;
@@ -94,7 +109,7 @@ export function validInput(v: unknown): v is Input {
     Math.abs(i.side) <= 1 &&
     Math.abs(i.yaw) <= Math.PI * 2 &&
     Math.abs(i.pitch) <= 1.5 &&
-    [0, 1, 2, 3].includes(i.weapon) &&
+    [0, 1, 2, 3, 4].includes(i.weapon) &&
     ["sprint", "crouch", "jump", "fire", "reload", "aim"].every(
       (k) => typeof i[k as keyof Input] === "boolean",
     )
@@ -128,7 +143,9 @@ export function makePlayer(
     seq: -1,
     weapon: 0,
     ammo: 5,
-    ammoByWeapon: [5, 8, 30, 30],
+    ammoByWeapon: [5, 8, 30, 30, 1],
+    powerUntil: 0,
+    powerReadyAt: 0,
     reserve: 999,
     reloadAt: 0,
     fireAt: 0,
@@ -136,12 +153,27 @@ export function makePlayer(
     protectedUntil: 0,
     grounded: true,
     crouching: false,
+    stamina:SPRINT_DURATION_MS,sprintReadyAt:0,sprintExhausted:false,sprinting:false,
   };
 }
-export function move(p: Player, i: Input, dt = STEP,world:World=getWorld()) {
+export function move(p: Player, i: Input, dt = STEP,world:World=getWorld(),now=i.time) {
   const boxes=world.boxes;
+  if(p.uniform==='leatherface'&&p.hp>0&&i.fire&&now>=p.powerReadyAt){
+    p.powerUntil=now+SAW_POWER_MS;p.powerReadyAt=p.powerUntil+SAW_RECOVERY_MS;
+  }
   p.crouching=i.crouch;
-  const speed = i.crouch ? 2.3 : i.sprint ? 6.2 : 4.3,
+  const moving=Math.hypot(i.forward,i.side)>.01;
+  const powered=p.uniform==='leatherface'&&i.fire&&now<p.powerUntil;
+  p.stamina=Number.isFinite(p.stamina)?p.stamina:SPRINT_DURATION_MS;
+  p.sprinting=!!(i.sprint&&moving&&!i.crouch&&!i.aim&&!p.sprintExhausted&&p.stamina>0&&!powered);
+  if(p.sprinting){
+    p.stamina=Math.max(0,p.stamina-dt*1000);p.sprintReadyAt=now+SPRINT_REST_MS;
+    if(p.stamina<.001){p.stamina=0;p.sprintExhausted=true;}
+  }else if(now>=p.sprintReadyAt){
+    p.stamina=Math.min(SPRINT_DURATION_MS,p.stamina+dt*1000*SPRINT_DURATION_MS/SPRINT_RECHARGE_MS);
+    if(p.stamina>=SPRINT_DURATION_MS-.001){p.stamina=SPRINT_DURATION_MS;p.sprintExhausted=false;}
+  }
+  const speed = i.crouch ? 2.3 : powered ? 9.2 : p.sprinting ? 6.2 : 4.3,
     len = Math.max(1, Math.hypot(i.forward, i.side));
   const dx =
     ((Math.cos(i.yaw) * i.side - Math.sin(i.yaw) * i.forward) * speed * dt) /
@@ -153,8 +185,7 @@ export function move(p: Player, i: Input, dt = STEP,world:World=getWorld()) {
     r = 0.34;
   function blocked(x: number, z: number) {
     return (
-      Math.abs(x) > 73 ||
-      Math.abs(z) > 73 ||
+      !withinPlayArea(x,z,world) ||
       boxes.some(
         (b) => b.kind==='rock' ? rockBlocks(b,x,p.y,z,h,r) :
           p.y + h > b.y - b.h / 2 + 0.04 &&
@@ -256,15 +287,19 @@ export class Game {
   received = new Map<string, number>();
   history: { at: number; players: Player[] }[] = [];
   round = 0;
+  interactions=new Map<string,number>();
+  world(){return interiorWorld(getWorld(this.state.mapId),this.state.interiors);}
   constructor(
     code: string,
     readonly durationMs = 600000,
     mapId:MapId="cologne",
+    private readonly random:()=>number=Math.random,
   ) {
     this.state = {
       version: VERSION,
       mapId,
       training:false,
+      interiors:initialInteriors(getWorld(mapId)),
       roomCode: code,
       matchId: "",
       phase: "waiting",
@@ -280,8 +315,14 @@ export class Game {
     };
   }
   add(id: string, name: string) {
+    const returning=this.player(id);
+    if(returning?.departed&&this.state.phase==='playing'){
+      if(this.state.players.filter(p=>!p.departed).length>=8||this.count(returning.team)>=4)throw Error('Dein Team ist bereits voll.');
+      const fresh=makePlayer(id,name,returning.team,returning.deaths,getWorld(this.state.mapId));
+      Object.assign(returning,fresh,{kills:returning.kills,deaths:returning.deaths,headshots:returning.headshots,ready:true,departed:false});return returning;
+    }
     if (
-      this.state.players.length >= 8 ||
+      this.state.players.filter(p=>!p.departed).length >= 8 ||
       this.state.players.some((p) => p.id === id)
     )
       throw Error("Raum voll oder bereits beigetreten");
@@ -291,9 +332,9 @@ export class Game {
     this.state.host ||= id;
     return p;
   }
-  selectMap(id:string,mapId:unknown){if(id!==this.state.host||this.state.phase!=='waiting'||!validMap(mapId))return false;this.state.mapId=mapId;this.history=[];this.inputs.clear();for(const p of this.state.players){const fresh=makePlayer(p.id,p.name,p.team,0,getWorld(mapId));Object.assign(p,fresh,{connected:p.connected});}return true;}
+  selectMap(id:string,mapId:unknown){if(id!==this.state.host||this.state.phase!=='waiting'||!validMap(mapId))return false;this.state.mapId=mapId;this.state.interiors=initialInteriors(getWorld(mapId));this.history=[];this.inputs.clear();for(const p of this.state.players){const fresh=makePlayer(p.id,p.name,p.team,0,getWorld(mapId));Object.assign(p,fresh,{connected:p.connected});}return true;}
   count(t: Team) {
-    return this.state.players.filter((p) => p.team === t).length;
+    return this.state.players.filter((p) => p.team === t&&!p.departed).length;
   }
   remove(id: string) {
     this.inputs.delete(id);
@@ -323,13 +364,14 @@ export class Game {
       return false;
     p.team = t;
     p.uniform=defaultUniform(t,this.state.mapId);
+    p.weapon=0;p.ammo=p.ammoByWeapon[0];p.powerUntil=p.powerReadyAt=0;
     p.ready = false;
     return true;
   }
   selectUniform(id:string,value:unknown){
     const p=this.player(id);
     if(!p||this.state.phase!=='waiting'||!validUniform(value,p.team,this.state.mapId))return false;
-    p.uniform=value;p.ready=false;return true;
+    p.uniform=value;p.weapon=value==='leatherface'?4:0;p.ammo=p.ammoByWeapon[p.weapon];p.powerUntil=p.powerReadyAt=0;p.ready=false;return true;
   }
   player(id: string) {
     return this.state.players.find((p) => p.id === id);
@@ -388,6 +430,7 @@ export class Game {
       s.matchId = `${s.roomCode}-${now}-${++this.round}`;
       s.endsAt = now + this.durationMs;
       s.scores = { de: 0, fr: 0 };
+      s.interiors=initialInteriors(getWorld(s.mapId));this.interactions.clear();
       s.persistence = "pending";
       this.history = [];
       this.inputs.clear();
@@ -406,12 +449,15 @@ export class Game {
     }
     if (s.phase !== "playing") return;
     for (const p of s.players) {
+      if(p.uniform==='leatherface'){p.weapon=4;p.ammo=1;p.reloadAt=0;}
       if (!p.hp) {
         if (now >= p.respawnAt) {
           const fresh = makePlayer(p.id, p.name, p.team, p.deaths,getWorld(s.mapId));
           Object.assign(p, {
             ...fresh,
             uniform:p.uniform,
+            weapon:p.uniform==='leatherface'?4:0,
+            ammo:p.uniform==='leatherface'?1:fresh.ammo,
             kills: p.kills,
             headshots:p.headshots,
             deaths: p.deaths,
@@ -427,16 +473,16 @@ export class Game {
           ? this.inputs.get(p.id)
           : undefined;
       if (i && p.connected) {
-        move(p, i,STEP,getWorld(s.mapId));
+        move(p, i,STEP,this.world(),now);
         if(p.y < -4){p.hp=0;p.deaths++;p.respawnAt=now+5000;continue;}
-        if (i.weapon !== p.weapon) {
+        if (p.uniform!=='leatherface' && i.weapon!==4 && i.weapon !== p.weapon) {
           p.ammoByWeapon[p.weapon] = p.ammo;
           p.weapon = i.weapon;
           p.ammo = p.ammoByWeapon[p.weapon];
           p.reloadAt = 0;
           p.fireAt = now + 350;
         }
-        if (i.reload && p.ammo < weapons[p.weapon].mag && !p.reloadAt)
+        if (p.uniform!=='leatherface' && i.reload && p.ammo < weapons[p.weapon].mag && !p.reloadAt)
           p.reloadAt = now + weapons[p.weapon].reload;
       }
       if (p.reloadAt && now >= p.reloadAt) {
@@ -459,25 +505,72 @@ export class Game {
             : "fr";
     }
   }
+  interact(id:string,value:unknown){
+    const p=this.player(id),state=this.state.interiors;
+    if(!p?.hp||!p.connected||this.state.phase!=='playing'||!state||typeof value!=='string'||this.state.now-(this.interactions.get(id)??-Infinity)<450)return false;
+    const f=interiorFixtures(getWorld(this.state.mapId)).find(f=>f.id===value&&f.type!=='glass');if(!f)return false;
+    const x=f.type==='door'?f.box.x+f.box.w/2-.2:f.box.x,y=f.box.y,z=f.box.z;
+    const o=[p.x,p.y+(p.crouching?1:1.6),p.z],delta=[x-o[0],y-o[1],z-o[2]],distance=Math.hypot(...delta);
+    if(distance>2.7)return false;
+    const d=delta.map(v=>v/Math.max(.001,distance));
+    if(d[0]*-Math.sin(p.yaw)+d[2]*-Math.cos(p.yaw)<.1)return false;
+    if(getWorld(this.state.mapId).boxes.some(b=>rayBox(o,d,[b.x-b.w/2,b.y-b.h/2,b.z-b.d/2],[b.x+b.w/2,b.y+b.h/2,b.z+b.d/2])<distance-.2))return false;
+    if(f.type==='door'){
+      const next=doorBox(f,!state.doors[f.id]);
+      if(this.state.players.some(q=>q.hp>0&&q.y<next.y+next.h/2&&q.y+1.75>next.y-next.h/2&&Math.abs(q.x-next.x)<next.w/2+.4&&Math.abs(q.z-next.z)<next.d/2+.4))return false;
+      state.doors[f.id]=!state.doors[f.id];
+    }else state.lights[f.id]=!state.lights[f.id];
+    this.interactions.set(id,this.state.now);return true;
+  }
   shoot(p: Player, i: Input, now: number) {
+    if(!p.hp)return;
+    if(p.uniform==='leatherface'){this.saw(p,i,now);return;}
+    if(p.weapon===4)return;
     if (p.reloadAt || p.fireAt > now || !p.ammo || i.sprint) return;
     p.fireAt = now + weapons[p.weapon].interval;
     p.ammo--;
     p.ammoByWeapon[p.weapon] = p.ammo;
     p.protectedUntil = 0;
-    const spread=(Math.abs(i.forward)+Math.abs(i.side)>0?.012:0)*(i.crouch?.45:1)*(i.aim?.5:1);
-    const shotYaw=p.yaw+(Math.random()*2-1)*spread,shotPitch=p.pitch+(Math.random()*2-1)*spread;
+    const spread=(weapons[p.weapon].spread+(Math.abs(i.forward)+Math.abs(i.side)>0?.012:0))*(i.crouch?.65:1)*(i.aim?.3:1);
+    const shotYaw=p.yaw+(this.random()*2-1)*spread,shotPitch=p.pitch+(this.random()*2-1)*spread;
     const o=[p.x,p.y+(i.crouch?1:1.6),p.z],d=[-Math.sin(shotYaw)*Math.cos(shotPitch),Math.sin(shotPitch),-Math.cos(shotYaw)*Math.cos(shotPitch)];
     let distance=150,target:Player|undefined,zone:HitZone='body';
-    for(const b of getWorld(this.state.mapId).boxes)distance=Math.min(distance,b.kind==='rock'?rayRock(b,o,d):rayBox(o,d,[b.x-b.w/2,b.y-b.h/2,b.z-b.d/2],[b.x+b.w/2,b.y+b.h/2,b.z+b.d/2]));
+    for(const b of this.world().boxes)distance=Math.min(distance,b.kind==='rock'?rayRock(b,o,d):rayBox(o,d,[b.x-b.w/2,b.y-b.h/2,b.z-b.d/2],[b.x+b.w/2,b.y+b.h/2,b.z+b.d/2]));
     const historical=[...this.history].reverse().find(h=>h.at<=i.time)?.players??this.state.players;
     for(const q of historical){const live=this.player(q.id);if(q.id===p.id||!live?.hp)continue;const hit=hitPlayer(o,d,q);if(hit&&hit.distance<distance){distance=hit.distance;target=live;zone=hit.zone;}}
     this.state.events.push({type:'shot',id:p.id,weapon:p.weapon,point:[o[0]+d[0]*distance,o[1]+d[1]*distance,o[2]+d[2]*distance]});
+    if(!target&&this.state.interiors){
+      const pane=interiorFixtures(getWorld(this.state.mapId)).find(f=>f.type==='glass'&&!this.state.interiors!.broken.includes(f.id)&&Math.abs(rayBox(o,d,[f.box.x-f.box.w/2,f.box.y-f.box.h/2,f.box.z-f.box.d/2],[f.box.x+f.box.w/2,f.box.y+f.box.h/2,f.box.z+f.box.d/2])-distance)<.001);
+      if(pane){this.state.interiors.broken.push(pane.id);this.state.events.push({type:'glass',id:p.id,point:[pane.box.x,pane.box.y,pane.box.z]});}
+    }
     if(target&&target.team!==p.team&&target.protectedUntil<=now){
-      const multiplier=zone==='head'?(p.weapon===0?2:4):zone==='legs'?.75:1,damage=Math.floor(weapons[p.weapon].damage*multiplier);
-      target.hp=Math.max(0,target.hp-damage);this.state.events.push({type:'hit',id:p.id,target:target.id,hitZone:zone,damage,point:[o[0]+d[0]*distance,o[1]+d[1]*distance,o[2]+d[2]*distance]});
-      if(!target.hp){target.deaths++;target.respawnAt=now+5000;p.kills++;if(zone==='head')p.headshots++;this.state.scores[p.team]++;this.state.events.push({type:'kill',id:p.id,target:target.id,hitZone:zone,point:[o[0]+d[0]*distance,o[1]+d[1]*distance,o[2]+d[2]*distance]});}
+      const multiplier=zone==='head'?(p.weapon===0?2:4):zone==='legs'?.75:1,damage=Math.floor(weaponDamage(p.weapon,distance)*multiplier);
+      target.hp=Math.max(0,target.hp-damage);this.state.events.push({type:'hit',id:p.id,target:target.id,weapon:p.weapon,hitZone:zone,damage,point:[o[0]+d[0]*distance,o[1]+d[1]*distance,o[2]+d[2]*distance]});
+      if(!target.hp){target.deaths++;target.respawnAt=now+5000;p.kills++;if(zone==='head')p.headshots++;this.state.scores[p.team]++;this.state.events.push({type:'kill',id:p.id,target:target.id,weapon:p.weapon,hitZone:zone,point:[o[0]+d[0]*distance,o[1]+d[1]*distance,o[2]+d[2]*distance]});}
     }
     this.state.events = this.state.events.slice(-64);
+  }
+  saw(p:Player,i:Input,now:number){
+    if(p.uniform!=='leatherface'||!p.hp||p.fireAt>now)return;
+    p.weapon=4;p.fireAt=now+weapons[4].interval;p.protectedUntil=0;
+    this.state.events.push({type:'melee',id:p.id,weapon:4});
+    const origin=[p.x,p.y+(p.crouching?1:1.4),p.z];
+    const facing=[-Math.sin(p.yaw)*Math.cos(p.pitch),Math.sin(p.pitch),-Math.cos(p.yaw)*Math.cos(p.pitch)];
+    let target:Player|undefined,nearest=weapons[4].range;
+    for(const q of this.state.players){
+      if(q.id===p.id||!q.hp)continue;
+      const delta=[q.x-origin[0],q.y+(q.crouching?.7:1.1)-origin[1],q.z-origin[2]];
+      const distance=Math.hypot(...delta);if(distance>nearest||distance<.001)continue;
+      const direction=delta.map(v=>v/distance);
+      if(direction.reduce((sum,v,n)=>sum+v*facing[n],0)<.72)continue;
+      const blocked=this.world().boxes.some(b=>(b.kind==='rock'?rayRock(b,origin,direction):rayBox(origin,direction,[b.x-b.w/2,b.y-b.h/2,b.z-b.d/2],[b.x+b.w/2,b.y+b.h/2,b.z+b.d/2]))<distance);
+      if(!blocked){nearest=distance;target=q;}
+    }
+    if(!target||target.team===p.team||target.protectedUntil>now)return;
+    target.hp=Math.max(0,target.hp-weapons[4].damage);
+    const point:[number,number,number]=[target.x,target.y+1,target.z];
+    this.state.events.push({type:'hit',id:p.id,target:target.id,weapon:4,hitZone:'body',damage:weapons[4].damage,point});
+    if(!target.hp){target.deaths++;target.respawnAt=now+5000;p.kills++;this.state.scores[p.team]++;this.state.events.push({type:'kill',id:p.id,target:target.id,weapon:4,hitZone:'body',point});}
+    this.state.events=this.state.events.slice(-64);
   }
 }

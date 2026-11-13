@@ -1,0 +1,4 @@
+Quaternius Universal Animation Library. CC0 1.0.
+https://quaternius.com/packs/universalanimationlibrary.html
+CC0 export: KinemIQ. https://huggingface.co/datasets/Kinemiq/free-game-animations
+Adaptation: retargeted to MakeHuman, in-place motion and grounded foot contact.

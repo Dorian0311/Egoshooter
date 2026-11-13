@@ -2,7 +2,7 @@ import * as T from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { Building } from '../shared/world.ts';
 
-export function instanceStaticModel(scene: T.Scene, source: T.Object3D, placements: T.Matrix4[]) {
+export function instanceStaticModel(scene: T.Scene|T.Group, source: T.Object3D, placements: T.Matrix4[]) {
   source.updateMatrixWorld(true);
   source.traverse(part => {
     if (!(part instanceof T.Mesh)) return;
@@ -18,7 +18,7 @@ export function instanceStaticModel(scene: T.Scene, source: T.Object3D, placemen
 
 // Static world geometry needs one draw per material, not one draw per shutter/slat.
 // Keep replaceable cover meshes and instances independent.
-export function batchStaticMeshes(scene: T.Scene, excluded: Set<T.Object3D>) {
+export function batchStaticMeshes(scene: T.Scene | T.Group, excluded: Set<T.Object3D>) {
   const groups = new Map<string, T.Mesh<T.BufferGeometry, T.Material>[]>();
   for (const object of scene.children) {
     if (!(object instanceof T.Mesh) || object instanceof T.InstancedMesh ||
@@ -29,9 +29,10 @@ export function batchStaticMeshes(scene: T.Scene, excluded: Set<T.Object3D>) {
   }
   for (const meshes of groups.values()) {
     if (meshes.length < 2) continue;
+    const mixedIndices=meshes.some(mesh=>!!mesh.geometry.index)&&meshes.some(mesh=>!mesh.geometry.index);
     const geometries = meshes.map(mesh => {
       mesh.updateMatrix();
-      return mesh.geometry.clone().applyMatrix4(mesh.matrix);
+      return (mixedIndices&&mesh.geometry.index?mesh.geometry.toNonIndexed():mesh.geometry.clone()).applyMatrix4(mesh.matrix);
     });
     const geometry = mergeGeometries(geometries);
     geometries.forEach(g => g.dispose());
@@ -45,7 +46,7 @@ export function batchStaticMeshes(scene: T.Scene, excluded: Set<T.Object3D>) {
   }
 }
 
-export function createRiver(scene: T.Scene) {
+export function createRiver(scene: T.Scene,width=60,depth=420,height=-4) {
   const time = { value: 0 };
   const material = new T.MeshPhysicalMaterial({
     color: '#254a50', roughness: .22, metalness: .12,
@@ -71,10 +72,10 @@ export function createRiver(scene: T.Scene) {
     `);
   };
   material.customProgramCacheKey = () => 'river-waves-v1';
-  const geometry = new T.PlaneGeometry(60, 420, 96, 256);
+  const geometry = new T.PlaneGeometry(width, depth, 96, 256);
   geometry.rotateX(-Math.PI / 2);
   const river = new T.Mesh(geometry, material);
-  river.position.y = -4;
+  river.position.y = height;
   river.receiveShadow = true;
   scene.add(river);
   return { update(seconds: number) { time.value = seconds; } };

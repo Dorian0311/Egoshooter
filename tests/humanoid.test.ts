@@ -4,6 +4,18 @@ import {readFileSync} from 'node:fs';
 import * as T from 'three';
 import {createHuman} from '../client/humanoid.ts';
 import {makePlayer} from '../shared/game.ts';
+
+test('greatcoat keeps the neck down inside the collar instead of a floating head',()=>{
+ const data=JSON.parse(readFileSync(new URL('../public/shooter/characters/humanoid.json',import.meta.url),'utf8'));
+ // Empty garment pieces exercise the same body cut without browser texture loading.
+ const human=createHuman({...data,coat:[]},'de','cologne',new T.MeshStandardMaterial(),'de-greatcoat');
+ const body=human.group.children.find(o=>o instanceof T.SkinnedMesh) as T.SkinnedMesh;
+ const positions=body.geometry.getAttribute('position'),indices=body.geometry.index!;
+ const heights=Array.from(indices.array,i=>positions.getY(i));
+ assert.ok(Math.min(...heights)<1.46,'neck must extend into the coat collar');
+ assert.ok(Math.max(...heights)>1.7,'head remains at its original height');
+ human.dispose();
+});
 test('human asset has valid topology, bounded skin weights and a rooted skeleton',()=>{
  const data=JSON.parse(readFileSync(new URL('../public/shooter/characters/humanoid.json',import.meta.url),'utf8'));
  const vertices=data.positions.length/3;

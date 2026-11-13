@@ -1,0 +1,55 @@
+name: Docker multiplayer
+
+on:
+  push:
+    branches: [main, 'codex/docker-*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  docker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install test dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Unit checks
+        run: npm test
+      - name: Configure isolated test stack
+        run: |
+          npm run docker:configure -- localhost
+          docker compose config --quiet
+      - name: Build and start containers
+        run: docker compose up -d --build --wait --wait-timeout 180
+      - name: Trust only this test stack's local certificate authority
+        run: |
+          mkdir -p artifacts/docker-ci
+          for attempt in $(seq 1 30); do
+            if docker compose cp web:/data/caddy/pki/authorities/local/root.crt artifacts/docker-ci/root.crt 2>/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+          test -s artifacts/docker-ci/root.crt
+      - name: Check HTTPS, eight-player WebSockets and restart persistence
+        env:
+          NODE_EXTRA_CA_CERTS: ${{ github.workspace }}/artifacts/docker-ci/root.crt
+          TEST_DOCKER_RESTART: 'true'
+        run: npm run test:docker
+      - name: Container diagnostics on failure
+        if: failure()
+        run: |
+          docker compose ps
+          docker compose logs --no-color --tail 50
+      - name: Stop isolated test stack
+        if: always()
+        run: docker compose down

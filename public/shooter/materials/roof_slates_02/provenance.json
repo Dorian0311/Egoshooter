@@ -1,0 +1,32 @@
+{
+  "name": "roof_slates_02",
+  "source": "https://polyhaven.com/a/roof_slates_02",
+  "license": "CC0-1.0",
+  "resolution": "2k",
+  "files": [
+    {
+      "channel": "albedo",
+      "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/roof_slates_02/roof_slates_02_diff_2k.jpg",
+      "sha256": "5be7e739997e9f5560b07ee42f335d7ad70213359d48cbffc9c04ad129e9a2c4",
+      "bytes": 1838933
+    },
+    {
+      "channel": "normal",
+      "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/roof_slates_02/roof_slates_02_nor_gl_2k.jpg",
+      "sha256": "4ff2618aa5f2eac52f728b8b4f7e715d87c410719effc66eb6f528378ef9f49e",
+      "bytes": 2919261
+    },
+    {
+      "channel": "roughness",
+      "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/roof_slates_02/roof_slates_02_rough_2k.jpg",
+      "sha256": "641b51370745e7e990c93542716bf46219e7415808a4cea999bb3f0683ec01bf",
+      "bytes": 1126001
+    },
+    {
+      "channel": "ao",
+      "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/roof_slates_02/roof_slates_02_ao_2k.jpg",
+      "sha256": "45f4853c971b3ac9c9a8a66d11461c382b2e78c2a5da8d270eeb947080024f27",
+      "bytes": 1701208
+    }
+  ]
+}

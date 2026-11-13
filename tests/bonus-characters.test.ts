@@ -5,7 +5,7 @@ import {Game} from '../shared/game.ts';
 import {difference,mergeSnapshot} from '../shared/protocol.ts';
 import {uniformOptions,defaultUniform} from '../shared/uniforms.ts';
 
-const ids=['deadpool','harley','rocket','homer'] as const;
+const ids=['deadpool','harley','rocket','homer','leatherface','commander'] as const;
 test('bonus choices are valid for both factions and maps and synchronize',()=>{
  for(const map of ['cologne','alpine'] as const){
   const game=new Game('ABC234');game.add('a','A');game.add('b','B');game.selectMap('a',map);
@@ -18,10 +18,10 @@ test('bonus choices are valid for both factions and maps and synchronize',()=>{
    assert.equal(mergeSnapshot(before,difference(before,game.state))!.players.find(p=>p.id===player)!.uniform,id);
   }
   game.ready('a',true,1000);game.ready('b',true,1000);game.tick(4000);
-  assert.equal(game.player('a')!.uniform,'homer');assert.equal(game.selectUniform('a','rocket'),false);
+  assert.equal(game.player('a')!.uniform,'commander');assert.equal(game.selectUniform('a','rocket'),false);
   game.player('a')!.hp=0;game.player('a')!.respawnAt=5000;game.tick(5000);
-  assert.equal(game.player('a')!.uniform,'homer');game.state.phase='finished';game.rematch('a');
-  assert.equal(game.player('a')!.uniform,'homer');
+  assert.equal(game.player('a')!.uniform,'commander');game.state.phase='finished';game.rematch('a');
+  assert.equal(game.player('a')!.uniform,'commander');
  }
 });
 test('embedded character assets stay inside geometry and download budgets',()=>{
@@ -32,10 +32,10 @@ test('embedded character assets stay inside geometry and download budgets',()=>{
   let triangles=0,draws=0;
   for(const mesh of json.meshes)for(const primitive of mesh.primitives){
    triangles+=json.accessors[primitive.indices??primitive.attributes.POSITION].count/3;draws++;
-   assert.ok(primitive.attributes.JOINTS_0!==undefined);assert.ok(primitive.attributes.WEIGHTS_0!==undefined);
+   if(id!=='leatherface'&&id!=='commander'){assert.ok(primitive.attributes.JOINTS_0!==undefined);assert.ok(primitive.attributes.WEIGHTS_0!==undefined);}
   }
   assert.ok(triangles<=60000,`${id}: ${triangles}`);assert.ok(draws<=5);
   for(const image of json.images??[])assert.ok(image.bufferView!==undefined&&!image.uri);
-  assert.ok(json.skins.length>0);
+  if(id!=='leatherface'&&id!=='commander')assert.ok(json.skins.length>0);
  }
 });

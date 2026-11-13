@@ -1,0 +1,20 @@
+import * as T from 'three';
+import {GLTFLoader} from 'three/examples/jsm/loaders/GLTFLoader.js';
+import {OrbitControls} from 'three/examples/jsm/controls/OrbitControls.js';
+import {RoomEnvironment} from 'three/examples/jsm/environments/RoomEnvironment.js';
+const canvas=document.querySelector('canvas')!,renderer=new T.WebGLRenderer({canvas,antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.toneMapping=T.ACESFilmicToneMapping;
+const scene=new T.Scene();scene.background=new T.Color('#273038');
+const camera=new T.PerspectiveCamera(38,1,.01,30);camera.position.set(.6,.3,1.7);
+const controls=new OrbitControls(camera,canvas);controls.enableDamping=true;
+const pmrem=new T.PMREMGenerator(renderer),room=new RoomEnvironment(),env=pmrem.fromScene(room);scene.environment=env.texture;room.dispose();pmrem.dispose();
+scene.add(new T.HemisphereLight(0xcce0ff,0x39322b,1));const sun=new T.DirectionalLight(0xffedd7,3);sun.position.set(-1,3,2);scene.add(sun);
+let current:T.Group|undefined,request=0;
+async function show(){const version=++request,name=document.querySelector('select')!.value;const {scene:model}=await new GLTFLoader().loadAsync('/shooter/models/realistic/'+name+'.glb');if(version!==request)return;
+ if(current)scene.remove(current);current=model;
+ if(name==='m1-garand'||name==='thompson')model.rotation.y=Math.PI/2;
+ let bounds=new T.Box3().setFromObject(model);model.scale.setScalar(1/Math.max(...bounds.getSize(new T.Vector3()).toArray()));bounds=new T.Box3().setFromObject(model);model.position.sub(bounds.getCenter(new T.Vector3()));scene.add(model);
+ camera.position.set(.6,.3,1.7);controls.target.set(0,0,0);controls.update();
+}
+document.querySelector('select')!.onchange=()=>void show();void show();
+function frame(){const w=canvas.clientWidth,h=canvas.clientHeight;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();controls.update();renderer.render(scene,camera);requestAnimationFrame(frame);}frame();

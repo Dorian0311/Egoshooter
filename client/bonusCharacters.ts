@@ -3,7 +3,7 @@ import {GLTFLoader} from 'three/examples/jsm/loaders/GLTFLoader.js';
 import {clone} from 'three/examples/jsm/utils/SkeletonUtils.js';
 import type {Player} from '../shared/game';
 
-export const bonusIds=['deadpool','harley','rocket','homer'] as const;
+export const bonusIds=['deadpool','harley','rocket','homer','leatherface','commander'] as const;
 export type BonusId=typeof bonusIds[number];
 export function isBonusId(value:string):value is BonusId{return (bonusIds as readonly string[]).includes(value);}
 type Entry={root:T.Group;refs:number};
@@ -19,6 +19,8 @@ const joints:Record<BonusId,{upper:string[];lower:string[];arms:string[];head:st
  deadpool:{upper:['UN_j_L__Leg_00','UN_j_R__Leg_00'],lower:['UN_j_L__Leg_05','UN_j_R__Leg_05'],arms:['UN_j_L__Arm_00','UN_j_R__Arm_00'],head:'UN_j_Neck_01'},
  harley:{upper:['thigh_stretchl','thigh_stretchr'],lower:['leg_stretchl','leg_stretchr'],arms:['arm_stretchl','arm_stretchr'],head:'headx'},
  rocket:{upper:['Bip001-L-Thigh','Bip001-R-Thigh'],lower:['Bip001-L-Calf','Bip001-R-Calf'],arms:['Bip001-L-UpperArm','Bip001-R-UpperArm'],head:'Bip001-Head'},
+ commander:{upper:[],lower:[],arms:[],head:''},
+ leatherface:{upper:[],lower:[],arms:[],head:''},
  homer:{upper:['Hip_L','Hip_R'],lower:['Knee_L','Knee_R'],arms:['Shoulder_L','Shoulder_R'],head:'Head'},
 };
 
@@ -61,15 +63,20 @@ export function createBonusCharacter(data:BonusCharacterData){
   b.getWorldQuaternion(worldQ).invert();return {bone:b,rest:b.quaternion.clone(),axis:new T.Vector3(1,0,0).applyQuaternion(worldQ).normalize(),upper:config.upper.indexOf(b.name),lower:config.lower.indexOf(b.name),head:b.name===config.head};
  });
  const heads=bones.filter(b=>b.name===config.head),rotation=new T.Quaternion();
+ // Static bonus models have no head bone. Clip their upper head in model space.
+ const headCut=new T.Plane(new T.Vector3(0,-1,0),1.44),worldHeadCut=new T.Plane();
+ let headVisible=true;
  let disposed=false,initialized=false,previousX=0,previousZ=0,speed=0,phase=0;
  return {
   group,
   update(player:Player,_time:number,dt:number){
    if(disposed)return;
+   if(!headVisible&&!heads.length){group.updateWorldMatrix(true,false);worldHeadCut.copy(headCut).applyMatrix4(group.matrixWorld);}
    const step=Math.min(.1,Math.max(.001,dt));
    const movement=initialized?Math.min(1,Math.hypot(player.x-previousX,player.z-previousZ)/step/4):0;
    initialized=true;previousX=player.x;previousZ=player.z;speed+=(movement-speed)*(1-Math.exp(-step*12));phase+=step*9*speed;
    const walk=Math.sin(phase)*.38*speed;
+   if((data.character==='leatherface'||data.character==='commander')){body.position.y=Math.abs(Math.sin(phase))*.018*speed;body.rotation.z=Math.sin(phase)*.012*speed;}
    for(const part of animated){let angle=0;
     if(part.upper>=0)angle=walk*(part.upper===0?1:-1);
     if(part.lower>=0)angle=Math.max(0,-walk*(part.lower===0?1:-1))*.8;
@@ -77,7 +84,11 @@ export function createBonusCharacter(data:BonusCharacterData){
     part.bone.quaternion.copy(part.rest).multiply(rotation.setFromAxisAngle(part.axis,angle));
    }
   },
-  setHeadVisible(visible:boolean){for(const head of heads)head.scale.setScalar(visible?1:.001);},
+  setHeadVisible(visible:boolean){
+   for(const head of heads)head.scale.setScalar(visible?1:.001);
+   if(headVisible!==visible&&!heads.length){for(const material of materials){material.clippingPlanes=visible?null:[worldHeadCut];material.clipShadows=true;material.needsUpdate=true;}}
+   headVisible=visible;
+  },
   dispose(){
    if(disposed)return;disposed=true;group.remove(body);geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());skeletons.forEach(s=>s.dispose());
    if(--data.entry.refs===0){

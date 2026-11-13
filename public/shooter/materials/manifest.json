@@ -5,25 +5,31 @@
       "name": "cobblestone_floor_02",
       "source": "https://polyhaven.com/a/cobblestone_floor_02",
       "license": "CC0-1.0",
-      "license_url": "https://polyhaven.com/license",
+      "resolution": "2k",
       "files": [
         {
           "channel": "albedo",
-          "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/cobblestone_floor_02/cobblestone_floor_02_diff_1k.jpg",
-          "bytes": 221882,
-          "sha256": "b1be7866d908135276ae6bdb566cf81789caf3092d12ad1c1915131fc747fd53"
+          "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/cobblestone_floor_02/cobblestone_floor_02_diff_2k.jpg",
+          "sha256": "1a2d1f21ccff0f70cd181c28f529ce040c123b5c605cc0069f26450040bd6b40",
+          "bytes": 915386
         },
         {
           "channel": "normal",
-          "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/cobblestone_floor_02/cobblestone_floor_02_nor_gl_1k.jpg",
-          "bytes": 208641,
-          "sha256": "838f9f169956fceac4996967ff14dfcbc47b658bbedf1e60c0cd4536977aa064"
+          "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/cobblestone_floor_02/cobblestone_floor_02_nor_gl_2k.jpg",
+          "sha256": "3849d3d07b9de564a3b50c0878ce752502fd071f9b63cb6b2acea5d16de72606",
+          "bytes": 646806
         },
         {
           "channel": "roughness",
-          "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/cobblestone_floor_02/cobblestone_floor_02_rough_1k.jpg",
-          "bytes": 163268,
-          "sha256": "39d802084263449216d7467c7d8a2134939a165eb8581f033048bfb1344ba2a1"
+          "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/cobblestone_floor_02/cobblestone_floor_02_rough_2k.jpg",
+          "sha256": "a696caf242e449531712fc31e7f402eaf1a89e2c4044ec6c4d3ea5bf60dd2bc6",
+          "bytes": 662455
+        },
+        {
+          "channel": "ao",
+          "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/cobblestone_floor_02/cobblestone_floor_02_ao_2k.jpg",
+          "sha256": "b4dc989d178994bb6ca72c71ddb184e99e1562fce2896b1fee8bda3a23351023",
+          "bytes": 771278
         }
       ]
     },
@@ -180,6 +186,134 @@
           "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/rocky_terrain_02/rocky_terrain_02_rough_1k.jpg",
           "bytes": 437094,
           "sha256": "8652ee05de206888eb77f84df7c8080f6ffef27afadb7917127726570b66c45d"
+        }
+      ]
+    },
+    {
+      "name": "roof_slates_02",
+      "source": "https://polyhaven.com/a/roof_slates_02",
+      "license": "CC0-1.0",
+      "resolution": "2k",
+      "files": [
+        {
+          "channel": "albedo",
+          "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/roof_slates_02/roof_slates_02_diff_2k.jpg",
+          "sha256": "5be7e739997e9f5560b07ee42f335d7ad70213359d48cbffc9c04ad129e9a2c4",
+          "bytes": 1838933
+        },
+        {
+          "channel": "normal",
+          "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/roof_slates_02/roof_slates_02_nor_gl_2k.jpg",
+          "sha256": "4ff2618aa5f2eac52f728b8b4f7e715d87c410719effc66eb6f528378ef9f49e",
+          "bytes": 2919261
+        },
+        {
+          "channel": "roughness",
+          "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/roof_slates_02/roof_slates_02_rough_2k.jpg",
+          "sha256": "641b51370745e7e990c93542716bf46219e7415808a4cea999bb3f0683ec01bf",
+          "bytes": 1126001
+        },
+        {
+          "channel": "ao",
+          "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/roof_slates_02/roof_slates_02_ao_2k.jpg",
+          "sha256": "45f4853c971b3ac9c9a8a66d11461c382b2e78c2a5da8d270eeb947080024f27",
+          "bytes": 1701208
+        }
+      ]
+    },
+    {
+      "name": "plastered_wall_02",
+      "source": "https://polyhaven.com/a/plastered_wall_02",
+      "license": "CC0-1.0",
+      "resolution": "2k",
+      "files": [
+        {
+          "channel": "albedo",
+          "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/plastered_wall_02/plastered_wall_02_diff_2k.jpg",
+          "sha256": "caa72056d9157f08912a4c86c844296f93f323f8b30f418895625b052c837d0c",
+          "bytes": 1713014
+        },
+        {
+          "channel": "normal",
+          "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/plastered_wall_02/plastered_wall_02_nor_gl_2k.jpg",
+          "sha256": "7667573e538a6116892a3139fbecf5acb85728bf10e715111b87080af756cd78",
+          "bytes": 3842550
+        },
+        {
+          "channel": "roughness",
+          "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/plastered_wall_02/plastered_wall_02_rough_2k.jpg",
+          "sha256": "01b41c22151f7b3d7d6e78720205a6df9b36ed11ae36bbe6ea35994fba0c1d82",
+          "bytes": 812325
+        },
+        {
+          "channel": "ao",
+          "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/plastered_wall_02/plastered_wall_02_ao_2k.jpg",
+          "sha256": "51538762adbc849550ce25ed235154e8c84e28c638b99506d84e4a6257dd6890",
+          "bytes": 2492495
+        }
+      ]
+    },
+    {
+      "name": "aerial_grass_rock",
+      "source": "https://polyhaven.com/a/aerial_grass_rock",
+      "license": "CC0-1.0",
+      "resolution": "2k",
+      "files": [
+        {
+          "channel": "albedo",
+          "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/aerial_grass_rock/aerial_grass_rock_diff_2k.jpg",
+          "sha256": "1a2ddfa4652adbe00447b940c40019d46f4b88245bc1b341cdf622c2110b7bc5",
+          "bytes": 2624635
+        },
+        {
+          "channel": "normal",
+          "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/aerial_grass_rock/aerial_grass_rock_nor_gl_2k.jpg",
+          "sha256": "c6aa14b042ce243f93a6ca807f46a085711c23ad316b104578e92df7770ee285",
+          "bytes": 3799025
+        },
+        {
+          "channel": "roughness",
+          "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/aerial_grass_rock/aerial_grass_rock_rough_2k.jpg",
+          "sha256": "fc0fff40e3378f2f54d225db6e3e566a8563bb2c143eef0f09b543c9d4698776",
+          "bytes": 1495844
+        },
+        {
+          "channel": "ao",
+          "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/aerial_grass_rock/aerial_grass_rock_ao_2k.jpg",
+          "sha256": "2eb11d2282c78126dff97697ae87a35ac5c1e2b7a3aa0b1c67473a0ae0621d03",
+          "bytes": 2162395
+        }
+      ]
+    },
+    {
+      "name": "sand_01",
+      "source": "https://polyhaven.com/a/sand_01",
+      "license": "CC0-1.0",
+      "resolution": "2k",
+      "files": [
+        {
+          "channel": "albedo",
+          "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/sand_01/sand_01_diff_2k.jpg",
+          "sha256": "f311767ab68e132cb9de4160493a71ff17ec765c699d411facd5154d9a9a9c18",
+          "bytes": 1984816
+        },
+        {
+          "channel": "normal",
+          "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/sand_01/sand_01_nor_gl_2k.jpg",
+          "sha256": "b784b6a0526b79c81635bf423be9bc517ad36278ae5d68a4ff30f46eac56f0e3",
+          "bytes": 2503853
+        },
+        {
+          "channel": "roughness",
+          "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/sand_01/sand_01_rough_2k.jpg",
+          "sha256": "60ec73993d245be5dab83f9debb67cab4303a0af9d4cec3f28868a58f939f8db",
+          "bytes": 757435
+        },
+        {
+          "channel": "ao",
+          "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/sand_01/sand_01_ao_2k.jpg",
+          "sha256": "869cb6a93c2fb37fbe37236b33e386871134a5b154354396c7ba000f1be09b22",
+          "bytes": 1021179
         }
       ]
     }

@@ -1,0 +1,13 @@
+{
+  "id": "leatherface",
+  "source": "Texas_Chainsaw_-_Leatherface.usdz",
+  "sourceSha256": "b48ae2ef0a15069037335e7baf38a90168324f69421670595a8bc8bc3dc5622f",
+  "sourceTriangles": 623274,
+  "triangles": 52970,
+  "draws": 1,
+  "bytes": 2620924,
+  "maxTextureSize": 1024,
+  "sha256": "5931296ddca7ca790ef079752feaaee8af60c35b1f258db8cadade036a1e0dc0",
+  "animation": "Static source: no skeleton or clips supplied. Cosmetic movement only.",
+  "license": "User supplied; redistribution permission not established."
+}

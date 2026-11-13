@@ -1,0 +1,32 @@
+{
+  "name": "plastered_wall_02",
+  "source": "https://polyhaven.com/a/plastered_wall_02",
+  "license": "CC0-1.0",
+  "resolution": "2k",
+  "files": [
+    {
+      "channel": "albedo",
+      "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/plastered_wall_02/plastered_wall_02_diff_2k.jpg",
+      "sha256": "caa72056d9157f08912a4c86c844296f93f323f8b30f418895625b052c837d0c",
+      "bytes": 1713014
+    },
+    {
+      "channel": "normal",
+      "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/plastered_wall_02/plastered_wall_02_nor_gl_2k.jpg",
+      "sha256": "7667573e538a6116892a3139fbecf5acb85728bf10e715111b87080af756cd78",
+      "bytes": 3842550
+    },
+    {
+      "channel": "roughness",
+      "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/plastered_wall_02/plastered_wall_02_rough_2k.jpg",
+      "sha256": "01b41c22151f7b3d7d6e78720205a6df9b36ed11ae36bbe6ea35994fba0c1d82",
+      "bytes": 812325
+    },
+    {
+      "channel": "ao",
+      "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/plastered_wall_02/plastered_wall_02_ao_2k.jpg",
+      "sha256": "51538762adbc849550ce25ed235154e8c84e28c638b99506d84e4a6257dd6890",
+      "bytes": 2492495
+    }
+  ]
+}

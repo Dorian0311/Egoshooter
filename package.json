@@ -5,10 +5,13 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "server": "tsx server/index.ts",
-    "build": "tsc --noEmit && vite build",
+    "build": "tsc --noEmit && vite build && node scripts/compress-client.mjs",
     "test": "tsx --test tests/*.test.ts",
     "test:network": "tsx tests/network.ts",
-    "preview:solo": "tsx tests/preview.ts --open"
+    "preview:solo": "tsx tests/preview.ts --open",
+    "host:multiplayer": "npm run build && tsx scripts/host-multiplayer.ts",
+    "docker:configure": "node scripts/configure-docker.mjs",
+    "test:docker": "tsx tests/docker-smoke.ts"
   },
   "dependencies": {
     "@colyseus/core": "0.18.28",

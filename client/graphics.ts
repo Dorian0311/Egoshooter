@@ -7,6 +7,16 @@ import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { graphicsPresets, renderPixelRatio, ResolutionGovernor, type GraphicsQuality } from './graphicsSettings.ts';
 
+// Keep the environment's lighting while preventing its sky from covering the
+// world during the second, depth-cleared first-person render.
+class WeaponPass extends RenderPass {
+  override render(...args:Parameters<RenderPass['render']>){
+    const background=this.scene.background;
+    this.scene.background=null;
+    try{super.render(...args);}finally{this.scene.background=background;}
+  }
+}
+
 export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
   camera: T.PerspectiveCamera, sun: T.DirectionalLight, initialQuality: GraphicsQuality) {
   const composer = new EffectComposer(renderer);
@@ -14,15 +24,19 @@ export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
   // RenderPass updates shadows once; the following SSAO normal pass reuses them.
   renderer.shadowMap.autoUpdate = false;
   const render = new RenderPass(scene, camera);
+  const weaponCamera=new T.PerspectiveCamera(62,1,.025,8);
+  weaponCamera.layers.set(1);
+  const weaponPass=new WeaponPass(scene,weaponCamera);
+  weaponPass.clear=false;weaponPass.clearDepth=true;
   const ao = new SSAOPass(scene, camera, 1, 1, 24);
   ao.kernelRadius = .65;
   ao.minDistance = .001;
   ao.maxDistance = .025;
-  const bloom = new UnrealBloomPass(new T.Vector2(1, 1), .16, .35, 1.35);
+  const bloom = new UnrealBloomPass(new T.Vector2(1, 1), .075, .3, 1.65);
   const smaa = new SMAAPass(1, 1);
   const output = new OutputPass();
   // Stay in linear HDR until OutputPass performs the single tone/color conversion.
-  for (const pass of [render, ao, bloom, smaa, output]) composer.addPass(pass);
+  for (const pass of [render, ao, weaponPass, bloom, smaa, output]) composer.addPass(pass);
   let quality = initialQuality, width = 0, height = 0, ratio = 0;
   // Contact shading is low-frequency; its normal/depth buffers need fewer pixels
   // than the crisp full-resolution color/SMAA buffers.
@@ -32,7 +46,7 @@ export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
     resizeOcclusion(Math.max(1, Math.floor(w * scale)), Math.max(1, Math.floor(h * scale)));
   };
   const shadowExtent = 52;
-  const sunOffset = new T.Vector3(-70, 100, 55);
+  const sunOffset = new T.Vector3(-70, 80, 55);
   const lightRotation = new T.Matrix4().lookAt(sunOffset, new T.Vector3(), T.Object3D.DEFAULT_UP);
   const inverseRotation = lightRotation.clone().invert();
   const shadowCenter = new T.Vector3();
@@ -64,11 +78,12 @@ export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
   setQuality(quality);
   return {
     setQuality,
+    weaponFov:()=>weaponCamera.fov,
     stats:()=>({quality,scale:ratio/Math.max(.01,renderPixelRatio(quality,window.devicePixelRatio,width,height)),pixelRatio:ratio}),
-    render(dt: number) {
+    render(dt: number,aimBlend=0,adaptive=true) {
       const w = Math.max(1, renderer.domElement.clientWidth);
       const h = Math.max(1, renderer.domElement.clientHeight);
-      const scale=quality==='auto'?governor.update(dt,!document.hidden):1;
+      const scale=quality==='auto'?governor.update(dt,!document.hidden&&adaptive):1;
       const baseRatio=renderPixelRatio(quality, window.devicePixelRatio, w, h);
       // Keep the 3D image at least 540 pixels tall when the viewport permits it.
       const nextRatio = Math.max(Math.min(baseRatio,540/h),baseRatio*scale);
@@ -96,10 +111,14 @@ export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
       }
       renderer.info.reset();
       renderer.shadowMap.needsUpdate = updateShadow;
+      camera.updateWorldMatrix(true,false);
+      camera.matrixWorld.decompose(weaponCamera.position,weaponCamera.quaternion,weaponCamera.scale);
+      weaponCamera.aspect=camera.aspect;weaponCamera.fov=62-12*aimBlend;
+      weaponCamera.updateProjectionMatrix();weaponCamera.updateMatrixWorld();
       composer.render(dt);
     },
     dispose() {
-      for (const pass of [render, ao, bloom, smaa, output]) pass.dispose();
+      for (const pass of [render, ao, weaponPass, bloom, smaa, output]) pass.dispose();
       // r170's SSAOPass.dispose omits these owned GPU resources.
       ao.noiseTexture.dispose();
       ao.ssaoMaterial.dispose();

@@ -1,0 +1,72 @@
+[
+  {
+    "file": "kar98k.glb",
+    "title": "WWII Kar98K German Sniper Rifle",
+    "author": "danscrivy",
+    "source": "https://sketchfab.com/3d-models/wwii-kar98k-german-sniper-rifle-d1b203a857e645fdbf086244e73fa258",
+    "mirror": "https://zenodo.org/records/10318462",
+    "license": "CC-BY-4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+    "sourceChecksum": "md5:d20d6be63b0d91fdca4dd2420e774ddd",
+    "sourceBytes": 3315548,
+    "sha256": "5ba06c7d21de1a3e13e0450c0e63ff3a91942b34ed0d8c7e14b665ad2da08ee0",
+    "bytes": 2049904,
+    "modifications": "Embedded textures capped at 2048px and JPEG encoded. Runtime scale/orientation/hand adaptation."
+  },
+  {
+    "file": "mp40.glb",
+    "title": "MP-40 (Rusty)",
+    "author": "FOXYSCA",
+    "source": "https://sketchfab.com/3d-models/mp-40-rusty-4098585cd0a248ffaa2c529e8d493a5d",
+    "mirror": "https://zenodo.org/records/10219382",
+    "license": "CC-BY-4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+    "sourceChecksum": "md5:0f5e42bf58624312f975185e06a17118",
+    "sourceBytes": 26687208,
+    "sha256": "7df9e59be4ceeacf98818ae475ccab1a4513fa8a7d81834e997180ebbefa1097",
+    "bytes": 8946592,
+    "modifications": "Embedded textures capped at 2048px and JPEG encoded. Runtime scale/orientation/hand adaptation."
+  },
+  {
+    "file": "m1-garand.glb",
+    "title": "M1 Garand",
+    "author": "Ismaele.Giraldo",
+    "source": "https://sketchfab.com/3d-models/m1-garand-e118eafbdbdc43c9a202889e6b0bbf3a",
+    "mirror": "https://zenodo.org/records/10345868",
+    "license": "CC-BY-4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+    "sourceChecksum": "md5:dfd6e11556de958d39874d9e737a49b3",
+    "sourceBytes": 2493892,
+    "sha256": "baada7dada4de6c6cffe6b627ef39b185ac876b0974c0fc8774df6bfc8538123",
+    "bytes": 1457144,
+    "modifications": "Embedded textures capped at 2048px and JPEG encoded. Runtime scale/orientation/hand adaptation."
+  },
+  {
+    "file": "thompson.glb",
+    "title": "Thompson SMG",
+    "author": "Sammi_stapley",
+    "source": "https://sketchfab.com/3d-models/thompson-smg-1f6b60bb64db48a590ec58369f8624e4",
+    "mirror": "https://zenodo.org/records/10289149",
+    "license": "CC-BY-4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+    "sourceChecksum": "md5:392ae1c2d09f92bd245479cb118ba72a",
+    "sourceBytes": 5791608,
+    "sha256": "84efcfbfc6e58a4d8725761953ac93dc8bc17e04f23a6e45e96e30873385e15a",
+    "bytes": 2848552,
+    "modifications": "Embedded textures capped at 2048px and JPEG encoded. Runtime scale/orientation/hand adaptation."
+  },
+  {
+    "file": "luger.glb",
+    "title": "Luger P08 / Free Download",
+    "author": "zdani98",
+    "source": "https://sketchfab.com/3d-models/luger-p08-free-download-3162bdd6f91d4334bebb40bae461933a",
+    "mirror": "https://zenodo.org/records/10284480",
+    "license": "CC-BY-4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+    "sourceChecksum": "md5:4f27c244d0632cd40a2a43cfab7abe18",
+    "sourceBytes": 3591884,
+    "sha256": "9ef6750b8cbb11d2d110d7f125da9267fd7fc760b1f484484b24ff2d2c78135b",
+    "bytes": 1346100,
+    "modifications": "Embedded textures capped at 2048px and JPEG encoded. Runtime scale/orientation/hand adaptation."
+  }
+]

@@ -1,12 +1,14 @@
 export const graphicsPresets = {
   auto: { label: 'Auto · Ziel 60 FPS', pixelRatio: 1.25, shadowSize: 1536, ao: false, bloom: false },
   performance: { label: 'Flüssig', pixelRatio: 1, shadowSize: 1024, ao: false, bloom: false },
-  high: { label: 'Hoch', pixelRatio: 1.5, shadowSize: 2048, ao: true, bloom: true },
+  high: { label: 'Hoch', pixelRatio: 1.5, shadowSize: 2048, ao: true, bloom: false },
   ultra: { label: 'Ultra', pixelRatio: 2, shadowSize: 4096, ao: true, bloom: true },
 } as const;
 export type GraphicsQuality = keyof typeof graphicsPresets;
-export const graphicsStorageKey = 'altstadt.graphics.v2';
+// Reset the previous implicit "high" default so existing installations adapt too.
+export const graphicsStorageKey = 'altstadt.graphics.v3';
 export function parseGraphicsQuality(value: unknown): GraphicsQuality {
+  if(value===null)return 'auto';
   return value === 'performance' || value === 'high' || value === 'ultra' || value==='auto' ? value : 'auto';
 }
 

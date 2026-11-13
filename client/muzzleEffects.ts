@@ -9,7 +9,7 @@ export function createMuzzleEffects(scene:T.Scene){
   ctx.fillStyle=gradient;ctx.fillRect(0,0,64,64);
   const texture=new T.CanvasTexture(canvas);
   const particles:Array<{sprite:T.Sprite;velocity:T.Vector3;life:number;total:number;flash:boolean;fresh:boolean}>=[];
-  const light=new T.PointLight(0xffb64c,0,4,2);scene.add(light);let lightLife=0;
+  const light=new T.PointLight(0xffb64c,0,4,2);light.layers.enable(1);scene.add(light);let lightLife=0;
   function remove(index:number){const p=particles[index];p.sprite.removeFromParent();p.sprite.material.dispose();particles.splice(index,1);}
   return {
     emit(position:T.Vector3,direction:T.Vector3){

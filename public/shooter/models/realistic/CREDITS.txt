@@ -1,0 +1,25 @@
+# Realistic weapon credits
+
+All five models: CC BY 4.0.
+https://creativecommons.org/licenses/by/4.0/
+
+- WWII Kar98K German Sniper Rifle — danscrivy
+  https://sketchfab.com/3d-models/wwii-kar98k-german-sniper-rifle-d1b203a857e645fdbf086244e73fa258
+  https://zenodo.org/records/10318462
+  Changes: Embedded textures capped at 2048px and JPEG encoded. Runtime scale/orientation/hand adaptation.
+- MP-40 (Rusty) — FOXYSCA
+  https://sketchfab.com/3d-models/mp-40-rusty-4098585cd0a248ffaa2c529e8d493a5d
+  https://zenodo.org/records/10219382
+  Changes: Embedded textures capped at 2048px and JPEG encoded. Runtime scale/orientation/hand adaptation.
+- M1 Garand — Ismaele.Giraldo
+  https://sketchfab.com/3d-models/m1-garand-e118eafbdbdc43c9a202889e6b0bbf3a
+  https://zenodo.org/records/10345868
+  Changes: Embedded textures capped at 2048px and JPEG encoded. Runtime scale/orientation/hand adaptation.
+- Thompson SMG — Sammi_stapley
+  https://sketchfab.com/3d-models/thompson-smg-1f6b60bb64db48a590ec58369f8624e4
+  https://zenodo.org/records/10289149
+  Changes: Embedded textures capped at 2048px and JPEG encoded. Runtime scale/orientation/hand adaptation.
+- Luger P08 / Free Download — zdani98
+  https://sketchfab.com/3d-models/luger-p08-free-download-3162bdd6f91d4334bebb40bae461933a
+  https://zenodo.org/records/10284480
+  Changes: Embedded textures capped at 2048px and JPEG encoded. Runtime scale/orientation/hand adaptation.

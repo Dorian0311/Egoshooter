@@ -1,0 +1,32 @@
+{
+  "name": "cobblestone_floor_02",
+  "source": "https://polyhaven.com/a/cobblestone_floor_02",
+  "license": "CC0-1.0",
+  "resolution": "2k",
+  "files": [
+    {
+      "channel": "albedo",
+      "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/cobblestone_floor_02/cobblestone_floor_02_diff_2k.jpg",
+      "sha256": "1a2d1f21ccff0f70cd181c28f529ce040c123b5c605cc0069f26450040bd6b40",
+      "bytes": 915386
+    },
+    {
+      "channel": "normal",
+      "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/cobblestone_floor_02/cobblestone_floor_02_nor_gl_2k.jpg",
+      "sha256": "3849d3d07b9de564a3b50c0878ce752502fd071f9b63cb6b2acea5d16de72606",
+      "bytes": 646806
+    },
+    {
+      "channel": "roughness",
+      "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/cobblestone_floor_02/cobblestone_floor_02_rough_2k.jpg",
+      "sha256": "a696caf242e449531712fc31e7f402eaf1a89e2c4044ec6c4d3ea5bf60dd2bc6",
+      "bytes": 662455
+    },
+    {
+      "channel": "ao",
+      "source": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/cobblestone_floor_02/cobblestone_floor_02_ao_2k.jpg",
+      "sha256": "b4dc989d178994bb6ca72c71ddb184e99e1562fce2896b1fee8bda3a23351023",
+      "bytes": 771278
+    }
+  ]
+}

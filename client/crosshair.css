@@ -1,0 +1,12 @@
+/* Centered on the camera ray in both the game and the graphics preview. */
+.city-crosshair{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:24px;height:24px;color:#75ef9c;font-size:0;z-index:3;pointer-events:none}
+.city-crosshair i,.city-crosshair b{position:absolute;display:block;background:currentColor;box-shadow:0 0 0 1px #101710}
+.city-crosshair i:nth-child(1){width:2px;height:6px;left:11px;top:0}
+.city-crosshair i:nth-child(2){width:2px;height:6px;left:11px;bottom:0}
+.city-crosshair i:nth-child(3){width:6px;height:2px;left:0;top:11px}
+.city-crosshair i:nth-child(4){width:6px;height:2px;right:0;top:11px}
+.city-crosshair b{width:2px;height:2px;left:11px;top:11px}
+.city-crosshair.city-hit{font-weight:bold;color:#f0eee4}
+.city-crosshair.city-hit-head{color:#e8c46f}
+.city-hit-head:after{content:'KOPFTREFFER';position:absolute;left:50%;top:32px;transform:translateX(-50%);font:10px system-ui;letter-spacing:2px}
+.city-crosshair.city-hit i{transform:rotate(45deg)}

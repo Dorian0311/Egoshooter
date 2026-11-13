@@ -11,7 +11,7 @@ export function loadSceneAssets(scene:T.Scene,renderer:T.WebGLRenderer,covers:{b
  new RGBELoader().load('/shooter/environment/sky.hdr',texture=>{
   if(disposed){texture.dispose();return;}sky=texture;texture.mapping=T.EquirectangularReflectionMapping;
   const generator=new T.PMREMGenerator(renderer);environment=generator.fromEquirectangular(texture);generator.dispose();
-  scene.environment=environment.texture;scene.environmentIntensity=.65;scene.background=texture;scene.backgroundIntensity=.65;scene.backgroundBlurriness=.025;
+  scene.environment=environment.texture;scene.environmentIntensity=.48;scene.background=texture;scene.backgroundIntensity=.65;scene.backgroundBlurriness=.025;
  },undefined,()=>console.warn('Sky asset unavailable'));
  loader.load('/shooter/models/wooden_military_crate/asset.gltf',gltf=>{
   if(disposed){disposeObject(gltf.scene);return;}

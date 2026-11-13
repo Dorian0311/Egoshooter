@@ -1,6 +1,13 @@
 node_modules/
+data/
 dist/
 .env
+.env.*
+!.env.example
+*.pem
+*.key
+*.sqlite
+*.sqlite-*
 *.log
 backups/
 supporthub-check/

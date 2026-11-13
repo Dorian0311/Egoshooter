@@ -1,5 +1,6 @@
 import {GLTFLoader} from 'three/examples/jsm/loaders/GLTFLoader.js';
 import {batchWeaponMeshes} from './batchWeaponMeshes';
+import {createCharacterMotion,loadMotionLibrary,type MotionLibrary} from './characterMotion';
 import {isBonusId,loadBonusCharacter,createBonusCharacter,type BonusCharacterData} from './bonusCharacters';
 import {defaultUniform,uniforms,type UniformId} from '../shared/uniforms.ts';
 import * as T from 'three';
@@ -12,18 +13,18 @@ const coatTextureCache=new Map<string,{texture:T.Texture;refs:number}>();
 function acquireCoatTexture(file:string,color:boolean){let entry=coatTextureCache.get(file);if(!entry){const texture=new T.TextureLoader().load('/shooter/characters/greatcoat/'+file);if(color)texture.colorSpace=T.SRGBColorSpace;texture.anisotropy=4;entry={texture,refs:0};coatTextureCache.set(file,entry);}entry.refs++;return entry.texture;}
 function releaseCoatTexture(texture:T.Texture){for(const [file,entry]of coatTextureCache)if(entry.texture===texture){if(--entry.refs===0){texture.dispose();coatTextureCache.delete(file);}break;}}
 
-type HumanData={coat?:CoatPiece[];positions:number[];uv:number[];indices:number[];skinIndex:number[];skinWeight:number[];categories:number[];bones:Joint[];skinImage?:HTMLImageElement};
+type HumanData={coat?:CoatPiece[];positions:number[];uv:number[];indices:number[];skinIndex:number[];skinWeight:number[];categories:number[];bones:Joint[];skinImage?:HTMLImageElement;motion?:MotionLibrary};
 let source:Promise<HumanData>|null=null;
-function loadBaseHuman(){return source??=fetch('/shooter/characters/humanoid.json').then(r=>{if(!r.ok)throw Error('Human model unavailable');return r.json() as Promise<HumanData>;}).then(async data=>{data.skinImage=await new T.ImageLoader().loadAsync('/shooter/characters/skin.png');return data;}).catch(e=>{source=null;throw e;});}
+function loadBaseHuman(){return source??=fetch('/shooter/characters/humanoid.json').then(r=>{if(!r.ok)throw Error('Human model unavailable');return r.json() as Promise<HumanData>;}).then(async data=>{const [image,motion]=await Promise.all([new T.ImageLoader().loadAsync('/shooter/characters/skin.png'),loadMotionLibrary()]);data.skinImage=image;data.motion=motion;return data;}).catch(e=>{source=null;throw e;});}
 export async function loadHuman(uniformId?:UniformId){
  if(uniformId&&isBonusId(uniformId))return loadBonusCharacter(uniformId);
  const data=await loadBaseHuman();if(uniformId!=='de-greatcoat')return data;
  coatSource??=fetch('/shooter/characters/greatcoat/rigged.json').then(r=>{if(!r.ok)throw Error('Mantelmodell konnte nicht geladen werden');return r.json() as Promise<CoatPiece[]>;}).catch(e=>{coatSource=null;throw e;});
  return {...data,coat:await coatSource};
 }
-export function createHuman(data:HumanData|BonusCharacterData,team:'de'|'fr',map:MapId,uniform:T.MeshStandardMaterial,uniformId:UniformId=defaultUniform(team,map)){
+export function createHuman(data:HumanData|BonusCharacterData,team:'de'|'fr',map:MapId,uniform:T.MeshStandardMaterial,uniformId:UniformId=defaultUniform(team,map),civilian=false){
  if('character' in data)return createBonusCharacter(data);
- uniform=uniform.clone();const outfit=uniforms[uniformId];uniform.color.set(outfit.color);
+ uniform=uniform.clone();const outfit=uniforms[uniformId];if(!civilian)uniform.color.set(outfit.color);
  let isDisposed=false;
  const group=new T.Group(),geometry=new T.BufferGeometry();
  const tailored=data.positions.slice();
@@ -32,7 +33,7 @@ export function createHuman(data:HumanData|BonusCharacterData,team:'de'|'fr',map
  geometry.setAttribute('skinIndex',new T.Uint16BufferAttribute(data.skinIndex,4));geometry.setAttribute('skinWeight',new T.Float32BufferAttribute(data.skinWeight,4));
  const skin=new T.Texture(data.skinImage);skin.colorSpace=T.SRGBColorSpace;skin.anisotropy=4;skin.needsUpdate=true;
  const materials=[uniform,new T.MeshStandardMaterial({color:'#ffffff',map:skin,roughness:.82,envMapIntensity:.35}),new T.MeshStandardMaterial({color:'#272723',roughness:.85})];
- const ordered:number[][]=[[],[],[]];for(let i=0;i<data.indices.length;i+=3){if(data.coat&&!data.indices.slice(i,i+3).every(v=>data.positions[v*3+1]>1.54&&(data.positions[v*3+1]>1.62||Math.abs(data.positions[v*3])<.085)))continue;const tri=data.indices.slice(i,i+3),labels=tri.map(v=>data.categories[v]);const category=data.coat?1:labels.filter(v=>v===1).length>=2?1:labels.filter(v=>v===2).length>=2?2:0;ordered[category].push(...tri);}
+ const ordered:number[][]=[[],[],[]];for(let i=0;i<data.indices.length;i+=3){if(data.coat&&!data.indices.slice(i,i+3).every(v=>data.positions[v*3+1]>1.40&&(data.positions[v*3+1]>1.62||Math.abs(data.positions[v*3])<.085)))continue;const tri=data.indices.slice(i,i+3),labels=tri.map(v=>data.categories[v]);const category=data.coat?1:labels.filter(v=>v===1).length>=2?1:labels.filter(v=>v===2).length>=2?2:0;ordered[category].push(...tri);}
  ordered[2]=[];geometry.setIndex(ordered.flat());let start=0;ordered.forEach((indices,index)=>{geometry.addGroup(start,indices.length,index);start+=indices.length;});geometry.computeVertexNormals();
  const bones=data.bones.map(j=>{const b=new T.Bone();b.name=j.name;return b;});
  for(let i=0;i<bones.length;i++){const j=data.bones[i],parent=j.parent>=0?data.bones[j.parent].head:[0,0,0];bones[i].position.set(j.head[0]-parent[0],j.head[1]-parent[1],j.head[2]-parent[2]);if(j.parent>=0)bones[j.parent].add(bones[i]);else group.add(bones[i]);}
@@ -50,11 +51,11 @@ export function createHuman(data:HumanData|BonusCharacterData,team:'de'|'fr',map
  const ownMaterials:T.Material[]=[uniform,materials[1],materials[2]];
  const detailMaterials=new Map<string,T.MeshStandardMaterial>();
  function detailMaterial(color:string,roughness=.85){const key=`${color}:${roughness}`;let material=detailMaterials.get(key);if(!material){material=new T.MeshStandardMaterial({color,roughness});detailMaterials.set(key,material);ownMaterials.push(material);}return material;}
- const equipment=new T.Group();group.add(equipment);if(data.coat)equipment.visible=false;
+ const equipment=new T.Group();group.add(equipment);if(data.coat||civilian)equipment.visible=false;
  function part(x:number,y:number,z:number,w:number,h:number,d:number,color:string,parent:T.Object3D=equipment){const m=new T.Mesh(new T.BoxGeometry(w,h,d),detailMaterial(color));m.position.set(x,y,z);m.castShadow=true;parent.add(m);return m;}
  const headBone=named.get('head')!;const headOrigin=data.bones.find(j=>j.name==='head')!.head;
  const headgear=new T.Group();headgear.position.set(0,1.72-headOrigin[1],data.bones.find(j=>j.name==='head')!.tail[2]-headOrigin[2]);headBone.add(headgear);
- if(uniformId==='de-panzer'){
+ if(!civilian&&uniformId==='de-panzer'){
   const insigniaCanvas=document.createElement('canvas');insigniaCanvas.width=256;insigniaCanvas.height=128;
   const ink=insigniaCanvas.getContext('2d')!;ink.strokeStyle='#b5b8ac';ink.fillStyle='#b5b8ac';ink.lineWidth=6;ink.lineCap='square';
   // Small historical Heer breast insignia, not a separate faction banner.
@@ -70,15 +71,15 @@ export function createHuman(data:HumanData|BonusCharacterData,team:'de'|'fr',map
   const capMat=new T.MeshStandardMaterial({color:'#292d30',roughness:1});ownMaterials.push(capMat);const cap=new T.Mesh(new T.SphereGeometry(.12,20,12,0,Math.PI*2,0,Math.PI*.6),capMat);cap.scale.set(1,.65,1.05);headgear.add(cap);const visor=new T.Mesh(new T.SphereGeometry(.12,16,8),capMat);visor.scale.set(1,.045,.7);visor.position.set(0,-.035,-.08);headgear.add(visor);
   part(.01,1.22,-.105,.13,.30,.012,'#292d30').rotation.z=-.16;
   for(const side of [-1,1]){part(side*.05,1.50,-.103,.042,.032,.005,'#ad8694').rotation.z=side*.25;part(side*.05,1.50,-.107,.035,.026,.003,'#25292c');const skullMaterial=new T.MeshStandardMaterial({color:'#bfc0ba',roughness:.7});ownMaterials.push(skullMaterial);const skull=new T.Mesh(new T.SphereGeometry(.009,10,8),skullMaterial);skull.scale.set(1,.85,.3);skull.position.set(side*.05,1.503,-.112);equipment.add(skull);part(side*.05,1.493,-.112,.008,.006,.003,'#bfc0ba');}
- }else if(outfit.headgear==='helmet'){
+ }else if(!civilian&&outfit.headgear==='helmet'){
   const material=new T.MeshStandardMaterial({color:team==='de'?'#454c42':'#5d684b',roughness:.85});ownMaterials.push(material);const helmet=new T.Mesh(new T.SphereGeometry(.17,16,12,0,Math.PI*2,0,Math.PI*.6),material);helmet.position.y=-.025;helmet.scale.set(.75,.55,.9);headgear.add(helmet);
-  if(team==='de')void new GLTFLoader().loadAsync('/shooter/models/m40-helmet.glb').then(gltf=>{
+  if(team==='de'&&!uniformId.startsWith('task-'))void new GLTFLoader().loadAsync('/shooter/models/m40-helmet.glb').then(gltf=>{
     if(isDisposed){gltf.scene.traverse(o=>{if(o instanceof T.Mesh){o.geometry.dispose();for(const m of Array.isArray(o.material)?o.material:[o.material])m.dispose();}});return;}
     helmet.visible=false;gltf.scene.rotation.y=Math.PI;gltf.scene.scale.setScalar(1.1);
     gltf.scene.traverse(o=>{if(o instanceof T.Mesh){o.castShadow=true;for(const m of Array.isArray(o.material)?o.material:[o.material])ownMaterials.push(m);}});batchWeaponMeshes(gltf.scene);headgear.add(gltf.scene);
   }).catch(error=>console.warn('Helm konnte nicht geladen werden',error));
 
- }else{
+ }else if(!civilian){
   const material=new T.MeshStandardMaterial({color:'#303947',roughness:1});ownMaterials.push(material);const beret=new T.Mesh(new T.SphereGeometry(.2,16,10),material);beret.scale.set(1,.28,1);beret.position.set(.025,.025,0);beret.rotation.z=-.16;headgear.add(beret);
   const hornMaterial=new T.MeshStandardMaterial({color:'#b6ae80',metalness:.55,roughness:.6});ownMaterials.push(hornMaterial);
   const horn=new T.Mesh(new T.TorusGeometry(.018,.003,8,24,Math.PI*1.6),hornMaterial);horn.position.set(.08,.008,-.165);horn.rotation.z=.3;headgear.add(horn);
@@ -86,6 +87,14 @@ export function createHuman(data:HumanData|BonusCharacterData,team:'de'|'fr',map
 
  }
  part(0,.94,0,.34,.035,.24,'#4a3e2b');part(.085,1.15,-.135,.105,.13,.014,outfit.color);part(-.085,1.15,-.135,.105,.13,.014,outfit.color);
+ if(!civilian&&uniformId.startsWith('task-')){
+  const vest=uniformId==='task-olive'?'#39473b':'#706c53';
+  part(0,1.23,-.145,.31,.33,.10,vest);part(0,1.23,.125,.30,.31,.09,vest);
+  for(let n=0;n<3;n++)part((n-1)*.095,1.12,-.218,.08,.16,.055,vest);
+  for(let row=0;row<4;row++)part(0,1.22+row*.04,-.202,.29,.013,.012,'#92977b');
+  part(.18,1.31,-.14,.06,.14,.05,'#26332d');part(.18,1.44,-.14,.009,.15,.009,'#1c2325');
+  const goggles=new T.Mesh(new T.BoxGeometry(.17,.055,.04),detailMaterial('#243b43',.2));goggles.position.set(0,-.025,-.13);headgear.add(goggles);
+ }
 
  const webColor=team==='de'?'#39342c':'#9b9576';
  function strap(points:T.Vector3[],radius:number,color:string){const mesh=new T.Mesh(new T.TubeGeometry(new T.CatmullRomCurve3(points),20,radius,6,false),detailMaterial(color,.95));mesh.castShadow=true;equipment.add(mesh);}
@@ -125,17 +134,31 @@ export function createHuman(data:HumanData|BonusCharacterData,team:'de'|'fr',map
  part(.14,1.18,-.42,.045,.055,.6,'#5c4732');part(.14,1.215,-.7,.022,.025,.35,'#414744');
  // Each branch is rigid in its own bone space. Never merge across animated bones.
  batchWeaponMeshes(equipment);batchWeaponMeshes(headgear);
+ if(!civilian){group.updateMatrixWorld(true);named.get('spine01')?.attach(equipment);}
+ const motion=data.motion?createCharacterMotion(group,named,data.motion,civilian):undefined;
+ group.userData.hasCrouchAnimation=!!motion;
  let previous=new T.Vector3(),speed=0;
+ const upperPose=new T.Quaternion(),upperParent=new T.Quaternion(),leanPose=new T.Quaternion(),poseAxis=new T.Vector3(1,0,0);
  function update(player:Player,time:number,dt:number){
+  motion?.update(player,group.position,dt);
+  if(motion&&!civilian){
+   // Locomotion drives hips/legs. Keep the armed chest and gaze aligned with aim.
+   const chest=named.get('spine01')!;group.getWorldQuaternion(upperPose);
+   upperPose.multiply(leanPose.setFromAxisAngle(poseAxis,player.crouching?-.12:player.sprinting?-.09:-.02));
+   chest.parent!.getWorldQuaternion(upperParent).invert();chest.quaternion.copy(upperParent.multiply(upperPose));chest.updateWorldMatrix(false,true);
+   group.getWorldQuaternion(upperPose);upperPose.multiply(leanPose.setFromAxisAngle(poseAxis,-player.pitch*.35));
+   headBone.parent!.getWorldQuaternion(upperParent).invert();headBone.quaternion.copy(upperParent.multiply(upperPose));
+  }
   const displacement=previous.distanceTo(new T.Vector3(player.x,player.y,player.z));speed=T.MathUtils.lerp(speed,Math.min(1,displacement/Math.max(.001,dt)/4),.25);previous.set(player.x,player.y,player.z);
   const phase=time*.009,walk=Math.sin(phase)*.48*speed;
-  for(const side of ['L','R']){const sign=side==='L'?1:-1;const upper=named.get(`upperleg01.${side}`);if(upper)upper.rotation.x=walk*sign;const knee=named.get(`lowerleg01.${side}`);if(knee)knee.rotation.x=Math.max(0,-walk*sign)*.8;
-   const shoulder=named.get(`upperarm01.${side}`);if(shoulder){shoulder.rotation.y=-sign*.95;shoulder.rotation.z=sign*.22;}
-   const elbow=named.get(`lowerarm01.${side}`);if(elbow)elbow.rotation.x=.55;
+  for(const side of ['L','R']){const sign=side==='L'?1:-1;const upper=named.get(`upperleg01.${side}`);if(upper&&!motion)upper.rotation.x=walk*sign;const knee=named.get(`lowerleg01.${side}`);if(knee&&!motion)knee.rotation.x=Math.max(0,-walk*sign)*.8;
+   const shoulder=named.get(`upperarm01.${side}`);if(shoulder&&(!civilian||!motion)){shoulder.rotation.y=-sign*.95;shoulder.rotation.z=sign*.22;}
+   const elbow=named.get(`lowerarm01.${side}`);if(elbow&&(!civilian||!motion))elbow.rotation.x=.55;
   }
-  headBone.rotation.x=-player.pitch*.35;
+  if(civilian&&!motion){for(const side of ['L','R']){const sign=side==='L'?1:-1,shoulder=named.get(`upperarm01.${side}`),elbow=named.get(`lowerarm01.${side}`);if(shoulder){shoulder.rotation.set(-walk*sign*.55,0,sign*.65);}if(elbow)elbow.rotation.x=.14;} }
+  if(!motion||civilian)headBone.rotation.x=-player.pitch*.35;
   for(const [name,bone]of named)if(name.startsWith('finger')&&!name.startsWith('finger1-1'))bone.rotation.z=(name.endsWith('.L')?1:-1)*.38;
  }
- function dispose(){if(isDisposed)return;isDisposed=true;for(const garment of coatMeshes)(garment.material as T.Material).dispose();for(const texture of coatTextures)releaseCoatTexture(texture);skin.dispose();skeleton.dispose();ownMaterials.forEach(m=>m.dispose());group.traverse(o=>{if(o instanceof T.Mesh){o.geometry.dispose();o.userData.ownedTexture?.dispose();}});group.clear();}
+ function dispose(){if(isDisposed)return;isDisposed=true;motion?.dispose();for(const garment of coatMeshes)(garment.material as T.Material).dispose();for(const texture of coatTextures)releaseCoatTexture(texture);skin.dispose();skeleton.dispose();ownMaterials.forEach(m=>m.dispose());group.traverse(o=>{if(o instanceof T.Mesh){o.geometry.dispose();o.userData.ownedTexture?.dispose();}});group.clear();}
  return {group,update,dispose,setHeadVisible:(visible:boolean)=>{headBone.scale.setScalar(visible?1:.001);}};
 }

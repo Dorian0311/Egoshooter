@@ -23,3 +23,9 @@ and embedded in GLB. Per-file JSON records sizes, triangle counts and SHA-256.
 Runtime walking and head movement are procedural; no complete motion-capture
 or weapon-specific animation library was supplied. All figures use the existing
 server hitboxes and rules; Rocket is deliberately scaled to player height.
+
+## Leatherface
+User-provided Texas_Chainsaw_-_Leatherface.usdz. Static mesh without skeleton or animation clips. Reduced from 623,274 to 52,970 triangles, one material, embedded 1024px texture. Conversion: scripts/convert-leatherface.py. Fixed source pose with subtle movement feedback; no separate chainsaw weapon or attack behavior. Redistribution permission has not been established.
+
+## Commander Easter egg
+User-provided nazi-commander-1946-wolf-old-blood.zip. Static FBX with textures; no skeleton or animation. Now also selectable in the regular gallery at user request; fixed source pose, not a historically accurate uniform. 13,683 triangles, five meshes, 1024px textures. Conversion: scripts/convert-commander.mjs and scripts/pack-character-textures.py commander. Game-derived asset; redistribution permission not established.

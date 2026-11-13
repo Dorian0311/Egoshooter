@@ -1,0 +1,11 @@
+{
+  "id": "commander",
+  "triangles": 13683,
+  "draws": 5,
+  "bones": 0,
+  "source": "User-provided nazi-commander-1946-wolf-old-blood.zip; redistribution permission not established",
+  "bytes": 827316,
+  "sha256": "8b6bfe7ea14b16a38166b36d1fb5bf7f1a82b0396b91e6bd66d6380bc555cdd8",
+  "maxTextureSize": 1024,
+  "animation": "Static source, no skeleton or animations; standalone lobby viewer only."
+}

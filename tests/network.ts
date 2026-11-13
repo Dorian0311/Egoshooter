@@ -6,12 +6,13 @@ import { Client, type Room } from "@colyseus/sdk";
 import type { Snapshot } from "../shared/game.ts";
 import { mergeSnapshot, type SnapshotPacket } from "../shared/protocol.ts";
 import { neutral } from "../shared/game.ts";
+const gamePort=Number(process.env.TEST_GAME_PORT??2579),proxyPort=Number(process.env.TEST_PROXY_PORT??2581);
 const secret = "network-test-only-secret-32-characters-minimum";
 const server = spawn(process.execPath, ["--import", "tsx", "server/index.ts"], {
   env: {
     ...process.env,
     NODE_ENV: "test",
-    PORT: "2579",
+    PORT: String(gamePort),
     DATABASE_URL: "",
     SHOOTER_TICKET_SECRET: secret,
     SHOOTER_ORIGINS: "http://127.0.0.1:5173",
@@ -46,11 +47,11 @@ async function token(id: string) {
     .setExpirationTime("2m")
     .sign(new TextEncoder().encode(secret));
 }
-const closeProxy = await latencyProxy(2581, 2579);
+const closeProxy = await latencyProxy(proxyPort, gamePort);
 try {
   await until(() => logs.includes("multiplayer listening"), 60000);
   for (let n = 0; n < 8; n++) {
-    const sdk = new Client("ws://127.0.0.1:2581", {
+    const sdk = new Client(`ws://127.0.0.1:${proxyPort}`, {
       headers: { Origin: "http://127.0.0.1:5173" },
     });
     const r =
@@ -73,11 +74,11 @@ try {
       [...states.values()].every((s) => s.players.length === 8),
   );
   const code = states.get(0)!.roomCode;
-  const lookup = await fetch(`http://127.0.0.1:2579/rooms/${code}`, {
+  const lookup = await fetch(`http://127.0.0.1:${gamePort}/rooms/${code}`, {
     headers: { Authorization: `Bearer ${await token("0")}` },
   });
   assert.equal((await lookup.json()).roomId, rooms[0].roomId);
-  const outsider = new Client("ws://127.0.0.1:2581", {
+  const outsider = new Client(`ws://127.0.0.1:${proxyPort}`, {
     headers: { Origin: "http://127.0.0.1:5173" },
   });
   await assert.rejects(() =>
@@ -107,6 +108,21 @@ try {
   rooms[0].send("input", { ...neutral(100), forward: 999 });
   await sleep(100);
   assert.ok(states.get(1)!.players.find((p) => p.id === "0")!.seq < 100);
+  // Reach the near watch-house via the street using real, validated movement.
+  if(states.get(0)!.mapId==='cologne'){
+    let seq=200;
+    const deadline=Date.now()+8500;
+    while(true){
+      const p=states.get(0)!.players.find(p=>p.id==='0')!,dx=-46.5-p.x,dz=-10.1-p.z;
+      if(Math.hypot(dx,dz)<.5)break;
+      assert.ok(Date.now()<deadline,'could not reach watch-house door');
+      rooms[0].send('input',{...neutral(++seq),forward:1,yaw:Math.atan2(-dx,-dz),time:states.get(0)!.now});await sleep(70);
+    }
+    const stopSeq=++seq;rooms[0].send('input',{...neutral(stopSeq),yaw:Math.PI,time:states.get(0)!.now});
+    await until(()=>states.get(0)!.players.find(p=>p.id==='0')!.seq>=stopSeq);
+    rooms[0].send('interact','door-1--1');
+    await until(()=>[...states.values()].every(s=>s.interiors?.doors['door-1--1']===false));
+  }
   rooms[0].connection.close(4010, "test drop");
   await until(
     () => states.get(1)?.players.find((p) => p.id === "0")?.connected === false,
@@ -115,6 +131,7 @@ try {
     () => states.get(1)?.players.find((p) => p.id === "0")?.connected === true,
     12000,
   );
+  if(states.get(0)!.mapId==='cologne')assert.equal(states.get(0)!.interiors?.doors['door-1--1'],false);
   await until(
     () => [...states.values()].every((s) => s.phase === "finished"),
     20000,
@@ -124,7 +141,7 @@ try {
   rooms[host].send("rematch");
   await until(() => [...states.values()].every((s) => s.phase === "waiting"));
   console.log(
-    "PASS: full accelerated match and rematch; eight real WebSocket clients, room lookup, auth rejection, balanced teams, synchronized countdown, 50–150ms WebSocket RTT, invalid input rejection, reconnect.",
+    "PASS: full accelerated match and rematch; eight real WebSocket clients, room lookup, auth rejection, balanced teams, synchronized countdown, 50–150ms WebSocket RTT, invalid input rejection, synchronized door interaction and reconnect.",
   );
 } finally {
   await Promise.allSettled(rooms.map((r) => r.leave()));

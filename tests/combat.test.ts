@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {Game,hitPlayer,makePlayer,neutral} from '../shared/game.ts';
-function duel(){const game=new Game('ABC234');game.add('a','Anna');game.add('b','Bruno');game.ready('a',true,1000);game.ready('b',true,1000);game.tick(4000);const a=game.player('a')!,b=game.player('b')!;Object.assign(a,{x:8,z:8,yaw:0,pitch:0,protectedUntil:0});Object.assign(b,{x:8,z:0,yaw:0,protectedUntil:0});game.history=[];return {game,a,b};}
+function duel(){const game=new Game('ABC234',600000,'cologne',()=>.5);game.add('a','Anna');game.add('b','Bruno');game.ready('a',true,1000);game.ready('b',true,1000);game.tick(4000);const a=game.player('a')!,b=game.player('b')!;Object.assign(a,{x:8,z:8,yaw:0,pitch:0,protectedUntil:0});Object.assign(b,{x:8,z:0,yaw:0,protectedUntil:0});game.history=[];return {game,a,b};}
 test('rifle headshot kills and records the hit zone',()=>{const {game,a,b}=duel();game.shoot(a,{...neutral(1),fire:true,time:4000},4000);assert.equal(b.hp,0);assert.equal(a.headshots,1);assert.equal(game.state.events.find(e=>e.type==='hit')?.hitZone,'head');assert.equal(game.state.events.find(e=>e.type==='hit')?.damage,130);});
 test('pistol headshot kills; body and legs cause lower damage',()=>{let {game,a,b}=duel();a.weapon=1;a.ammo=8;game.shoot(a,{...neutral(1),fire:true,time:4000},4000);assert.equal(b.hp,0);assert.equal(game.state.events.find(e=>e.type==='hit')?.damage,112);
  ({game,a,b}=duel());a.pitch=-.07;game.shoot(a,{...neutral(1),fire:true,time:4000},4000);assert.equal(b.hp,35);assert.equal(a.headshots,0);

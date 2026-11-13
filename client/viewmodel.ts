@@ -6,12 +6,22 @@ export type ViewmodelInput = {
   reloadRemainingMs:number; reloadDurationMs:number;
   /** Camera-local muzzle height before this controller transforms the parent. */
   muzzleY:number;
+  /** Camera-local iron-sight / optic height, when the loaded weapon provides it. */
+  sightY?:number;
 };
 export type ViewmodelPose = {aimBlend:number;reloadProgress:number;reloadBlend:number;recoil:number};
 const clamp=(v:number,min:number,max:number)=>Math.max(min,Math.min(max,v));
 const smooth=(v:number)=>{v=clamp(v,0,1);return v*v*(3-2*v);};
 export function reloadEnvelope(progress:number){
   return smooth(progress/.18)*(1-smooth((progress-.78)/.22));
+}
+
+/** Match world-space flash/tracer origins to the independently projected gun. */
+export function projectWeaponMuzzle(point:T.Vector3,camera:T.PerspectiveCamera,weaponFov:number){
+  const local=camera.worldToLocal(point.clone());
+  const factor=Math.tan(T.MathUtils.degToRad(camera.fov/2))/Math.tan(T.MathUtils.degToRad(weaponFov/2));
+  local.x*=factor;local.y*=factor;
+  return camera.localToWorld(local);
 }
 
 /** Cosmetic only: never changes camera aim, simulation inputs, cadence or damage.
@@ -21,7 +31,7 @@ export function reloadEnvelope(progress:number){
 export function createViewmodel(parent:T.Group){
   const restPosition=parent.position.clone(),restRotation=parent.rotation.clone();
   const pose:ViewmodelPose={aimBlend:0,reloadProgress:0,reloadBlend:0,recoil:0};
-  let recoil=0,velocity=0,phase=0,swayX=0,swayY=0,lastYaw=0,lastPitch=0;
+  let recoil=0,velocity=0,phase=0,swayX=0,swayY=0,lastYaw=0,lastPitch=0,movementBlend=0;
   let initialized=false,lastWeapon=-1,equip=0,disposed=false;
   return {
     /** Call once for each server-confirmed local shot, never from mouse-down. */
@@ -45,17 +55,18 @@ export function createViewmodel(parent:T.Group){
       const follow=1-Math.exp(-dt*12);
       swayX+=(clamp(-yawDelta*1.6,-.035,.035)-swayX)*follow;
       swayY+=(clamp(pitchDelta*1.4,-.025,.025)-swayY)*follow;
-      const movement=clamp(input.moving,0,1)*Number(input.grounded);
+      movementBlend+=(clamp(input.moving,0,1)*Number(input.grounded)-movementBlend)*(1-Math.exp(-dt*10));
+      const movement=movementBlend;
       phase+=dt*(input.sprinting?13:9)*movement;
       const hip=1-pose.aimBlend,bob=movement*hip*(input.sprinting?.012:.006);
       parent.position.set(restPosition.x-.24*pose.aimBlend+swayX*hip+Math.sin(phase)*bob,
-        restPosition.y+(-input.muzzleY-.012)*pose.aimBlend+swayY*hip+Math.cos(phase*2)*bob*.6-pose.reloadBlend*.13-equip*.18,
-        restPosition.z+recoil+equip*.10);
+        restPosition.y+(-(input.sightY??input.muzzleY)-.008)*pose.aimBlend+swayY*hip+Math.cos(phase*2)*bob*.6-pose.reloadBlend*.13-equip*.18,
+        restPosition.z-.18*pose.aimBlend+recoil+equip*.10);
       parent.rotation.set(restRotation.x-recoil*.8-pose.reloadBlend*.48+equip*.25,
         restRotation.y+swayX*.6,restRotation.z+pose.reloadBlend*.32-Math.sin(phase)*bob*.6);
       return pose;
     },
-    reset(){initialized=false;lastWeapon=-1;recoil=velocity=swayX=swayY=phase=0;pose.aimBlend=0;},
+    reset(){initialized=false;lastWeapon=-1;recoil=velocity=swayX=swayY=phase=movementBlend=0;pose.aimBlend=0;},
     dispose(){disposed=true;parent.position.copy(restPosition);parent.rotation.copy(restRotation);},
   };
 }

@@ -7,7 +7,7 @@ export function facadeColor(index:number){return facadePalette[index%facadePalet
 
 /** Architectural relief on the existing wall footprint. Doorways and side firing
  * openings remain open; opaque facade windows are inset within their surrounds. */
-export function addArchitecture(scene:T.Scene,buildings:Building[],get:(color:string)=>T.MeshStandardMaterial) {
+export function addArchitecture(scene:T.Scene,buildings:Building[],get:(color:string)=>T.MeshStandardMaterial,texturedFacades=false) {
   const stone=get('#9d8b75'),brick=get('#c1b59a'),wood=get('#67513d');
   const painted=get('#3e514b'),interior=get('#121d20'),glass=get('#7b8a82'),curtain=get('#b6b09a');
   const box=(x:number,y:number,z:number,w:number,h:number,d:number,material:T.MeshStandardMaterial)=>{
@@ -30,7 +30,7 @@ export function addArchitecture(scene:T.Scene,buildings:Building[],get:(color:st
       for(const dx of [-b.w/2+.2,b.w/2-.2])for(let y=.3;y<height;y+=.46){
         box(b.x+dx,y,z,.45,.37,.12,stone);
       }
-      for(const dx of [-5.5,5.5])for(const y of b.upper?[1.9,5.9]:[1.9]){
+      for(const dx of texturedFacades?[]:[-5.5,5.5])for(const y of b.upper?[1.9,5.9]:[1.9]){
         const x=b.x+dx;
         // Dark recess, deep reveals, stone lintel and projecting sloped sill.
         box(x,y,z+side*.025,1.50,1.94,.035,interior);
@@ -65,7 +65,7 @@ export function addArchitecture(scene:T.Scene,buildings:Building[],get:(color:st
       box(b.x,height+.08,z,b.w+.8,.13,.43,stone);
       // Existing side openings: frames only, so movement and firing remain aligned.
       const x=b.x+side*(b.w/2+.245);
-      box(x,.42,b.z,.12,.84,b.d,brick);
+      if(b.upper)box(x,.42,b.z,.12,.84,b.d,brick);else for(const dz of [-4.75,4.75])box(x,.42,b.z+dz,.12,.84,6.5,brick);
       for(const dz of [-3.25,3.25]){
         box(x,1.18,b.z+dz,.32,.13,3.55,stone);
         box(x,2.79,b.z+dz,.23,.18,3.55,stone);

@@ -1,0 +1,37 @@
+{
+  "name": "wild_rooibos_bush",
+  "source": "https://polyhaven.com/a/wild_rooibos_bush",
+  "license": "CC0-1.0",
+  "files": [
+    {
+      "file": "asset.gltf",
+      "url": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/wild_rooibos_bush/wild_rooibos_bush_1k.gltf",
+      "sha256": "7f3fb17e4606e33d0bc4239c4901c9610b4bd17fe26b6780ba11ab4493f25d29",
+      "bytes": 23122
+    },
+    {
+      "file": "textures/wild_rooibos_bush_nor_gl_1k.jpg",
+      "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/wild_rooibos_bush/wild_rooibos_bush_nor_gl_1k.jpg",
+      "sha256": "ffd557b4cb732d24988d41741398df150567f3ac9d1433f11b88d60158c953d4",
+      "bytes": 463170
+    },
+    {
+      "file": "textures/wild_rooibos_bush_diff_1k.jpg",
+      "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/wild_rooibos_bush/wild_rooibos_bush_diff_1k.jpg",
+      "sha256": "d963cdaf769bc39bb57295d518b37cd9456168cf5e3b82fd59f58c98d3faf596",
+      "bytes": 374003
+    },
+    {
+      "file": "textures/wild_rooibos_bush_arm_1k.jpg",
+      "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/wild_rooibos_bush/wild_rooibos_bush_arm_1k.jpg",
+      "sha256": "e0e512f263b8f1fe1c485e61912ba1ce5d42b397cf9a4e2b1786677e732bb84b",
+      "bytes": 367273
+    },
+    {
+      "file": "wild_rooibos_bush.bin",
+      "url": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/8k/wild_rooibos_bush/wild_rooibos_bush.bin",
+      "sha256": "7a3471b4d110fe9927f4a200191eae86fa3c0a08f8e8e797d22e94a1703322e1",
+      "bytes": 1236928
+    }
+  ]
+}

@@ -1,13 +1,15 @@
 <!doctype html>
 <html lang="de"><head><meta charset="utf-8"><title>Grafikprüfung · Altstadt</title>
-<style>body{margin:0;background:#101916;color:#eceddf;font:13px system-ui}canvas{display:block;width:100vw;height:100vh}aside{position:absolute;top:16px;left:16px;display:flex;align-items:center;gap:12px;padding:12px 16px;background:#101916dd;border:1px solid #ffffff33;border-radius:4px}select{background:#25382e;color:inherit;border:1px solid #71816b;padding:7px}output{color:#c4d3b3;min-width:150px}small{position:absolute;bottom:16px;left:16px;background:#101916cc;padding:8px}</style>
-</head><body><canvas></canvas><aside>
-<label>Ansicht <select id="view" aria-label="Ansicht"><option value="street">Köln · Straße</option><option value="river">Köln · Rhein</option><option value="alpine">Alpen · Gebirgspass</option></select></label>
+<style>body{margin:0;background:#101916;color:#eceddf;font:13px system-ui}canvas{display:block;width:100vw;height:100vh}aside{position:absolute;top:16px;left:16px;display:flex;align-items:center;gap:12px;padding:12px 16px;background:#101916dd;border:1px solid #ffffff33;border-radius:4px}select{background:#25382e;color:inherit;border:1px solid #71816b;padding:7px}output{color:#c4d3b3;min-width:150px}body>small{position:absolute;bottom:16px;left:16px;background:#101916cc;padding:8px}</style>
+</head><body><canvas></canvas><div class="city-crosshair" aria-hidden="true"><i></i><i></i><i></i><i></i><b></b></div><aside>
+<label>Ansicht <select id="view" aria-label="Ansicht"><option value="storm">Sturmzone · Küstenwacht</option><option value="frontline">Operation Abendrot</option><option value="interior">Funkwache innen</option><option value="upstairs">Obergeschoss</option><option value="station">Bahnhof innen</option><option value="residents">Stadtbewohner</option><option value="combat">Kampf · Nahansicht</option><option value="street">Köln · Straße</option><option value="river">Köln · Rhein</option><option value="alpine">Alpen · Gebirgspass</option></select></label>
 <label>Grafik <select id="quality" aria-label="Grafikqualität"><option value="auto">Auto · Ziel 60 FPS</option><option value="ultra">Ultra</option><option value="high">Hoch</option><option value="performance">Flüssig</option></select></label>
 <output aria-label="Bildrate">Messung läuft …</output></aside><small>Lokale Grafikprüfung · feste Kamera · keine Serververbindung</small>
-<div style="position:absolute;bottom:54px;left:16px;background:#101916dd;padding:10px;display:flex;gap:12px">
+<div style="position:absolute;bottom:54px;left:16px;background:#101916dd;padding:10px;display:flex;gap:12px;flex-wrap:wrap;max-width:calc(100vw - 52px)">
 <label><input type="checkbox" id="crowd"> 8 Figuren</label>
-<label>Figuren <select id="characters" aria-label="Figuren"><option value="historical">Historisch</option><option value="bonus">Bonus-Mix</option></select></label>
-<label>Waffe <select id="weapon" aria-label="Waffe"><option value="0">Kar98k</option><option value="1">Pistole</option><option value="2">MP40</option><option value="3">G36</option></select></label>
-<button id="reload">Nachladen prüfen</button></div>
+<label>Figuren <select id="characters" aria-label="Figuren"><option value="historical">Militär</option><option value="bonus">Bonus-Mix</option></select></label>
+<label>Bewegung <select id="motion" aria-label="Bewegung"><option value="idle">Stand</option><option value="walk">Gehen</option><option value="sprint">Sprint</option><option value="crouch">Ducken</option></select></label>
+<label>Waffe <select id="weapon" aria-label="Waffe"><option value="0">Kar98k</option><option value="1">Pistole</option><option value="2">MP40</option><option value="3">G36</option><option value="4">Kettensäge</option></select></label>
+<button id="lights">Licht prüfen</button><button id="doors">Türen prüfen</button><button id="glass">Glas prüfen</button><button id="reload">Nachladen prüfen</button><button id="headshot">Kopftreffer prüfen</button><button id="revive">Figur wiederherstellen</button></div>
+<style>.clean-overview body>small,.clean-overview body>div{display:none!important}.clean-overview canvas{height:658px}</style>
 <script type="module" src="/tests/graphics-preview.ts"></script></body></html>

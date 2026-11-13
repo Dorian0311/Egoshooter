@@ -9,9 +9,14 @@ import { Game,neutral } from "../shared/game.ts";
 import { difference } from "../shared/protocol.ts";
 import { identity } from "./auth.ts";
 import { Store } from "./store.ts";
+import {Accounts} from './accounts';
+import {accountRoutes} from './accountRoutes';
+import {resolve} from 'node:path';
+import {validUniform} from '../shared/uniforms';
 const store = new Store();
 await store.init();
 const codes = new Map<string, string>();
+const liveRooms=new Map<string,CityRoom>();
 export class CityRoom extends Room {
   maxClients = 8;
   game!: Game;
@@ -34,6 +39,7 @@ export class CityRoom extends Room {
       ).join("");
     } while (codes.has(code));
     codes.set(code, this.roomId);
+    liveRooms.set(code,this);
     this.game = new Game(
       code,
       process.env.NODE_ENV === "test" ? 15000 : 600000,
@@ -48,6 +54,7 @@ export class CityRoom extends Room {
       const id = this.users.get(c.sessionId);
       if (id && this.limit(c, 100)) this.game.input(id, v);
     });
+    this.onMessage("interact",(c,value)=>{if(this.limit(c,5))this.game.interact(this.users.get(c.sessionId)??"",value);});
     this.onMessage("ready", (c, v) => {
       if (typeof v === "boolean" && this.limit(c, 10))
         this.game.ready(this.users.get(c.sessionId) ?? "", v, Date.now());
@@ -121,11 +128,14 @@ export class CityRoom extends Room {
   async onAuth(_c: Client, options: { ticket?: unknown }) {
     return identity(options.ticket);
   }
-  onJoin(c: Client) {
+  onJoin(c: Client,options:{uniform?:unknown}={}) {
     const user = c.auth as { id: string; name: string };
-    if (this.game.state.phase !== "waiting")
-      throw Error("Match bereits gestartet");
-    this.game.add(user.id, user.name);
+    if (!['waiting','playing'].includes(this.game.state.phase))throw Error('Dieser Einsatz nimmt gerade keine Spieler auf.');
+    const player=this.game.add(user.id,user.name);
+    if(validUniform(options.uniform,player.team,this.game.state.mapId)){
+      player.uniform=options.uniform;player.weapon=options.uniform==='leatherface'?4:0;player.ammo=player.ammoByWeapon[player.weapon];
+    }
+    if(this.game.state.phase==='playing'){player.ready=true;player.protectedUntil=this.game.state.now+3000;}
     if(this.training&&!this.game.player("local-training-target")){this.game.add("local-training-target","Trainingsziel");this.game.ready("local-training-target",true,Date.now());}
     this.users.set(c.sessionId, user.id);
     c.send("snapshot", { full: this.game.state });
@@ -159,6 +169,7 @@ export class CityRoom extends Room {
   }
   onDispose() {
     codes.delete(this.game.state.roomCode);
+    liveRooms.delete(this.game.state.roomCode);
   }
 }
 const app = express();
@@ -173,6 +184,7 @@ app.use((req, res, next) => {
     return;
   }
   if (origin) res.setHeader("Access-Control-Allow-Origin", origin);
+  if(origin)res.setHeader('Access-Control-Allow-Credentials','true');
   res.setHeader("Vary", "Origin");
   res.setHeader("Access-Control-Allow-Headers", "Authorization,Content-Type");
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
@@ -181,6 +193,11 @@ app.use((req, res, next) => {
     return;
   }
   next();
+});
+const accounts=new Accounts(process.env.SHOOTER_ACCOUNTS_DB??(process.env.NODE_ENV==='test'?':memory:':resolve('data/users.sqlite')));
+app.use('/account',accountRoutes(accounts));
+app.get('/rooms',async(req,res)=>{
+ try{await identity(req.headers.authorization?.replace(/^Bearer /,''));res.setHeader('Cache-Control','no-store');res.json({rooms:[...liveRooms.values()].filter(r=>!r.training&&['waiting','playing'].includes(r.game.state.phase)).map(r=>({code:r.game.state.roomCode,mapId:r.game.state.mapId,phase:r.game.state.phase,players:r.game.state.players.filter(p=>!p.departed).length,capacity:8,joinable:r.game.state.players.filter(p=>!p.departed).length<8,host:r.game.player(r.game.state.host)?.name??'Spieler'}))});}catch{res.sendStatus(401);}
 });
 app.get("/rooms/:code", async (req, res) => {
   try {
