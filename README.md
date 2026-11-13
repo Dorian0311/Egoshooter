@@ -25,8 +25,6 @@ wird nur für die einmalige Erzeugung der Konfiguration benötigt.
 ```sh
 git clone https://github.com/Dorian0311/Egoshooter.git
 cd Egoshooter
-# Beim Einrichten des Docker-Release-Branches:
-git switch codex/docker-multiplayer
 node scripts/configure-docker.mjs spiel.deine-domain.de
 docker compose config --quiet
 docker compose up -d --build
