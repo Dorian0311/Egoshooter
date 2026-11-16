@@ -6,7 +6,7 @@ import {reloadEnvelope} from './viewmodel';
 import {applyHandMaterials} from './handMaterials';
 import {batchWeaponMeshes} from './batchWeaponMeshes';
 import {createViewmodelArms} from './viewmodelArms';
-import {prepareRealisticWeapon,realisticWeapons,type RealisticWeapon} from './realisticWeapons';
+import {prepareRealisticWeapon,realisticWeapons,realisticWeaponUrl,type RealisticWeapon} from './realisticWeapons';
 
 /** Authored at real scale. The exported muzzle socket stays with the moving weapon. */
 export function createWeaponModels(parent:T.Group) {
@@ -28,7 +28,7 @@ export function createWeaponModels(parent:T.Group) {
       const gltf=await new GLTFLoader().loadAsync(`/shooter/models/${name==='luger'||germanId!==undefined?'viewmodel-hands':name}.glb`);
       if(disposed){release(gltf.scene);return;}
       let textured:T.Group|undefined;
-      if(germanId!==undefined){
+      if(germanId!==undefined&&!(name in realisticWeapons)){
         textured=createGermanWeapon(germanId);
         const removed=new T.Group(),meshes:T.Mesh[]=[];
         gltf.scene.traverse(o=>{if(o instanceof T.Mesh&&!/^(hand-|view-sleeve-)/.test(o.name))meshes.push(o);});
@@ -37,7 +37,7 @@ export function createWeaponModels(parent:T.Group) {
       }
       if(name in realisticWeapons){
         try{
-          const imported=await new GLTFLoader().loadAsync(`/shooter/models/realistic/${name}.glb`);
+          const imported=await new GLTFLoader().loadAsync(realisticWeaponUrl(name as RealisticWeapon));
           if(disposed){release(gltf.scene);release(imported.scene);return;}
           textured=prepareRealisticWeapon(imported.scene,name as RealisticWeapon);
           // Keep the authored grip and sleeve transforms; replace the entire gun.
@@ -45,11 +45,11 @@ export function createWeaponModels(parent:T.Group) {
           gltf.scene.traverse(object=>{if(object instanceof T.Mesh&&!/^(hand-|view-sleeve-)/.test(object.name))meshes.push(object);});
           for(const mesh of meshes){mesh.removeFromParent();removed.add(mesh);}
           release(removed);
-          if(name==='luger')gltf.scene.traverse(object=>{
+          if(name==='luger'||name==='p38')gltf.scene.traverse(object=>{
             if(/^(hand-|view-sleeve-)l$/.test(object.name))object.visible=false;
-            if(/^(hand-|view-sleeve-)r$/.test(object.name))object.position.z+=.11;
+            if(name==='luger'&&/^(hand-|view-sleeve-)r$/.test(object.name))object.position.z+=.11;
           });
-        }catch(error){if(name==='luger'){release(gltf.scene);throw error;}console.warn('Textured weapon unavailable, using existing model:',name,error);}
+        }catch(error){if(name==='luger'){release(gltf.scene);throw error;}if(germanId!==undefined)textured=createGermanWeapon(germanId);console.warn('Textured weapon unavailable, using existing model:',name,error);}
       }
       let hands:T.Group|undefined;
       if(name==='g36'){

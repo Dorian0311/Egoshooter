@@ -1,0 +1,24 @@
+German WWII weapon models
+
+All imported models: CC BY 4.0.
+https://creativecommons.org/licenses/by/4.0/
+
+STG-44 - Arbuzz747
+https://sketchfab.com/3d-models/stg-44-fe139cf77b384d3fbf40bef53a6c809c
+Changes: Original embedded texture data retained. Runtime metre scale, forward orientation and grip alignment.
+
+WW2 German Gewehr 43 - Itsrushe
+https://sketchfab.com/3d-models/ww2-german-gewehr-43-3a5fb9185b47408ba2bd6540e5771aec
+Changes: Legacy specular/glossiness material maps converted to metallic/roughness. Runtime metre scale, forward orientation and grip alignment. Normal-map UV channel corrected to TEXCOORD_0.
+
+MG42 - AlbertoGalindo3D
+https://sketchfab.com/3d-models/mg42-325abbe1c6614dd58480db5557c4c7a2
+Changes: Original embedded texture data retained. Runtime metre scale, forward orientation and grip alignment.
+
+Walther P38 - CGenesis
+https://sketchfab.com/3d-models/walther-p38-1ac10334fe70472880ec3f60a09d763a
+Changes: Legacy specular/glossiness material maps converted to metallic/roughness. Runtime metre scale, forward orientation and grip alignment. Exploded-view presentation extras removed.
+
+FG42 - Shorty_Digitan
+https://sketchfab.com/3d-models/fg42-d699ac259bd74f70a51125a7e4320f4b
+Changes: Original embedded texture data retained. Runtime metre scale, forward orientation and grip alignment.

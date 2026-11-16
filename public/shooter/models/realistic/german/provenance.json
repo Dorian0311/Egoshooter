@@ -1,0 +1,72 @@
+[
+  {
+    "file": "stg44.glb",
+    "uid": "fe139cf77b384d3fbf40bef53a6c809c",
+    "title": "STG-44",
+    "author": "Arbuzz747",
+    "source": "https://sketchfab.com/3d-models/stg-44-fe139cf77b384d3fbf40bef53a6c809c",
+    "mirror": "https://huggingface.co/datasets/allenai/objaverse/resolve/main/glbs/000-138/fe139cf77b384d3fbf40bef53a6c809c.glb",
+    "license": "CC-BY-4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+    "sourceSha256": "133eddcdf014e5aab9389f59895200d66ea9a223fde2ed01ad542520f041e390",
+    "sha256": "8f13fcef9021e42a3dda8498d002b3d585ca35922f78eb4c240f99c4e00ca319",
+    "bytes": 12956252,
+    "modifications": "Original embedded texture data retained. Runtime metre scale, forward orientation and grip alignment."
+  },
+  {
+    "file": "gewehr43.glb",
+    "uid": "3a5fb9185b47408ba2bd6540e5771aec",
+    "title": "WW2 German Gewehr 43",
+    "author": "Itsrushe",
+    "source": "https://sketchfab.com/3d-models/ww2-german-gewehr-43-3a5fb9185b47408ba2bd6540e5771aec",
+    "mirror": "https://huggingface.co/datasets/allenai/objaverse/resolve/main/glbs/000-029/3a5fb9185b47408ba2bd6540e5771aec.glb",
+    "license": "CC-BY-4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+    "sourceSha256": "36ad3afa29b49b0be29a711ecdfe896c9e30b778f12bd6221e0a7d7264ecd82d",
+    "sha256": "20cd20f35893445ac2acf69fbbaffdd3eda7bee89db4dab4bd8040fdc95798d9",
+    "bytes": 1250140,
+    "modifications": "Legacy specular/glossiness material maps converted to metallic/roughness. Runtime metre scale, forward orientation and grip alignment. Normal-map UV channel corrected to TEXCOORD_0."
+  },
+  {
+    "file": "mg42.glb",
+    "uid": "325abbe1c6614dd58480db5557c4c7a2",
+    "title": "MG42",
+    "author": "AlbertoGalindo3D",
+    "source": "https://sketchfab.com/3d-models/mg42-325abbe1c6614dd58480db5557c4c7a2",
+    "mirror": "https://huggingface.co/datasets/allenai/objaverse/resolve/main/glbs/000-089/325abbe1c6614dd58480db5557c4c7a2.glb",
+    "license": "CC-BY-4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+    "sourceSha256": "ffd27fa019519395ff8895bd0ae71fb68b42a7c7d18ab3c278558acaf70d548b",
+    "sha256": "cc7b722783bfe69365a2344ea60c785ff274b88419007110117289e56ca253e0",
+    "bytes": 4685008,
+    "modifications": "Original embedded texture data retained. Runtime metre scale, forward orientation and grip alignment."
+  },
+  {
+    "file": "p38.glb",
+    "uid": "1ac10334fe70472880ec3f60a09d763a",
+    "title": "Walther P38",
+    "author": "CGenesis",
+    "source": "https://sketchfab.com/3d-models/walther-p38-1ac10334fe70472880ec3f60a09d763a",
+    "mirror": "https://huggingface.co/datasets/allenai/objaverse/resolve/main/glbs/000-089/1ac10334fe70472880ec3f60a09d763a.glb",
+    "license": "CC-BY-4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+    "sourceSha256": "bb1d14572a6e1fd3906bdcf2be39ccc0845ba17b9cd83d708ead2d4d9d61a577",
+    "sha256": "62d716585d8f3d571e0c9e527799b9e82df493bd4285a744f60c63589d339a7a",
+    "bytes": 10923828,
+    "modifications": "Legacy specular/glossiness material maps converted to metallic/roughness. Runtime metre scale, forward orientation and grip alignment. Exploded-view presentation extras removed."
+  },
+  {
+    "file": "fg42.glb",
+    "uid": "d699ac259bd74f70a51125a7e4320f4b",
+    "title": "FG42",
+    "author": "Shorty_Digitan",
+    "source": "https://sketchfab.com/3d-models/fg42-d699ac259bd74f70a51125a7e4320f4b",
+    "mirror": "https://huggingface.co/datasets/allenai/objaverse/resolve/main/glbs/000-125/d699ac259bd74f70a51125a7e4320f4b.glb",
+    "license": "CC-BY-4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+    "sourceSha256": "54bdf7ded9c54cbe180ddf3726587f04840ba33ce42238fd985ac443d1670389",
+    "sha256": "e20c42b7dd45ef06e5c119e88bece7ca099541778173efe01e7e3becd930ce24",
+    "bytes": 15445960,
+    "modifications": "Original embedded texture data retained. Runtime metre scale, forward orientation and grip alignment."
+  }
+]

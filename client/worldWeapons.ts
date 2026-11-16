@@ -1,6 +1,6 @@
 import * as T from 'three';
 import {GLTFLoader} from 'three/examples/jsm/loaders/GLTFLoader.js';
-import {prepareRealisticWeapon,type RealisticWeapon} from './realisticWeapons';
+import {prepareRealisticWeapon,realisticWeaponUrl,type RealisticWeapon} from './realisticWeapons';
 import {batchWeaponMeshes} from './batchWeaponMeshes';
 
 export type WorldWeapon=RealisticWeapon|'g36';
@@ -8,7 +8,7 @@ type Entry={root:T.Group;refs:number;timer:ReturnType<typeof setTimeout>|null};
 const cache=new Map<WorldWeapon,Promise<Entry>>();let prewarmed=false,sessions=0;
 function dispose(root:T.Group){const geometries=new Set<T.BufferGeometry>(),materials=new Set<T.Material>(),textures=new Set<T.Texture>();root.traverse(o=>{if(!(o instanceof T.Mesh))return;geometries.add(o.geometry);for(const m of Array.isArray(o.material)?o.material:[o.material]){materials.add(m);for(const value of Object.values(m))if(value instanceof T.Texture)textures.add(value);}});for(const g of geometries)g.dispose();for(const m of materials)m.dispose();for(const texture of textures)texture.dispose();}
 function expire(name:WorldWeapon,entry:Entry){if(entry.timer)clearTimeout(entry.timer);entry.timer=null;if(sessions>0)return;entry.timer=setTimeout(()=>{if(entry.refs===0&&sessions===0){cache.delete(name);dispose(entry.root);}entry.timer=null;},600000);}
-async function load(name:WorldWeapon){let pending=cache.get(name);if(!pending){pending=new GLTFLoader().loadAsync(`/shooter/models/${name==='g36'?'':'realistic/'}${name}.glb`).then(gltf=>{
+async function load(name:WorldWeapon){let pending=cache.get(name);if(!pending){pending=new GLTFLoader().loadAsync(name==='g36'?'/shooter/models/g36.glb':realisticWeaponUrl(name)).then(gltf=>{
   let prepared:T.Group;if(name!=='g36')prepared=prepareRealisticWeapon(gltf.scene,name);else{prepared=new T.Group();prepared.add(gltf.scene);gltf.scene.rotation.y=-Math.PI/2;prepared.updateWorldMatrix(true,true);let bounds=new T.Box3().setFromObject(prepared),size=bounds.max.z-bounds.min.z;if(size<=0)throw Error('Invalid G36 dimensions');gltf.scene.scale.multiplyScalar(.999/size);prepared.updateWorldMatrix(true,true);bounds=new T.Box3().setFromObject(prepared);gltf.scene.position.add(new T.Vector3(-(bounds.min.x+bounds.max.x)/2,.15-bounds.max.y,.75-bounds.max.z));}
   prepared.rotation.y=Math.PI;prepared.position.z=name==='luger'?.20:0;prepared.updateWorldMatrix(true,true);
   const root=new T.Group(),oldGeometry=new Set<T.BufferGeometry>(),skeletons=new Set<T.Skeleton>(),point=new T.Vector3();root.name=`world-${name}`;

@@ -119,3 +119,18 @@ scale, materials, animation and injury handling for its city residents. This
 asset is a civilian model, with no claim of a historically authenticated uniform.
 It does not replace the existing user-provided bonus characters or change their
 licensing.
+
+## Detailed German WWII weapon models
+
+Five additional textured models are distributed under CC BY 4.0:
+StG 44 by Arbuzz747, Gewehr 43 by Itsrushe, MG 42 by AlbertoGalindo3D,
+Walther P38 by CGenesis, and FG42 by Shorty_Digitan.
+Individual source URLs, public Objaverse mirror URLs, author names, checksums and
+modifications are recorded in `public/shooter/models/realistic/german/provenance.json`
+and `public/shooter/models/realistic/german/CREDITS.txt`.
+License: https://creativecommons.org/licenses/by/4.0/ .
+Textures retain their original pixels where possible. Legacy specular/glossiness
+materials are converted to metallic/roughness; P38 exploded-view extras are removed.
+Runtime scale and grip alignment are adapted to the game. The MP 34 is an original
+project mesh with procedural walnut/steel materials, using the existing MIT-licensed
+Muster surface shader.

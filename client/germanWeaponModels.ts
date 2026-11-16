@@ -1,4 +1,5 @@
 import * as T from 'three';
+import {createMP34} from './mp34Model';
 
 export const germanWeaponNames:Record<number,string>={7:'stg44',8:'gewehr43',9:'mg42',10:'mp34',11:'p38',12:'fg42'};
 export function germanWeaponId(name:string){return Object.keys(germanWeaponNames).map(Number).find(id=>germanWeaponNames[id]===name);}
@@ -6,6 +7,7 @@ export function germanWeaponId(name:string){return Object.keys(germanWeaponNames
 /** Original game meshes in metres, grip at the origin and muzzle along +Z. */
 export function createGermanWeapon(id:number):T.Group {
   if(!germanWeaponNames[id])throw Error(`Unknown German weapon: ${id}`);
+  if(id===10)return createMP34();
   const root=new T.Group();root.name=germanWeaponNames[id];
   const steel=new T.MeshStandardMaterial({color:0x414a48,metalness:.82,roughness:.38}),dark=new T.MeshStandardMaterial({color:0x242a29,metalness:.72,roughness:.5}),wood=new T.MeshStandardMaterial({color:id===10?0x755333:0x68432d,roughness:.72}),grip=new T.MeshStandardMaterial({color:0x332b27,roughness:.58});
   function mesh(geometry:T.BufferGeometry,material:T.Material,x:number,y:number,z:number,name:string){const m=new T.Mesh(geometry,material);m.name=name;m.position.set(x,y,z);m.castShadow=m.receiveShadow=true;root.add(m);return m;}

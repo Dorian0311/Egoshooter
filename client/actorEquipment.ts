@@ -1,4 +1,5 @@
 import {createGermanWeapon,germanWeaponNames} from './germanWeaponModels';
+import {realisticWeapons} from './realisticWeapons';
 import * as T from 'three';
 import {armCount,hasLost,isCrawling} from '../shared/injuries';
 import {weapons,type Player} from '../shared/game';
@@ -54,7 +55,7 @@ export function createActorEquipment(root:T.Group,chains:Partial<Record<'armL'|'
  const starGeometry=createThrowingStarGeometry(),star=new T.Mesh(starGeometry,starMaterial);star.name='held-throwing-star';star.userData.nonAnatomic=true;root.add(star);star.visible=false;
  let previousWeapon=-1,changedAt=-Infinity;
  let disposed=false;const worldModels=new Map<number,Awaited<ReturnType<typeof acquireWorldWeapon>> & {name:WorldWeapon}>(),pendingModels=new Map<number,WorldWeapon>(),failedModels=new Set<WorldWeapon>();
- function textured(index:number,team:Player['team']){if(typeof window==='undefined'||index>3)return;const name:WorldWeapon=index===3?'g36':index===1?'luger':index===0?'kar98k':'mp40';if(worldModels.get(index)?.name===name||pendingModels.get(index)===name||failedModels.has(name))return;pendingModels.set(index,name);void acquireWorldWeapon(name).then(asset=>{if(disposed||pendingModels.get(index)!==name){asset.release();return;}const old=worldModels.get(index);if(old){old.object.removeFromParent();old.release();}for(const child of models[index].children)child.visible=false;models[index].add(asset.object);worldModels.set(index,{...asset,name});pendingModels.delete(index);}).catch(()=>{pendingModels.delete(index);failedModels.add(name);});}
+ function textured(index:number,team:Player['team']){if(typeof window==='undefined')return;const german=germanWeaponNames[index];if(index>3&&(!german||!(german in realisticWeapons)))return;const name:WorldWeapon=german as WorldWeapon??(index===3?'g36':index===1?'luger':index===0?'kar98k':'mp40');if(worldModels.get(index)?.name===name||pendingModels.get(index)===name||failedModels.has(name))return;pendingModels.set(index,name);void acquireWorldWeapon(name).then(asset=>{if(disposed||pendingModels.get(index)!==name){asset.release();return;}const old=worldModels.get(index);if(old){old.object.removeFromParent();old.release();}for(const child of models[index].children)child.visible=false;models[index].add(asset.object);worldModels.set(index,{...asset,name});pendingModels.delete(index);}).catch(()=>{pendingModels.delete(index);failedModels.add(name);});}
  const reset=(arm:SavedArm)=>{arm.upper.quaternion.copy(arm.rest[0]);arm.lower.quaternion.copy(arm.rest[1]);arm.hand.quaternion.copy(arm.rest[2]);};
  const target=new T.Vector3(),pole=new T.Vector3(),forward=new T.Vector3(),handDirection=new T.Vector3(),right=new T.Vector3(),left=new T.Vector3(),offset=new T.Vector3(),localGrip=new T.Vector3();
  function grip(arm:SavedArm,localTarget:T.Vector3,side:number,up=false){

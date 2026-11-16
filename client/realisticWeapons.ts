@@ -8,8 +8,14 @@ export const realisticWeapons = {
   'm1-garand': {rotation: 0, length: 1.10, muzzle: [0,.0485,.8385], top: .106},
   thompson: {rotation: 0, length: .811, muzzle: [0,.0875,.5266], top: .125},
   luger: {rotation: Math.PI/2, length: .222, muzzle: [0,.045,.35], top: .068},
-} satisfies Record<string,{rotation:number;length:number;muzzle:number[];top:number}>;
+  stg44: {rotation: 0, length: .94, muzzle: [0,.054,.66], top: .125,file:'german/stg44.glb'},
+  gewehr43: {rotation: Math.PI, length: 1.117, muzzle: [0,.054,.83], top: .113,file:'german/gewehr43.glb'},
+  mg42: {rotation: 0, length: 1.22, muzzle: [0,.054,.91], top: .145,file:'german/mg42.glb'},
+  p38: {rotation: -Math.PI/2, length: .216, muzzle: [0,.043,.24], top: .098,file:'german/p38.glb'},
+  fg42: {rotation: Math.PI, length: .945, muzzle: [0,.054,.70], top: .15,file:'german/fg42.glb'},
+} satisfies Record<string,{rotation:number;length:number;muzzle:number[];top:number;file?:string}>;
 export type RealisticWeapon = keyof typeof realisticWeapons;
+export function realisticWeaponUrl(name:RealisticWeapon){const config=realisticWeapons[name];return '/shooter/models/realistic/'+('file' in config?config.file:name+'.glb');}
 
 export function prepareRealisticWeapon(source:T.Group,name:RealisticWeapon){
   const config=realisticWeapons[name];

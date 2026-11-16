@@ -4,11 +4,12 @@ import {readFile} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
 import * as T from 'three';
 import {GLTFLoader} from 'three/examples/jsm/loaders/GLTFLoader.js';
-import {prepareRealisticWeapon,realisticWeapons,type RealisticWeapon} from '../client/realisticWeapons';
+import {prepareRealisticWeapon,realisticWeapons,realisticWeaponUrl,type RealisticWeapon} from '../client/realisticWeapons';
 
 test('downloaded weapons are self-contained, attributed and match recorded hashes',async()=>{
  const folder='public/shooter/models/realistic/';
- const records=JSON.parse(await readFile(folder+'provenance.json','utf8'));
+ const german=JSON.parse(await readFile(folder+'german/provenance.json','utf8'));
+ const records=[...JSON.parse(await readFile(folder+'provenance.json','utf8')),...german.map((record:{file:string})=>({...record,file:'german/'+record.file}))];
  assert.equal(records.length,Object.keys(realisticWeapons).length);
  for(const record of records){
   const data=await readFile(folder+record.file);
@@ -22,9 +23,9 @@ test('downloaded weapons are self-contained, attributed and match recorded hashe
  }
 });
 
-test('all five imported weapons mount at metre scale, forward and at their muzzle socket',async()=>{
+test('all imported weapons mount at metre scale, forward and at their muzzle socket',async()=>{
  for(const name of Object.keys(realisticWeapons) as RealisticWeapon[]){
-  const data=await readFile('public/shooter/models/realistic/'+name+'.glb');
+  const data=await readFile('public'+realisticWeaponUrl(name));
   const originalLength=data.readUInt32LE(12),doc=JSON.parse(data.subarray(20,20+originalLength).toString());
   // Geometry QA in Node: omit image references without changing any accessors,
   // source transforms or geometry. Browser QA separately exercises real textures.

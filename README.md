@@ -428,13 +428,20 @@ Nachweise: `artifacts/movement-combat-20261116/`, `artifacts/remains-client/` un
 Der neue Rocketbox-Stadtbewohner, die deutsche Waffenauswahl mit fünf Plätzen und
 die überarbeiteten Gefechtsgeräusche sind gemeinsam integriert. Kroenen und Deadpool
 bleiben erhalten. Das Start-Changelog trägt die Kennung
-`npc-weapons-audio-details-2026-11-16`: Auch nach Bestätigung der vorherigen Übersicht erscheint
+`german-weapon-quality-2026-11-16`: Auch nach Bestätigung der vorherigen Übersicht erscheint
 dieses Update einmal; Bestätigung, Neuladen, Anmeldung und Mobilansicht sind geprüft.
 
-Die gemeinsame Abnahme umfasst 181 erfolgreiche Tests und den Produktionsbuild.
+Die gemeinsame Abnahme umfasst inzwischen 182 erfolgreiche Tests und den Produktionsbuild.
 Zusätzliche Integrationsregressionen sichern das gewählte Loadout nach Zeltbehandlung,
 den Munitionsnachschub für alle Waffen und die P38 bei Armverlust/Leichentragen ab.
 Die Drittpersonen-Waffen liegen nach Bündelung wieder innerhalb des bisherigen
 Zeichenbudgets. Browsernachweise liegen unter `artifacts/coordinated-release/`,
 `artifacts/weapon-loadout-20261116/` und `artifacts/audio-overhaul-20261116/`.
 Den Server-Rollout übernimmt der Betreiber; aus diesem Chat wurde kein Deployment ausgeführt.
+
+Die anschließende Waffen-Grafiküberarbeitung ersetzt die einfachen Darstellungen von
+StG 44, Gewehr 43, MG 42, Walther P38 und FG 42 durch texturierte Modelle mit
+dokumentierten CC-BY-4.0-Quellen. Die MP 34 bleibt ein eigenes, neu ausgearbeitetes
+Projektmodell. Übersichts- und Egoansichten mit dem Waffenrenderer wurden tatsächlich
+angesehen; der Browserbericht enthält keine JavaScriptfehler oder Warnungen.
+Nachweise: `artifacts/german-weapon-quality-20261116/`.

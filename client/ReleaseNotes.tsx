@@ -1,10 +1,11 @@
 import React,{useEffect,useRef,useState} from 'react';
 import './releaseNotes.css';
 
-const release='npc-weapons-audio-details-2026-11-16';
+const release='german-weapon-quality-2026-11-16';
 const storageKey='eiserne-front-changelog';
 let acknowledgedInSession=false;
 const changes=[
+ ['Waffenmodelle grafisch überarbeitet','StG 44, Gewehr 43, MG 42, Walther P38 und FG 42 verwenden jetzt detailreichere texturierte 3D-Modelle. Die MP 34 wurde im Projekt neu modelliert: mit rundem Holzschaft, seitlichem Magazin und offenen Kühlbohrungen. Die neuen Darstellungen sind aus der Ego- und Drittperson sichtbar; die Stützhand der P38 schwebt nicht mehr neben der Waffe.'],
  ['Stadtbewohner ersetzt','Neues texturiertes Modell mit Sakko, langer Hose und Lederschuhen. Beine und Arme bewegen sich beim Gehen; Bewohner zeigen gelegentlich einen Mittelfinger. Verdrehte Ruhehände und fehlerhafte Haarflächen wurden korrigiert. Kroenen und Deadpool bleiben spielbar.'],
  ['Sechs neue deutsche Waffen','StG 44, Gewehr 43, MG 42, MP 34, Walther P38 und FG 42 ergänzen Karabiner 98k, Luger P08 und MP 40. Die neuen Waffen besitzen eigene Spielwerte und Modelle aus der Erst- und Drittperson.'],
  ['Charakter → fünf Waffen → Einsatz','Vor dem Beitreten oder Erstellen wählst du zuerst die Figur und danach genau fünf unterschiedliche Waffen. Tasten 1–5 wechseln deine gewählten Plätze; die Belegung ist umstellbar. Die Auswahl funktioniert auch auf schmalen Bildschirmen.'],
