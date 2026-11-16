@@ -428,7 +428,7 @@ Nachweise: `artifacts/movement-combat-20261116/`, `artifacts/remains-client/` un
 Der neue Rocketbox-Stadtbewohner, die deutsche Waffenauswahl mit fünf Plätzen und
 die überarbeiteten Gefechtsgeräusche sind gemeinsam integriert. Kroenen und Deadpool
 bleiben erhalten. Das Start-Changelog trägt die Kennung
-`npc-weapons-audio-2026-11-16`: Auch nach Bestätigung der vorherigen Übersicht erscheint
+`npc-weapons-audio-details-2026-11-16`: Auch nach Bestätigung der vorherigen Übersicht erscheint
 dieses Update einmal; Bestätigung, Neuladen, Anmeldung und Mobilansicht sind geprüft.
 
 Die gemeinsame Abnahme umfasst 181 erfolgreiche Tests und den Produktionsbuild.
