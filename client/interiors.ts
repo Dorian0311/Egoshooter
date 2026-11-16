@@ -1,3 +1,4 @@
+import {eyePosition} from '../shared/injuries';
 import {batchStaticMeshes} from './scenery';
 import * as T from 'three';
 import {doorBox,furnitureFor,initialInteriors,insideBuilding,interiorFixtures,roomThemes,type InteriorState} from '../shared/interiors';
@@ -58,7 +59,7 @@ export function createInteriors(scene:T.Scene,world:World){
  sync(state);
  return {sync,
   interaction(p:Player,yaw:number){
-   return fixtures.filter(f=>f.type!=='glass').map(f=>{const x=f.type==='door'?f.box.x+1.7:f.box.x,dx=x-p.x,dz=f.box.z-p.z;return {f,distance:Math.hypot(dx,dz,f.box.y-p.y-1.5),dot:dx*-Math.sin(yaw)+dz*-Math.cos(yaw)};}).filter(v=>v.distance<2.7&&v.dot>.1).sort((a,b)=>a.distance-b.distance)[0]?.f;
+   const eye=eyePosition(p);return fixtures.filter(f=>f.type!=='glass').map(f=>{const x=f.type==='door'?f.box.x+1.7:f.box.x,dx=x-eye.x,dz=f.box.z-eye.z;return {f,distance:Math.hypot(dx,dz,f.box.y-eye.y),dot:dx*-Math.sin(yaw)+dz*-Math.cos(yaw)};}).filter(v=>v.distance<2.7&&v.dot>.1).sort((a,b)=>a.distance-b.distance)[0]?.f;
   },label(id:string){return id.startsWith('door')?(state.doors[id]?'Tür schließen':'Tür öffnen'):(state.lights[id]?'Licht ausschalten':'Licht einschalten');},
   impact(e:GameEvent){if(!e.point)return;if(e.type==='shot'){marks.setMatrixAt(markIndex%48,new T.Matrix4().makeTranslation(...e.point));marks.count=Math.min(48,++markIndex);marks.instanceMatrix.needsUpdate=true;marks.computeBoundingSphere();}if(e.type==='glass'){for(let n=0;n<12&&shards.length<72;n++){const mesh=new T.Mesh(shardGeometry,shardMat);mesh.position.set(...e.point);root.add(mesh);shards.push({mesh,velocity:new T.Vector3(Math.sin(n*7)*2,Math.cos(n)*2,Math.cos(n*7)*2),life:1.4});}}},
   update(p:Player|undefined,time:number,dt:number){

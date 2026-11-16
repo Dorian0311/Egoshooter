@@ -1,0 +1,16 @@
+[
+  {
+    "pack": "rpg-audio",
+    "source": "https://kenney.nl/assets/rpg-audio",
+    "archive": "https://kenney.nl/download/6173736574732f7270672d617564696f/75a7139104b7348dff948cef4b16c4618f844d11e262a2a4651001272cd838b7",
+    "sha256": "6dbeaf8544da958d8f2adcb4a4a4b76c1ade34a05f8ab9edccd327da7375f38b",
+    "license": "CC0-1.0"
+  },
+  {
+    "pack": "impact-sounds",
+    "source": "https://kenney.nl/assets/impact-sounds",
+    "archive": "https://kenney.nl/download/6173736574732f696d706163742d736f756e6473/8cb7cb2b674137b0ddabfc3762e91a13ed8d1c273a03a743216310b9e07de189",
+    "sha256": "029d734af1582474edf3a694d1b0cebc97c1c152f2f39fa34d4c2bafc5de77f8",
+    "license": "CC0-1.0"
+  }
+]

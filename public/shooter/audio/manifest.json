@@ -1,0 +1,32 @@
+{
+  "footstep": [
+    "/shooter/audio/rpg-audio-footstep00.ogg",
+    "/shooter/audio/rpg-audio-footstep01.ogg",
+    "/shooter/audio/rpg-audio-footstep02.ogg",
+    "/shooter/audio/rpg-audio-footstep03.ogg"
+  ],
+  "metal": [
+    "/shooter/audio/impact-sounds-impactMetal_heavy_000.ogg",
+    "/shooter/audio/impact-sounds-impactMetal_heavy_001.ogg",
+    "/shooter/audio/impact-sounds-impactMetal_heavy_002.ogg",
+    "/shooter/audio/impact-sounds-impactMetal_heavy_003.ogg"
+  ],
+  "wood": [
+    "/shooter/audio/impact-sounds-footstep_wood_000.ogg",
+    "/shooter/audio/impact-sounds-footstep_wood_001.ogg",
+    "/shooter/audio/impact-sounds-footstep_wood_002.ogg",
+    "/shooter/audio/impact-sounds-footstep_wood_003.ogg"
+  ],
+  "stone": [
+    "/shooter/audio/impact-sounds-impactGeneric_light_000.ogg",
+    "/shooter/audio/impact-sounds-impactGeneric_light_001.ogg",
+    "/shooter/audio/impact-sounds-impactGeneric_light_002.ogg",
+    "/shooter/audio/impact-sounds-impactGeneric_light_003.ogg"
+  ],
+  "glass": [
+    "/shooter/audio/impact-sounds-impactGlass_heavy_000.ogg",
+    "/shooter/audio/impact-sounds-impactGlass_heavy_001.ogg",
+    "/shooter/audio/impact-sounds-impactGlass_heavy_002.ogg",
+    "/shooter/audio/impact-sounds-impactGlass_heavy_003.ogg"
+  ]
+}

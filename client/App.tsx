@@ -1,3 +1,10 @@
+import {OperationSetup} from './OperationSetup';
+import {ReleaseNotes} from './ReleaseNotes';
+import {OperationHud} from './OperationHud';
+import {type OperationConfig,modeLabels} from '../shared/operationConfig';
+import {HighlightRecorder,type Highlight} from './highlights';
+import {HighlightPlayer} from './HighlightPlayer';
+import {saveBest,readBests} from './operationRecords';
 import {GameSettingsPanel} from './GameSettingsPanel';
 import {MatchScoreboard} from './MatchScoreboard';
 import {loadSettings,settingsKey} from './gameSettings';
@@ -64,11 +71,13 @@ export default function App({
     [connection, setConnection] = useState(""),
     [hitFeedback,setHitFeedback]=useState<string|null>(null);
   const [showCommander,setShowCommander]=useState(false);
+  const [showBests,setShowBests]=useState(false),[highlight,setHighlight]=useState<Highlight|null>(null),[clips,setClips]=useState<Highlight[]>([]);
+  const recorder=useRef(new HighlightRecorder()),savedMatch=useRef(''),uiEvents=useRef(new Set<string>());
   const gameRoot=useRef<HTMLDivElement>(null);
   const [fullscreen,setFullscreen]=useState(false),[hudNotice,setHudNotice]=useState('');
   useEffect(()=>{const changed=()=>setFullscreen(!!document.fullscreenElement);document.addEventListener('fullscreenchange',changed);return()=>document.removeEventListener('fullscreenchange',changed);},[]);
   async function toggleFullscreen(){try{if(document.fullscreenElement)await document.exitFullscreen();else await gameRoot.current?.requestFullscreen({navigationUI:'hide'});}catch{setHudNotice('Vollbild ist in diesem Browserfenster nicht verfügbar.');}}
-  const [startIntent,setStartIntent]=useState<{create:boolean;training:boolean}|null>(null);
+  const [startIntent,setStartIntent]=useState<{create:boolean;training:boolean;operation?:OperationConfig}|null>(null);
   const [scoreboardOpen,setScoreboardOpen]=useState(false),[scoreboardHeld,setScoreboardHeld]=useState(false);
   const tabAssigned=Object.values(settings.bindings).includes('Tab');
   useEffect(()=>{
@@ -145,7 +154,7 @@ export default function App({
     try{localStorage.setItem(graphicsStorageKey,graphicsQuality);}catch{/* Session-only preference if storage is unavailable. */}
   },[graphicsQuality]);
   useEffect(()=>{scene.current?.setSettings(settings);try{localStorage.setItem(settingsKey,JSON.stringify(settings));}catch{/* Session only. */}},[settings]);
-  useEffect(()=>{scene.current?.setEnabled(!settingsOpen&&!connection);},[settingsOpen,connection,!!snapshot]);
+  useEffect(()=>{scene.current?.setEnabled(!settingsOpen&&!connection&&!highlight);},[settingsOpen,connection,!!snapshot,!!highlight]);
   useEffect(()=>{try{localStorage.setItem('altstadt-character',preferredUniform);}catch{/* Session only. */}},[preferredUniform]);
   useEffect(()=>{if(!snapshot&&preferredUniform&&!uniformOptions('de',selectedMap).includes(preferredUniform))setPreferredUniform('');},[selectedMap,preferredUniform,!!snapshot]);
   function message(e: unknown) {
@@ -163,7 +172,12 @@ export default function App({
     accessRef.current = value;
     return value;
   }
-  async function connect(create: boolean,training=false,chosenUniform=preferredUniform) {
+  async function prepareJoin(){
+    if(!access||busy)return;setBusy(true);setError('');
+    try{const current=await refreshAccess(),response=await fetch(`${current.serverUrl.replace(/^ws/,'http')}/rooms/${encodeURIComponent(code.toUpperCase())}`,{headers:{Authorization:`Bearer ${current.ticket}`}});if(!response.ok)throw Error('Raum nicht gefunden oder nicht zugänglich');const info=await response.json();if(mapIds.includes(info.mapId))setSelectedMap(info.mapId);setStartIntent({create:false,training:false});}
+    catch(error){setError(message(error));}finally{setBusy(false);}
+  }
+  async function connect(create: boolean,training=false,chosenUniform=preferredUniform,operation?:OperationConfig) {
     if (!access || busy) return;
     if (!chosenUniform) {setError("Bitte wähle zuerst deinen Charakter aus.");return;}
     setBusy(true);
@@ -173,7 +187,7 @@ export default function App({
       const client = new Client(access.serverUrl);
       let r: Room;
       if (create)
-        r = await client.create("altstadt", { ticket: access.ticket,mapId:selectedMap,training,uniform:chosenUniform });
+        r = await client.create("altstadt", { ticket: access.ticket,mapId:selectedMap,training,operation,uniform:chosenUniform });
       else {
         const response = await fetch(
           `${access.serverUrl.replace(/^ws/, "http")}/rooms/${encodeURIComponent(code.toUpperCase())}`,
@@ -185,19 +199,24 @@ export default function App({
         r = await client.joinById(info.roomId, { ticket: access.ticket,uniform:chosenUniform });
       }
       r.reconnection.minUptime = 0;
-      room.current = r;setKillfeed([]);setDamage(null);setDeathReason('');setConnection('');
+      room.current = r;recorder.current=new HighlightRecorder();savedMatch.current='';uiEvents.current.clear();setClips([]);setKillfeed([]);setDamage(null);setDeathReason('');setConnection('');
       r.onMessage("snapshot", (packet: SnapshotPacket) => {
         const s = mergeSnapshot(last.current, packet);
         if (!s) return;
-        for(const event of s.events){if(event.type==='hit'&&event.id===access.playerId){setHitFeedback(event.hitZone??'body');if(feedbackTimer.current)clearTimeout(feedbackTimer.current);feedbackTimer.current=setTimeout(()=>setHitFeedback(null),220);}}
+        if(s.version!==12){setError('Spielversion geändert. Bitte die Seite neu laden.');void r.leave();return;}
+        recorder.current.push(s,access.playerId);setClips([...recorder.current.clips]);
+        if(s.phase==='finished'&&savedMatch.current!==s.matchId){saveBest(s,access.playerId);savedMatch.current=s.matchId;}
+        const freshEvents=s.events.filter(e=>!e.eventId||!uiEvents.current.has(e.eventId));for(const e of freshEvents)if(e.eventId)uiEvents.current.add(e.eventId);if(uiEvents.current.size>2048)uiEvents.current=new Set([...uiEvents.current].slice(-1024));
+
+        for(const event of freshEvents){if(event.type==='hit'&&event.id===access.playerId){setHitFeedback(event.hitZone??'body');if(feedbackTimer.current)clearTimeout(feedbackTimer.current);feedbackTimer.current=setTimeout(()=>setHitFeedback(null),220);}}
         const own=s.players.find(p=>p.id===access.playerId);
         if(own?.hp)setDeathReason('');
-        const newKills=s.events.filter(e=>e.type==='kill').map(e=>({key:++feedSequence.current,killer:s.players.find(p=>p.id===e.id)?.name??'Spieler',victim:s.players.find(p=>p.id===e.target)?.name??'Spieler',weapon:weapons[e.weapon??0].name,headshot:e.hitZone==='head',mine:e.id===access.playerId,friendly:s.players.find(p=>p.id===e.id)?.team===own?.team,at:s.now}));
+        const newKills=freshEvents.filter(e=>e.type==='kill').map(e=>({key:++feedSequence.current,killer:s.players.find(p=>p.id===e.id)?.name??(e.id?'Spieler':'Umwelt'),victim:[...s.players,...s.npcs].find(p=>p.id===e.target)?.name??'Spieler',weapon:weapons[e.weapon??0].name,headshot:e.hitZone==='head',mine:e.id===access.playerId,friendly:s.players.find(p=>p.id===e.id)?.team===own?.team,at:s.now}));
         setKillfeed(old=>[...old.filter(e=>s.now-e.at<6500),...newKills].slice(-4));
-        for(const event of s.events){
+        for(const event of freshEvents){
           if(event.type==='hit'&&event.target===access.playerId&&own){const attacker=s.players.find(p=>p.id===event.id);if(attacker)setDamage({angle:(Math.atan2(attacker.x-own.x,-(attacker.z-own.z))+own.yaw)*180/Math.PI,at:s.now});}
           if(event.type==='kill'&&event.id===access.playerId&&event.hitZone==='head')setHeadshotAt(s.now);
-          if(event.type==='kill'&&event.target===access.playerId)setDeathReason(`Besiegt von ${s.players.find(p=>p.id===event.id)?.name??'Spieler'} mit ${weapons[event.weapon??0].name}`);
+          if(event.type==='kill'&&event.target===access.playerId)setDeathReason(event.id?`Besiegt von ${s.players.find(p=>p.id===event.id)?.name??'Spieler'} mit ${weapons[event.weapon??0].name}`:'Durch Umweltschaden gefallen');
         }
         last.current = s;
         setSnapshot(s);
@@ -223,7 +242,7 @@ export default function App({
       setBusy(false);
     }
   }
-  async function leaveGame(){const current=room.current;room.current=null;setSettingsOpen(false);setSnapshot(null);last.current=null;setConnection('');setError('');await current?.leave();}
+  async function leaveGame(){if(last.current&&access&&savedMatch.current!==last.current.matchId){saveBest(last.current,access.playerId);savedMatch.current=last.current.matchId;}setClips(recorder.current.finish());const current=room.current;room.current=null;setSettingsOpen(false);setSnapshot(null);last.current=null;setConnection('');setError('');await current?.leave();}
   async function showStats() {
     if (!access) return;
     try {
@@ -242,10 +261,11 @@ export default function App({
     active = snapshot?.phase === "playing";
   return (
     <div ref={gameRoot} className={`city-app ${active?"city-playing":""} ${!snapshot?"city-lobby":""}`}>
+      <ReleaseNotes/>
       {snapshot && <canvas ref={canvas} className="city-canvas" />}
       {showCommander&&(!snapshot||snapshot.phase==='waiting'||snapshot.phase==='finished')&&<Suspense fallback={null}><CommanderEasterEgg onClose={()=>setShowCommander(false)}/></Suspense>}
       {settingsOpen&&<GameSettingsPanel value={settings} onChange={setSettings} onClose={()=>setSettingsOpen(false)} graphics={{value:graphicsQuality,onChange:setGraphicsQuality}} onLeave={snapshot?()=>void leaveGame():undefined}/>}
-      {startIntent&&!snapshot&&<CharacterPicker map={selectedMap} value={preferredUniform} onClose={()=>setStartIntent(null)} onSelect={id=>{const intent=startIntent;setPreferredUniform(id);setStartIntent(null);void connect(intent.create,intent.training,id);}}/>}
+      {startIntent&&!snapshot&&<CharacterPicker map={selectedMap} value={preferredUniform} onClose={()=>setStartIntent(null)} onSelect={id=>{const intent=startIntent;setPreferredUniform(id);setStartIntent(null);void connect(intent.create,intent.training,id,intent.operation);}}/>}
       {snapshot&&(scoreboardOpen||scoreboardHeld)&&<MatchScoreboard snapshot={snapshot} playerId={access?.playerId} onClose={()=>{setScoreboardOpen(false);setScoreboardHeld(false);}}/>}
       {snapshot&&<nav className="game-toolbar" aria-label="Spielbedienung">
         <button aria-expanded={scoreboardOpen||scoreboardHeld} onClick={()=>setScoreboardOpen(v=>!v)}>Rangliste{!tabAssigned?' · Tab':''}</button>
@@ -256,7 +276,7 @@ export default function App({
       {!snapshot&&account&&<div className="lobby-profile"><strong>{account.username}</strong><button onClick={onLogout}>Abmelden</button></div>}
       {!snapshot ? (
         <main className="city-entry">
-          <div className="lobby-wordmark"><strong>EISERNE FRONT</strong><span>OPERATION 1945</span><small>TAKTISCHER MULTIPLAYER · TEAM-DEATHMATCH</small></div>
+          <div className="lobby-wordmark"><strong>EISERNE FRONT</strong><span>OPERATION 1945</span><small>EINZELSPIELER · KOOP · TEAM-DEATHMATCH</small></div>
           <div className="city-kicker">
             VIER SCHAUPLÄTZE. DEINE TAKTIK.
           </div>
@@ -271,7 +291,8 @@ export default function App({
             Vier Karten. Taktische Gefechte mit bis zu acht Spielern.
           </p>
           <div className="city-map-picker">{mapIds.map(id=><button key={id} aria-pressed={selectedMap===id} className={`city-map-${id} ${selectedMap===id?"selected":""}`} onClick={()=>setSelectedMap(id)}><span className={`map-preview map-preview-${id}`} aria-hidden="true"/><span className="map-card-copy"><strong>{getWorld(id).name}</strong><small>{getWorld(id).subtitle}</small></span></button>)}</div>
-          {import.meta.env.DEV&&import.meta.env.VITE_SHOOTER_PREVIEW===true&&<button className="city-primary city-solo" disabled={!access||busy} onClick={()=>setStartIntent({create:true,training:true})}>Alleine testen · bewegliches Trainingsziel</button>}
+          <OperationSetup busy={!access||busy} onStart={operation=>setStartIntent({create:true,training:operation.kind==='solo',operation})}/>
+
           <div className="city-actions">
             <button
               disabled={!access || busy}
@@ -293,7 +314,7 @@ export default function App({
               />
               <button
                 disabled={!access || busy || code.length !== 6}
-                onClick={() => setStartIntent({create:false,training:false})}
+                onClick={() => void prepareJoin()}
               >
                 Beitreten
               </button>
@@ -301,6 +322,8 @@ export default function App({
           </div>
           <LiveRooms access={access} onRefreshTicket={refreshAccess} onJoin={room=>{setCode(room.code);setSelectedMap(room.mapId);setStartIntent({create:false,training:false});}}/>
           <button className="city-text" onClick={()=>setSettingsOpen(true)}>Einstellungen</button>
+          <button className="city-text" onClick={()=>setShowBests(true)}>Lokale Bestwerte</button>
+          {!!clips.length&&<div className="highlight-list">{clips.map(clip=><button key={clip.id} onClick={()=>setHighlight(clip)}>▶ {clip.title}</button>)}</div>}
           <button className="city-text" onClick={() => void showStats()}>
             Community-Rangliste & persönliche Statistik
           </button>
@@ -310,22 +333,23 @@ export default function App({
         </main>
       ) : (
         <>
+          <OperationHud snapshot={snapshot} player={me} throwKey={keyLabel("throwStar")} bandageKey={keyLabel("bandage")}/>
           <div className="city-score">
             <strong>{getWorld(snapshot.mapId).allyCode??'DE'} {snapshot.scores.de}</strong>
             <span>
               {active
-                ? `${Math.floor(Math.max(0,snapshot.endsAt-snapshot.now)/60000)}:${String(Math.floor(Math.max(0,snapshot.endsAt-snapshot.now)/1000)%60).padStart(2,"0")}`
+                ? snapshot.endsAt===0?"∞":`${Math.floor(Math.max(0,snapshot.endsAt-snapshot.now)/60000)}:${String(Math.floor(Math.max(0,snapshot.endsAt-snapshot.now)/1000)%60).padStart(2,"0")}`
                 : "ALTSTADT"}
-              <small>50 ABSCHÜSSE · 10 MINUTEN</small>
+              <small>{snapshot.operation.config.mode==='battle'?'50 ABSCHÜSSE · 10 MINUTEN':modeLabels[snapshot.operation.config.mode].toUpperCase()}</small>
             </span>
             <strong>{snapshot.scores.fr} {getWorld(snapshot.mapId).opponentCode}</strong>
           </div>
           {snapshot.phase !== "playing" && (
             <section className="city-panel">
-              <div className="city-kicker">EINSATZRAUM {snapshot.roomCode}</div><p>{getWorld(snapshot.mapId).name}</p>{snapshot.phase==="waiting"&&snapshot.host===access?.playerId&&<label>Karte <select value={snapshot.mapId} onChange={e=>room.current?.send("map",e.target.value)}>{mapIds.map(id=><option key={id} value={id}>{getWorld(id).name}</option>)}</select></label>}
+              <div className="city-kicker">EINSATZRAUM {snapshot.roomCode}</div><p>{getWorld(snapshot.mapId).name}</p>{snapshot.phase==="waiting"&&snapshot.operation.config.kind==='multiplayer'&&snapshot.host===access?.playerId&&<label>Karte <select value={snapshot.mapId} onChange={e=>room.current?.send("map",e.target.value)}>{mapIds.map(id=><option key={id} value={id}>{getWorld(id).name}</option>)}</select></label>}
               <h2>
                 {snapshot.phase === "finished"
-                  ? snapshot.winner === "draw"
+                  ? snapshot.operation.result? snapshot.operation.result==='success'?'Einsatz erfolgreich':'Einsatz beendet':snapshot.winner === "draw"
                     ? "Unentschieden"
                     : `${snapshot.winner === "de" ? getWorld(snapshot.mapId).ally??"Deutschland" : getWorld(snapshot.mapId).opponent} gewinnt`
                   : snapshot.phase === "countdown"
@@ -336,7 +360,7 @@ export default function App({
                 {(["de", "fr"] as const).map((t) => (
                   <div key={t}>
                     <button
-                      disabled={snapshot.phase !== "waiting"}
+                      disabled={snapshot.phase !== "waiting"||snapshot.operation.config.kind!=='multiplayer'}
                       onClick={() => {if(me?.team!==t)setPreferredUniform("");room.current?.send("team", t);}}
                     >
                       {t === "de" ? (getWorld(snapshot.mapId).ally??"Deutschland").toUpperCase() : getWorld(snapshot.mapId).opponent.toUpperCase()}{" "}
@@ -361,9 +385,6 @@ export default function App({
                   </div>
                 ))}
               </div>
-              {snapshot.phase === "waiting" && me && (
-                <CharacterGallery compact team={me.team} map={snapshot.mapId} value={preferredUniform===me.uniform?me.uniform:""} onChange={id=>{setPreferredUniform(id);room.current?.send('uniform',id);}}/>
-              )}
               {snapshot.phase === "waiting" && (
                 <button
                   className="city-primary"
@@ -375,26 +396,30 @@ export default function App({
                     : "Bereit für den Einsatz"}
                 </button>
               )}
+              {snapshot.phase === "waiting" && me && (
+                <CharacterGallery compact team={me.team} map={snapshot.mapId} value={preferredUniform===me.uniform?me.uniform:""} onChange={id=>{setPreferredUniform(id);room.current?.send('uniform',id);}}/>
+              )}
               {snapshot.phase === "finished" && (
                 <>
                   <p>
                     Ergebnisse:{" "}
                     {snapshot.persistence === "practice"
-                      ? "Training · nicht gewertet"
+                      ? "PvE · lokale Bestwerte · nicht in der Community-Rangliste"
                       : snapshot.persistence === "saved"
                       ? "gespeichert"
                       : snapshot.persistence === "failed"
                         ? "Speichern fehlgeschlagen – nicht gewertet"
                         : "werden gespeichert …"}
                   </p>
+                  {!!clips.length&&<div className="highlight-list">{clips.map(clip=><button key={clip.id} onClick={()=>setHighlight(clip)}>▶ {clip.title}</button>)}</div>}
                   {snapshot.host === access?.playerId && (
-                    <button onClick={() => room.current?.send("rematch")}>
+                    <button onClick={() => {room.current?.send("rematch");if(snapshot.operation.config.kind==='solo')room.current?.send("ready",true);}}>
                       Revanche im selben Raum
                     </button>
                   )}
                 </>
               )}
-              <button
+              {snapshot.operation.config.kind!=='solo'&&<button
                 className="city-text"
                 onClick={() => {
                   void navigator.clipboard.writeText(
@@ -403,7 +428,7 @@ export default function App({
                 }}
               >
                 Einladungslink kopieren
-              </button>
+              </button>}
             </section>
           )}
           {active && (
@@ -426,10 +451,10 @@ export default function App({
               {!me?.hp && (
                 <div className="city-respawn">
                   {deathReason&&<small className="death-reason">{deathReason}</small>}
-                  Gefallen · Wiedereinstieg in{" "}
+                  {me?.downedUntil?"Verwundet · Hilfe in Reichweite suchen":snapshot.operation.config.kind==='coop'?"Gefallen · Du schaust deinem Team zu":"Gefallen · Wiedereinstieg in"}{" "}
                   {Math.max(
                     0,
-                    Math.ceil(((me?.respawnAt ?? 0) - snapshot.now) / 1000),
+                    Math.ceil(((me?.respawnAt===Number.MAX_SAFE_INTEGER?0:me?.respawnAt ?? 0) - snapshot.now) / 1000),
                   )}{" "}
                   s
                 </div>
@@ -461,6 +486,8 @@ export default function App({
           )}
         </div>
       )}
+      {highlight&&<HighlightPlayer clip={highlight} settings={settings} onClose={()=>setHighlight(null)}/>}
+      {showBests&&<section className="city-stats"><button onClick={()=>setShowBests(false)}>Schließen ×</button><h2>Lokale Bestwerte</h2><p>Nur in diesem Browser gespeichert.</p>{readBests().map(r=><article key={r.key}><strong>{r.label}</strong><p>{r.matches} Einsätze · {r.wins} Siege · Bestwert {r.kills} Abschüsse · {r.headshots} Kopftreffer · Welle {r.waves}</p></article>)}</section>}
       {stats !== null && (
         <section className="city-stats">
           <button onClick={() => setStats(null)}>Schließen ×</button>

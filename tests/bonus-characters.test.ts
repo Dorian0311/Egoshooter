@@ -5,7 +5,7 @@ import {Game} from '../shared/game.ts';
 import {difference,mergeSnapshot} from '../shared/protocol.ts';
 import {uniformOptions,defaultUniform} from '../shared/uniforms.ts';
 
-const ids=['deadpool','harley','rocket','homer','leatherface','commander'] as const;
+const ids=['deadpool','harley','rocket','homer','leatherface','commander','kroenen'] as const;
 test('bonus choices are valid for both factions and maps and synchronize',()=>{
  for(const map of ['cologne','alpine'] as const){
   const game=new Game('ABC234');game.add('a','A');game.add('b','B');game.selectMap('a',map);
@@ -18,10 +18,10 @@ test('bonus choices are valid for both factions and maps and synchronize',()=>{
    assert.equal(mergeSnapshot(before,difference(before,game.state))!.players.find(p=>p.id===player)!.uniform,id);
   }
   game.ready('a',true,1000);game.ready('b',true,1000);game.tick(4000);
-  assert.equal(game.player('a')!.uniform,'commander');assert.equal(game.selectUniform('a','rocket'),false);
+  assert.equal(game.player('a')!.uniform,'kroenen');assert.equal(game.selectUniform('a','rocket'),false);
   game.player('a')!.hp=0;game.player('a')!.respawnAt=5000;game.tick(5000);
-  assert.equal(game.player('a')!.uniform,'commander');game.state.phase='finished';game.rematch('a');
-  assert.equal(game.player('a')!.uniform,'commander');
+  assert.equal(game.player('a')!.uniform,'kroenen');game.state.phase='finished';game.rematch('a');
+  assert.equal(game.player('a')!.uniform,'kroenen');
  }
 });
 test('embedded character assets stay inside geometry and download budgets',()=>{

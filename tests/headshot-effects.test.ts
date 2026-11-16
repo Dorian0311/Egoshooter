@@ -46,10 +46,11 @@ test('headshot collapse follows the particle clock, finishes grounded and never 
  const final=headshotPose(3,true);assert.equal(final.fall,1);assert.equal(final.height,.14);assert.ok(Math.abs(final.recoil)<1e-12);
  assert.deepEqual(headshotPose(10,true),final);
 });
-test('static Leatherface head clipping resets after respawn',()=>{
- const root=new T.Group();root.add(new T.Mesh(new T.BoxGeometry(1,1.8,1),new T.MeshStandardMaterial()));
- const character=createBonusCharacter({character:'leatherface',entry:{root,refs:0}}),mesh=character.group.children[0].children[0] as T.Mesh;
+test('articulated Leatherface head restores after respawn',()=>{
+ const root=new T.Group();root.add(new T.Mesh(new T.BoxGeometry(1,1.8,1).translate(0,.9,0),new T.MeshStandardMaterial()));
+ const character=createBonusCharacter({character:'leatherface',entry:{root,refs:0}}),head=character.group.getObjectByName('static-head')!;
+ assert.ok(head&&head.children.length>0);
  character.setHeadVisible(false);character.update(makePlayer('a','A','de'),0,.016);
- assert.equal((mesh.material as T.Material).clippingPlanes?.length,1);
- character.setHeadVisible(true);assert.equal((mesh.material as T.Material).clippingPlanes,null);character.dispose();
+ assert.equal(head.visible,false);
+ character.setHeadVisible(true);assert.equal(head.visible,true);character.dispose();
 });

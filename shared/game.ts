@@ -2,7 +2,9 @@ import {initialInteriors,interiorFixtures,interiorWorld,doorBox,type InteriorSta
 import {defaultUniform,validUniform,type UniformId} from './uniforms.ts';
 import { getWorld,validMap,ground,withinPlayArea,type World,type MapId } from "./world.ts";
 import {rockBlocks,rockSurface,rayRock} from './rocks.ts';
-export const VERSION = 11,
+import {Operation,createOperation,type OperationState,type Pickup,type Projectile,type Treatment} from './operations';
+import {freshInjuries,armCount,isCrawling,eyeHeight,eyePosition,hasLost,type Injuries,type BodyPart} from './injuries';
+export const VERSION = 12,
   STEP = 1 / 30;
 export type Team = "de" | "fr";
 export type Input = {
@@ -21,6 +23,15 @@ export type Input = {
   time: number;
 };
 export type Player = {
+  kind:'human'|'bot'|'resident';
+  life:number;
+  injuries:Injuries;
+  stars:number;
+  bandages:number;
+  throwAt:number;
+  downedUntil:number;
+  diedAt:number;
+  treatment?:Treatment;
   id: string;
   name: string;
   team: Team;
@@ -57,6 +68,10 @@ export type Player = {
   departed?: boolean;
 };
 export type Snapshot = {
+  operation:OperationState;
+  npcs:Player[];
+  pickups:Pickup[];
+  projectiles:Projectile[];
   version: number;
   mapId: MapId;
   training:boolean;
@@ -75,7 +90,10 @@ export type Snapshot = {
   persistence: "pending" | "saved" | "failed" | "practice";
 };
 export type GameEvent = {
-  type: "shot" | "melee" | "hit" | "kill" | "glass";
+  type: "shot" | "melee" | "hit" | "kill" | "glass" | 'sever' | 'down' | 'revive' | 'pickup' | 'throw' | 'impact';
+  eventId?:string;
+  life?:number;
+  bodyPart?:BodyPart;
   id: string;
   target?: string;
   weapon?: number;
@@ -91,6 +109,7 @@ export const weapons = [
   { name: "Maschinenpistole", mag: 30, damage: 24, interval: 85, reload: 2400, spread: .009, recoil: .012, range: 20 },
   { name: "HK G36 (modern)", mag: 30, damage: 27, interval: 130, reload: 2600, spread: .003, recoil: .022, range: 55 },
   { name: "Kettensäge", mag: 1, damage: 38, interval: 320, reload: 0, spread: 0, recoil: 0, range: 2.2 },
+  { name: "Wurfstern", mag: 3, damage: 40, interval: 750, reload: 0, spread: 0, recoil: 0, range: 72 },
 ];
 export function weaponDamage(index:number,distance:number){
   const w=weapons[index];
@@ -124,6 +143,7 @@ export function makePlayer(
 ): Player {
   const [x, z] = world.spawns[team][index % 4];
   return {
+    kind:'human',life:1,injuries:freshInjuries(),stars:0,bandages:0,throwAt:0,downedUntil:0,diedAt:0,
     id,
     name,
     team,
@@ -157,13 +177,15 @@ export function makePlayer(
   };
 }
 export function move(p: Player, i: Input, dt = STEP,world:World=getWorld(),now=i.time) {
+  if(p.downedUntil)return;
+  if(isCrawling(p))i={...i,sprint:false,jump:false,crouch:false};
   const boxes=world.boxes;
-  if(p.uniform==='leatherface'&&p.hp>0&&i.fire&&now>=p.powerReadyAt){
+  if(p.uniform==='leatherface'&&armCount(p)===2&&p.hp>0&&i.fire&&now>=p.powerReadyAt){
     p.powerUntil=now+SAW_POWER_MS;p.powerReadyAt=p.powerUntil+SAW_RECOVERY_MS;
   }
   p.crouching=i.crouch;
   const moving=Math.hypot(i.forward,i.side)>.01;
-  const powered=p.uniform==='leatherface'&&i.fire&&now<p.powerUntil;
+  const powered=p.uniform==='leatherface'&&armCount(p)===2&&i.fire&&now<p.powerUntil;
   p.stamina=Number.isFinite(p.stamina)?p.stamina:SPRINT_DURATION_MS;
   p.sprinting=!!(i.sprint&&moving&&!i.crouch&&!i.aim&&!p.sprintExhausted&&p.stamina>0&&!powered);
   if(p.sprinting){
@@ -173,7 +195,7 @@ export function move(p: Player, i: Input, dt = STEP,world:World=getWorld(),now=i
     p.stamina=Math.min(SPRINT_DURATION_MS,p.stamina+dt*1000*SPRINT_DURATION_MS/SPRINT_RECHARGE_MS);
     if(p.stamina>=SPRINT_DURATION_MS-.001){p.stamina=SPRINT_DURATION_MS;p.sprintExhausted=false;}
   }
-  const speed = i.crouch ? 2.3 : powered ? 9.2 : p.sprinting ? 6.2 : 4.3,
+  const speed = isCrawling(p) ? 4.3*.3 : i.crouch ? 2.3 : powered ? 9.2 : p.sprinting ? 6.2 : 4.3,
     len = Math.max(1, Math.hypot(i.forward, i.side));
   const dx =
     ((Math.cos(i.yaw) * i.side - Math.sin(i.yaw) * i.forward) * speed * dt) /
@@ -181,9 +203,12 @@ export function move(p: Player, i: Input, dt = STEP,world:World=getWorld(),now=i
   const dz =
     ((-Math.sin(i.yaw) * i.side - Math.cos(i.yaw) * i.forward) * speed * dt) /
     len;
-  const h = i.crouch ? 1.15 : 1.75,
+  const h = isCrawling(p) ? .6 : i.crouch ? 1.15 : 1.75,
     r = 0.34;
   function blocked(x: number, z: number) {
+    return (isCrawling(p)?[0,-.55,.8]:[0]).some(offset=>blockedPoint(x+Math.sin(i.yaw)*offset,z+Math.cos(i.yaw)*offset));
+  }
+  function blockedPoint(x:number,z:number){
     return (
       !withinPlayArea(x,z,world) ||
       boxes.some(
@@ -256,15 +281,20 @@ export function raySphere(origin:number[],direction:number[],center:number[],rad
  const rel=origin.map((v,i)=>v-center[i]),b=rel.reduce((s,v,i)=>s+v*direction[i],0),c=rel.reduce((s,v)=>s+v*v,0)-radius*radius,disc=b*b-c;
  if(disc<0)return Infinity;const near=-b-Math.sqrt(disc),far=-b+Math.sqrt(disc);return near>=0?near:far>=0?far:Infinity;
 }
-export function hitPlayer(origin:number[],direction:number[],p:Player):{distance:number;zone:HitZone}|null{
+export function hitPlayer(origin:number[],direction:number[],p:Player):{distance:number;zone:HitZone;part:BodyPart}|null{
  const c=Math.cos(p.yaw),s=Math.sin(p.yaw),dx=origin[0]-p.x,dz=origin[2]-p.z,scale=p.crouching?.66:1;
  const o=[c*dx-s*dz,origin[1]-p.y,s*dx+c*dz],d=[c*direction[0]-s*direction[2],direction[1],s*direction[0]+c*direction[2]];
- const zones:{distance:number;zone:HitZone}[]=[
- {distance:raySphere(o,d,[0,1.64*scale,-.1],.14*scale),zone:'head'},
- {distance:rayBox(o,d,[-.23,.82*scale,-.2],[.23,1.5*scale,.18]),zone:'body'},
- {distance:rayBox(o,d,[-.08,1.45*scale,-.12],[.08,1.54*scale,.08]),zone:'body'},
- ...[-1,1].map(side=>({distance:rayBox(o,d,[side*.10-.085,.02,-.28],[side*.10+.085,.9*scale,.15]),zone:'legs' as HitZone}))];
- const hit=zones.sort((a,b)=>a.distance-b.distance)[0];return Number.isFinite(hit.distance)?hit:null;
+ const crawl=isCrawling(p),zones:{distance:number;zone:HitZone;part:BodyPart}[]=[];
+ const add=(part:BodyPart,min:number[],max:number[])=>{if(!hasLost(p,part))zones.push({distance:rayBox(o,d,min,max),zone:part==='head'?'head':part.startsWith('leg')?'legs':'body',part});};
+ if(crawl){
+  add('head',[-.14,.30,-.70],[.14,.58,-.42]);add('body',[-.23,.12,-.42],[.23,.48,.38]);
+  for(const [side,suffix]of [[-1,'L'],[1,'R']] as const){add(`arm${suffix}`,[side*.31-.085,.08,-.55],[side*.31+.085,.32,.12]);add(`leg${suffix}`,[side*.12-.085,.05,.38],[side*.12+.085,.30,1.1]);}
+ }else{
+  if(!hasLost(p,'head'))zones.push({distance:raySphere(o,d,[0,1.64*scale,-.1],.14*scale),zone:'head',part:'head'});
+  add('body',[-.23,.82*scale,-.2],[.23,1.54*scale,.18]);
+  for(const [side,suffix]of [[-1,'L'],[1,'R']] as const){add(`arm${suffix}`,[side*.31-.08,.86*scale,-.15],[side*.31+.08,1.48*scale,.15]);add(`leg${suffix}`,[side*.10-.085,.02,-.28],[side*.10+.085,.9*scale,.15]);}
+ }
+ const hit=zones.sort((a,b)=>a.distance-b.distance)[0];return hit&&Number.isFinite(hit.distance)?hit:null;
 }
 export const neutral = (seq = 0): Input => ({
   seq,
@@ -282,6 +312,9 @@ export const neutral = (seq = 0): Input => ({
   time: 0,
 });
 export class Game {
+  operation:Operation;
+  private eventSequence=0;
+  emit(event:GameEvent){event.eventId=`${this.state.matchId}:${++this.eventSequence}`;event.life=event.target?this.operation.actor(event.target)?.life:undefined;this.state.events.push(event);this.state.events=this.state.events.slice(-128);}
   state: Snapshot;
   inputs = new Map<string, Input>();
   received = new Map<string, number>();
@@ -294,11 +327,13 @@ export class Game {
     readonly durationMs = 600000,
     mapId:MapId="cologne",
     private readonly random:()=>number=Math.random,
+    config?:unknown,
   ) {
     this.state = {
       version: VERSION,
       mapId,
       training:false,
+      operation:createOperation(config,getWorld(mapId),random),npcs:[],pickups:[],projectiles:[],
       interiors:initialInteriors(getWorld(mapId)),
       roomCode: code,
       matchId: "",
@@ -313,6 +348,7 @@ export class Game {
       events: [],
       persistence: "pending",
     };
+    this.operation=new Operation(this);
   }
   add(id: string, name: string) {
     const returning=this.player(id);
@@ -326,7 +362,7 @@ export class Game {
       this.state.players.some((p) => p.id === id)
     )
       throw Error("Raum voll oder bereits beigetreten");
-    const team = this.count("de") <= this.count("fr") ? "de" : "fr";
+    const team = this.operation.pve?'de':this.count("de") <= this.count("fr") ? "de" : "fr";
     const p = makePlayer(id, name, team, this.count(team),getWorld(this.state.mapId));
     this.state.players.push(p);
     this.state.host ||= id;
@@ -347,15 +383,16 @@ export class Game {
   }
   elect() {
     if (
-      !this.state.players.some((p) => p.id === this.state.host && p.connected)
+      !this.state.players.some((p) => p.id === this.state.host && p.connected&&p.kind==='human')
     )
-      this.state.host = this.state.players.find((p) => p.connected)?.id ?? "";
+      this.state.host = this.state.players.find((p) => p.connected&&p.kind==='human')?.id ?? "";
   }
   team(id: string, t: Team) {
     const p = this.player(id);
     if (
       !p ||
       this.state.phase !== "waiting" ||
+      this.operation.pve ||
       !["de", "fr"].includes(t) ||
       p.team === t ||
       this.count(t) >= 4 ||
@@ -397,10 +434,10 @@ export class Game {
     const p = this.player(id);
     if (p) p.ready = value;
     if (
-      this.state.players.length >= 2 &&
+      (this.operation.pve?this.operation.humans.length>=(this.state.operation.config.kind==='coop'?2:1):this.state.players.length >= 2) &&
       this.count("de") &&
       this.count("fr") &&
-      Math.abs(this.count("de") - this.count("fr")) <= 1 &&
+      (this.operation.pve||Math.abs(this.count("de") - this.count("fr")) <= 1) &&
       this.state.players.every((p) => p.ready && p.connected)
     ) {
       this.state.phase = "countdown";
@@ -444,14 +481,17 @@ export class Game {
             s.players.filter((q) => q.team === p.team).indexOf(p),
             getWorld(s.mapId),
           ),
-          { protectedUntil: now + 2000,uniform:p.uniform },
+          { protectedUntil: now + 2000,uniform:p.uniform,kind:p.kind,life:p.life+1 },
         );
+      this.operation.onStart();
     }
     if (s.phase !== "playing") return;
+    this.operation.beforeTick(now);
     for (const p of s.players) {
-      if(p.uniform==='leatherface'){p.weapon=4;p.ammo=1;p.reloadAt=0;}
+      if(p.uniform==='leatherface'&&armCount(p)===2){p.weapon=4;p.ammo=1;p.reloadAt=0;}
+      if(armCount(p)===1&&p.uniform!=='leatherface'&&p.weapon!==1){p.weapon=1;p.ammo=p.ammoByWeapon[1];p.reloadAt=0;}
       if (!p.hp) {
-        if (now >= p.respawnAt) {
+        if (now >= p.respawnAt&&!p.downedUntil&&!(this.state.operation.config.mode==='survival'&&p.kind==='bot')) {
           const fresh = makePlayer(p.id, p.name, p.team, p.deaths,getWorld(s.mapId));
           Object.assign(p, {
             ...fresh,
@@ -463,6 +503,7 @@ export class Game {
             deaths: p.deaths,
             connected: p.connected,
             seq: p.seq,
+            life:p.life+1,kind:p.kind,stars:p.stars,bandages:p.bandages,
             protectedUntil: now + 2000,
           });
         }
@@ -474,8 +515,8 @@ export class Game {
           : undefined;
       if (i && p.connected) {
         move(p, i,STEP,this.world(),now);
-        if(p.y < -4){p.hp=0;p.deaths++;p.respawnAt=now+5000;continue;}
-        if (p.uniform!=='leatherface' && i.weapon!==4 && i.weapon !== p.weapon) {
+        if(p.y < -4){this.operation.damage(p,'',0,100,'body',[p.x,p.y,p.z]);continue;}
+        if (p.uniform!=='leatherface' && armCount(p)===2 && i.weapon!==4 && i.weapon !== p.weapon) {
           p.ammoByWeapon[p.weapon] = p.ammo;
           p.weapon = i.weapon;
           p.ammo = p.ammoByWeapon[p.weapon];
@@ -492,10 +533,11 @@ export class Game {
       }
       if (i && p.connected && i.fire) this.shoot(p, i, now);
     }
-    this.history.push({ at: now, players: s.players.map((p) => ({ ...p })) });
+    this.history.push({ at: now, players: this.operation.actors().map((p) => ({ ...p,injuries:{...p.injuries,damage:{...p.injuries.damage}} })) });
     while (this.history.length && this.history[0].at < now - 200)
       this.history.shift();
-    if (now >= s.endsAt || Math.max(s.scores.de, s.scores.fr) >= 50) {
+    this.operation.afterTick();
+    if (s.phase==='playing'&&s.operation.config.mode==='battle'&&(now >= s.endsAt || Math.max(s.scores.de, s.scores.fr) >= 50)) {
       s.phase = "finished";
       s.winner =
         s.scores.de === s.scores.fr
@@ -503,14 +545,16 @@ export class Game {
           : s.scores.de > s.scores.fr
             ? "de"
             : "fr";
+      if(this.operation.pve){s.operation.result=s.winner==='de'?'success':'failure';s.persistence='practice';}
     }
   }
   interact(id:string,value:unknown){
     const p=this.player(id),state=this.state.interiors;
     if(!p?.hp||!p.connected||this.state.phase!=='playing'||!state||typeof value!=='string'||this.state.now-(this.interactions.get(id)??-Infinity)<450)return false;
+    const handled=this.operation.interact(p,value);if(handled!==undefined){if(handled)this.interactions.set(id,this.state.now);return handled;}
     const f=interiorFixtures(getWorld(this.state.mapId)).find(f=>f.id===value&&f.type!=='glass');if(!f)return false;
     const x=f.type==='door'?f.box.x+f.box.w/2-.2:f.box.x,y=f.box.y,z=f.box.z;
-    const o=[p.x,p.y+(p.crouching?1:1.6),p.z],delta=[x-o[0],y-o[1],z-o[2]],distance=Math.hypot(...delta);
+    const eye=eyePosition(p),o=[eye.x,eye.y,eye.z],delta=[x-o[0],y-o[1],z-o[2]],distance=Math.hypot(...delta);
     if(distance>2.7)return false;
     const d=delta.map(v=>v/Math.max(.001,distance));
     if(d[0]*-Math.sin(p.yaw)+d[2]*-Math.cos(p.yaw)<.1)return false;
@@ -523,7 +567,8 @@ export class Game {
     this.interactions.set(id,this.state.now);return true;
   }
   shoot(p: Player, i: Input, now: number) {
-    if(!p.hp)return;
+    this.state.now=Math.max(this.state.now,now);
+    if(!p.hp||armCount(p)<1||p.treatment)return;
     if(p.uniform==='leatherface'){this.saw(p,i,now);return;}
     if(p.weapon===4)return;
     if (p.reloadAt || p.fireAt > now || !p.ammo || i.sprint) return;
@@ -533,44 +578,43 @@ export class Game {
     p.protectedUntil = 0;
     const spread=(weapons[p.weapon].spread+(Math.abs(i.forward)+Math.abs(i.side)>0?.012:0))*(i.crouch?.65:1)*(i.aim?.3:1);
     const shotYaw=p.yaw+(this.random()*2-1)*spread,shotPitch=p.pitch+(this.random()*2-1)*spread;
-    const o=[p.x,p.y+(i.crouch?1:1.6),p.z],d=[-Math.sin(shotYaw)*Math.cos(shotPitch),Math.sin(shotPitch),-Math.cos(shotYaw)*Math.cos(shotPitch)];
-    let distance=150,target:Player|undefined,zone:HitZone='body';
+    const eye=eyePosition(p),o=[eye.x,eye.y,eye.z],d=[-Math.sin(shotYaw)*Math.cos(shotPitch),Math.sin(shotPitch),-Math.cos(shotYaw)*Math.cos(shotPitch)];
+    let distance=150,target:Player|undefined,zone:HitZone='body',part:BodyPart='body';
     for(const b of this.world().boxes)distance=Math.min(distance,b.kind==='rock'?rayRock(b,o,d):rayBox(o,d,[b.x-b.w/2,b.y-b.h/2,b.z-b.d/2],[b.x+b.w/2,b.y+b.h/2,b.z+b.d/2]));
-    const historical=[...this.history].reverse().find(h=>h.at<=i.time)?.players??this.state.players;
-    for(const q of historical){const live=this.player(q.id);if(q.id===p.id||!live?.hp)continue;const hit=hitPlayer(o,d,q);if(hit&&hit.distance<distance){distance=hit.distance;target=live;zone=hit.zone;}}
-    this.state.events.push({type:'shot',id:p.id,weapon:p.weapon,point:[o[0]+d[0]*distance,o[1]+d[1]*distance,o[2]+d[2]*distance]});
+    const historical=[...this.history].reverse().find(h=>h.at<=i.time)?.players??this.operation.actors();
+    for(const q of historical){const live=this.operation.actor(q.id);if(q.id===p.id||!live?.hp)continue;const hit=hitPlayer(o,d,q);if(hit&&hit.distance<distance){distance=hit.distance;target=live;zone=hit.zone;part=hit.part;}}
+    this.emit({type:'shot',id:p.id,weapon:p.weapon,point:[o[0]+d[0]*distance,o[1]+d[1]*distance,o[2]+d[2]*distance]});
     if(!target&&this.state.interiors){
       const pane=interiorFixtures(getWorld(this.state.mapId)).find(f=>f.type==='glass'&&!this.state.interiors!.broken.includes(f.id)&&Math.abs(rayBox(o,d,[f.box.x-f.box.w/2,f.box.y-f.box.h/2,f.box.z-f.box.d/2],[f.box.x+f.box.w/2,f.box.y+f.box.h/2,f.box.z+f.box.d/2])-distance)<.001);
-      if(pane){this.state.interiors.broken.push(pane.id);this.state.events.push({type:'glass',id:p.id,point:[pane.box.x,pane.box.y,pane.box.z]});}
+      if(pane){this.state.interiors.broken.push(pane.id);this.emit({type:'glass',id:p.id,point:[pane.box.x,pane.box.y,pane.box.z]});}
     }
-    if(target&&target.team!==p.team&&target.protectedUntil<=now){
+    if(target){
       const multiplier=zone==='head'?(p.weapon===0?2:4):zone==='legs'?.75:1,damage=Math.floor(weaponDamage(p.weapon,distance)*multiplier);
-      target.hp=Math.max(0,target.hp-damage);this.state.events.push({type:'hit',id:p.id,target:target.id,weapon:p.weapon,hitZone:zone,damage,point:[o[0]+d[0]*distance,o[1]+d[1]*distance,o[2]+d[2]*distance]});
-      if(!target.hp){target.deaths++;target.respawnAt=now+5000;p.kills++;if(zone==='head')p.headshots++;this.state.scores[p.team]++;this.state.events.push({type:'kill',id:p.id,target:target.id,weapon:p.weapon,hitZone:zone,point:[o[0]+d[0]*distance,o[1]+d[1]*distance,o[2]+d[2]*distance]});}
+      this.operation.damage(target,p.id,p.weapon,damage,part,[o[0]+d[0]*distance,o[1]+d[1]*distance,o[2]+d[2]*distance]);
     }
     this.state.events = this.state.events.slice(-64);
   }
   saw(p:Player,i:Input,now:number){
-    if(p.uniform!=='leatherface'||!p.hp||p.fireAt>now)return;
+    this.state.now=Math.max(this.state.now,now);
+    if(p.uniform!=='leatherface'||!p.hp||armCount(p)<2||p.treatment||p.fireAt>now)return;
     p.weapon=4;p.fireAt=now+weapons[4].interval;p.protectedUntil=0;
-    this.state.events.push({type:'melee',id:p.id,weapon:4});
-    const origin=[p.x,p.y+(p.crouching?1:1.4),p.z];
+    this.emit({type:'melee',id:p.id,weapon:4});
+    const eye=eyePosition(p),origin=[eye.x,Math.max(p.y+.25,eye.y-.2),eye.z];
     const facing=[-Math.sin(p.yaw)*Math.cos(p.pitch),Math.sin(p.pitch),-Math.cos(p.yaw)*Math.cos(p.pitch)];
     let target:Player|undefined,nearest=weapons[4].range;
-    for(const q of this.state.players){
+    for(const q of this.operation.actors()){
       if(q.id===p.id||!q.hp)continue;
-      const delta=[q.x-origin[0],q.y+(q.crouching?.7:1.1)-origin[1],q.z-origin[2]];
+      const delta=[q.x-origin[0],q.y+(isCrawling(q)?.3:q.crouching?.7:1.1)-origin[1],q.z-origin[2]];
       const distance=Math.hypot(...delta);if(distance>nearest||distance<.001)continue;
       const direction=delta.map(v=>v/distance);
       if(direction.reduce((sum,v,n)=>sum+v*facing[n],0)<.72)continue;
       const blocked=this.world().boxes.some(b=>(b.kind==='rock'?rayRock(b,origin,direction):rayBox(origin,direction,[b.x-b.w/2,b.y-b.h/2,b.z-b.d/2],[b.x+b.w/2,b.y+b.h/2,b.z+b.d/2]))<distance);
       if(!blocked){nearest=distance;target=q;}
     }
-    if(!target||target.team===p.team||target.protectedUntil>now)return;
-    target.hp=Math.max(0,target.hp-weapons[4].damage);
-    const point:[number,number,number]=[target.x,target.y+1,target.z];
-    this.state.events.push({type:'hit',id:p.id,target:target.id,weapon:4,hitZone:'body',damage:weapons[4].damage,point});
-    if(!target.hp){target.deaths++;target.respawnAt=now+5000;p.kills++;this.state.scores[p.team]++;this.state.events.push({type:'kill',id:p.id,target:target.id,weapon:4,hitZone:'body',point});}
+    if(!target)return;
+    const precise=hitPlayer(origin,facing,target);
+    const part:BodyPart=precise?.part??(p.pitch<-.25?'legL':p.pitch>.25?'head':target.injuries.lost&2?'armR':'armL');
+    this.operation.damage(target,p.id,4,weapons[4].damage,part,[target.x,target.y+eyeHeight(target),target.z],true);
     this.state.events=this.state.events.slice(-64);
   }
 }

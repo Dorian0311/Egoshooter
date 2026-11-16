@@ -60,3 +60,26 @@ converted to in-place movement and grounded. Crouch strength is adjusted to the
 playable silhouette. Download hashes and modifications are recorded in
 public/shooter/animations/provenance.json; conversion is reproducible with
 scripts/retarget-locomotion.mjs.
+
+## Operation feature references and assets
+
+- **Recast Navigation JS** — https://github.com/isaac-mason/recast-navigation-js — MIT.
+  `@recast-navigation/core`, `@recast-navigation/generators` and their WASM dependency
+  provide server-side navigation. Original notices accompany the installed packages.
+- **Dive / Yuka** — https://github.com/Mugen87/dive and https://github.com/Mugen87/yuka — MIT.
+  Shooter perception, memory, cover and navigation were reviewed as design references.
+  This project uses its own authoritative input controller; the Dive engine and assets
+  are not bundled.
+- **Kenney RPG Audio** — https://kenney.nl/assets/rpg-audio — CC0 1.0.
+- **Kenney Impact Sounds** — https://kenney.nl/assets/impact-sounds — CC0 1.0.
+  Only selected clips are included. Source archive checksums and source pages are
+  recorded in `public/shooter/audio/CREDITS.json`; runtime selection is documented
+  in `public/shooter/audio/manifest.json`.
+- **Karl Ruprecht Kroenen** — converted from the existing local
+  `Karl_Ruprecht_Kroenen.usdz`. Source/output checksums and conversion details are
+  in `public/shooter/characters/bonus/kroenen.json`. The source is user-provided;
+  no new redistribution license is asserted. See the character directory's
+  existing `PROVENANCE.md` for other figures.
+
+The new gift packages, throwing-star geometry, wound caps and procedural animation
+code are generated directly in this repository and do not require external artwork.

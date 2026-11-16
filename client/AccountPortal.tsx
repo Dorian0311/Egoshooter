@@ -1,4 +1,5 @@
 import React,{useEffect,useState} from 'react';
+import {ReleaseNotes} from './ReleaseNotes';
 import './accounts.css';
 import './lobby.css';
 const App=React.lazy(()=>import('./App'));
@@ -19,7 +20,7 @@ export function AccountPortal(){
   catch(e){setError(e instanceof Error?e.message:'Verbindung fehlgeschlagen.');}finally{setBusy(false);}
  }
  if(user)return <>{error&&<div role="alert" className="account-logout-error">{error}<button onClick={()=>setError('')}>Schließen</button></div>}<React.Suspense fallback={<main className="account-screen"><p role="status">Lobby wird geladen …</p></main>}><App account={user} onLogout={()=>{void fetch('/game/account/logout',{method:'POST',credentials:'include'}).then(response=>{if(!response.ok)throw Error('logout');setUser(null);setPassword('');setError('');}).catch(()=>setError('Abmelden gerade nicht möglich. Bitte erneut versuchen.'));}}/></React.Suspense></>;
- return <main className="account-screen"><div className="account-art"/><section className="account-card">
+ return <main className="account-screen"><ReleaseNotes/><div className="account-art"/><section className="account-card">
   <div className="lobby-wordmark"><strong>EISERNE FRONT</strong><span>OPERATION 1945</span><small>DEIN TRUPP. DEIN EINSATZ.</small></div>
   {loading?<p role="status">Profil wird geladen …</p>:<><div className="account-tabs"><button aria-pressed={mode==='register'} onClick={()=>{setMode('register');setError('');}}>Profil anlegen</button><button aria-pressed={mode==='login'} onClick={()=>{setMode('login');setError('');}}>Anmelden</button></div>
   <h1>{mode==='register'?'Bereit für deinen ersten Einsatz?':'Willkommen zurück.'}</h1><p>{mode==='register'?'Lege dein Spielerprofil an. Du brauchst nur einen Benutzernamen und ein Passwort.':'Melde dich mit deinem Spielerprofil an.'}</p>

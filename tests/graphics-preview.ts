@@ -1,3 +1,4 @@
+import {createOperation} from '../shared/operations';
 import {initialInteriors,interiorFixtures} from '../shared/interiors';
 import { createScene } from '../client/scene.ts';
 import '../client/crosshair.css';
@@ -42,7 +43,7 @@ function show() {
   if (view.value === 'river') Object.assign(player, { x: -34, y: 1, z: 24, yaw: -1.1, pitch: -.16 });
   if (view.value === 'alpine') Object.assign(player, { x: -62, y: 0, z: 0, yaw: -1.3, pitch: .06 });
   const snapshot: Snapshot = {
-    version: VERSION, mapId, training: true, roomCode: 'REVIEW', matchId: 'review',
+    version: VERSION, mapId, training: true, operation:createOperation(undefined,getWorld(mapId),Math.random),npcs:[],pickups:[],projectiles:[], roomCode: 'REVIEW', matchId: 'review',
     interiors:initialInteriors(getWorld(mapId)),phase: 'playing', now: 0, startsAt: 0, endsAt: 600000, host: player.id,
     scores: { de: 0, fr: 0 }, players: [player], winner: null, events: [], persistence: 'practice',
   };

@@ -4,7 +4,10 @@ import { randomBytes } from "node:crypto";
 import { Room, Server } from "@colyseus/core";
 import { WebSocketTransport } from "@colyseus/ws-transport";
 import type { Client } from "@colyseus/core";
-import {validMap} from "../shared/world.ts";
+import {Bots} from './bots';
+import {createNavigation} from './navigation';
+import {parseOperation} from '../shared/operationConfig';
+import {validMap,mapIds} from "../shared/world.ts";
 import { Game,neutral } from "../shared/game.ts";
 import { difference } from "../shared/protocol.ts";
 import { identity } from "./auth.ts";
@@ -23,13 +26,17 @@ export class CityRoom extends Room {
   users = new Map<string, string>();
   rates = new Map<string, { at: number; count: number }>();
   training=false;
-  trainingSeq=0;
-  trainingWaypoint=0;
+  bots?:Bots;
+  ownerId="";
+  clockOffset=0;
+  pausedAt=0;
+  now(){return Date.now()-this.clockOffset;}
   saving = false;
   baseline: Game["state"] | null = null;
-  onCreate(options:{mapId?:unknown;training?:unknown}={}) {
-    if(options.training===true&&process.env.SHOOTER_LOCAL_TRAINING!=='true')throw Error('Training ist in dieser Umgebung nicht freigeschaltet');
-    this.training=options.training===true;
+  async onCreate(options:{mapId?:unknown;training?:unknown;operation?:unknown}={}) {
+    const config=parseOperation(options.operation??(options.training===true?{kind:'solo',mode:'training'}:undefined));
+    this.training=config.kind!=='multiplayer';
+    this.maxClients=config.kind==='solo'?1:config.kind==='coop'?4:8;
     if (codes.size >= 32) throw Error("Server ausgelastet");
     let code: string;
     do {
@@ -44,34 +51,41 @@ export class CityRoom extends Room {
       code,
       process.env.NODE_ENV === "test" ? 15000 : 600000,
       validMap(options.mapId)?options.mapId:"cologne",
+      Math.random,config,
     );
     this.game.state.training=this.training;
+    if(this.training)this.bots=new Bots(this.game,await createNavigation(this.game.state.mapId));
+    if(config.kind==='solo')await this.setPrivate(true);
     this.setMetadata({ code });
     this.onMessage("sync", (c) => {
-      if (this.limit(c, 10)) c.send("snapshot", { full: this.game.state });
+      if (this.limit(c,10,'sync')) c.send("snapshot", { full: this.game.state });
     });
     this.onMessage("input", (c, v) => {
       const id = this.users.get(c.sessionId);
-      if (id && this.limit(c, 100)) this.game.input(id, v);
+      if (id && this.limit(c,100,'input')) this.game.input(id, v);
     });
-    this.onMessage("interact",(c,value)=>{if(this.limit(c,5))this.game.interact(this.users.get(c.sessionId)??"",value);});
+    this.onMessage("interact",(c,value)=>{if(this.limit(c,5,'interact'))this.game.interact(this.users.get(c.sessionId)??"",value);});
     this.onMessage("ready", (c, v) => {
-      if (typeof v === "boolean" && this.limit(c, 10))
-        this.game.ready(this.users.get(c.sessionId) ?? "", v, Date.now());
+      if (typeof v === "boolean" && this.limit(c,10,'ready'))
+        this.game.ready(this.users.get(c.sessionId) ?? "", v, this.now());
     });
-    this.onMessage("map",(c,v)=>{if(this.limit(c,10))this.game.selectMap(this.users.get(c.sessionId)??"",v);});
-    this.onMessage("uniform",(c,v)=>{if(this.limit(c,10))this.game.selectUniform(this.users.get(c.sessionId)??"",v);});
+    this.onMessage("map",(c,v)=>{if(!this.training&&this.limit(c,10,'map'))this.game.selectMap(this.users.get(c.sessionId)??"",v);});
+    this.onMessage("uniform",(c,v)=>{if(this.limit(c,10,'uniform'))this.game.selectUniform(this.users.get(c.sessionId)??"",v);});
     this.onMessage("team", (c, v) => {
-      if ((v === "de" || v === "fr") && this.limit(c, 10))
+      if ((v === "de" || v === "fr") && this.limit(c,10,'team'))
         this.game.team(this.users.get(c.sessionId) ?? "", v);
     });
     this.onMessage("rematch", (c) => {
-      if (this.limit(c, 10) && !this.saving)
+      if (this.limit(c,10,'rematch') && !this.saving)
         this.game.rematch(this.users.get(c.sessionId) ?? "");
     });
     this.setSimulationInterval(() => {
-      this.game.tick(Date.now());
-      if(this.training)this.updateTraining();
+      if(this.pausedAt)return;
+      if(this.training&&this.game.state.phase==='waiting')for(const p of this.game.state.players)if(p.kind==='bot'&&!p.ready){p.connected=true;this.game.ready(p.id,true,this.now());}
+      this.bots?.update(this.now());
+      this.game.tick(this.now());
+      if(this.game.state.operation.config.kind==='coop'&&this.game.state.phase!=='waiting')void this.lock();
+      else if(this.game.state.operation.config.kind==='coop'&&this.game.state.phase==='waiting'&&this.clients.length<4&&this.locked)void this.unlock();
       if (
         this.game.state.phase === "finished" &&
         this.game.state.persistence === "pending" &&
@@ -104,43 +118,40 @@ export class CityRoom extends Room {
       this.game.state.events = [];
     }, 50);
   }
-  updateTraining(){
-    const state=this.game.state,bot=this.game.player('local-training-target'),human=state.players.find(p=>p.id!=='local-training-target'&&p.connected);
-    if(!bot||!human)return;
-    if(state.phase==='waiting'){if(!bot.ready)this.game.ready(bot.id,true,Date.now());return;}
-    if(state.phase!=='playing'||!bot.hp)return;
-    const base=state.mapId==='cologne'?{x:-49,z:-19}:{x:-48,z:0};
-    if(Math.hypot(bot.x-human.x,bot.z-human.z)>28){Object.assign(bot,{x:human.x+16,z:human.z,y:human.y,vy:0,protectedUntil:0});this.game.history=[];this.trainingWaypoint=0;}
-    const points=[{x:base.x,z:base.z},{x:base.x+5,z:base.z},{x:base.x+5,z:base.z-3},{x:base.x-3,z:base.z-3}];
-    let goal=points[this.trainingWaypoint%points.length];let dx=goal.x-bot.x,dz=goal.z-bot.z;
-    if(Math.hypot(dx,dz)<.35){this.trainingWaypoint++;goal=points[this.trainingWaypoint%points.length];dx=goal.x-bot.x;dz=goal.z-bot.z;}
-    this.game.input(bot.id,{...neutral(++this.trainingSeq),forward:1,yaw:Math.atan2(-dx,-dz),time:state.now});
-  }
-  limit(c: Client, max: number) {
+  limit(c: Client, max: number,channel='control') {
+    const key=`${c.sessionId}:${channel}`;
     const now = Date.now();
-    let r = this.rates.get(c.sessionId);
+    let r = this.rates.get(key);
     if (!r || now - r.at >= 1000) {
       r = { at: now, count: 0 };
-      this.rates.set(c.sessionId, r);
+      this.rates.set(key, r);
     }
     return ++r.count <= max;
   }
   async onAuth(_c: Client, options: { ticket?: unknown }) {
-    return identity(options.ticket);
+    const user=await identity(options.ticket);
+    if(this.game.state.operation.config.kind==='solo'&&this.ownerId&&user.id!==this.ownerId)throw Error('Privater Einzelspieler-Einsatz');
+    if(this.training&&this.game.state.phase!=='waiting')throw Error('Dieser Einsatz wurde bereits gestartet');
+    return user;
   }
   onJoin(c: Client,options:{uniform?:unknown}={}) {
     const user = c.auth as { id: string; name: string };
     if (!['waiting','playing'].includes(this.game.state.phase))throw Error('Dieser Einsatz nimmt gerade keine Spieler auf.');
+    const config=this.game.state.operation.config;
+    if(config.kind==='solo'&&this.ownerId&&user.id!==this.ownerId)throw Error('Privater Einzelspieler-Einsatz');
+    if(this.training&&this.game.state.phase!=='waiting')throw Error('Dieser Einsatz wurde bereits gestartet');
+    this.ownerId ||= user.id;
     const player=this.game.add(user.id,user.name);
     if(validUniform(options.uniform,player.team,this.game.state.mapId)){
       player.uniform=options.uniform;player.weapon=options.uniform==='leatherface'?4:0;player.ammo=player.ammoByWeapon[player.weapon];
     }
     if(this.game.state.phase==='playing'){player.ready=true;player.protectedUntil=this.game.state.now+3000;}
-    if(this.training&&!this.game.player("local-training-target")){this.game.add("local-training-target","Trainingsziel");this.game.ready("local-training-target",true,Date.now());}
+    if(this.training&&!this.game.state.players.some(p=>p.kind==='bot'))this.game.operation.configureBots();
     this.users.set(c.sessionId, user.id);
     c.send("snapshot", { full: this.game.state });
   }
   async onDrop(c: Client) {
+    if(this.game.state.operation.config.kind==='solo'){this.pausedAt=Date.now();this.game.state.operation.paused=true;}
     const id = this.users.get(c.sessionId);
     if (!id) return;
     const p = this.game.player(id);
@@ -157,19 +168,21 @@ export class CityRoom extends Room {
     }
   }
   onReconnect(c: Client) {
+    if(this.pausedAt){this.clockOffset+=Date.now()-this.pausedAt;this.pausedAt=0;this.game.state.operation.paused=false;}
     const p = this.game.player(this.users.get(c.sessionId) ?? "");
     if (p) p.connected = true;
+    this.game.elect();
     c.send("snapshot", { full: this.game.state });
   }
   onLeave(c: Client) {
     const id = this.users.get(c.sessionId);
     if (id) this.game.remove(id);
     this.users.delete(c.sessionId);
-    this.rates.delete(c.sessionId);
+    for(const key of this.rates.keys())if(key.startsWith(c.sessionId+':'))this.rates.delete(key);
   }
   onDispose() {
-    codes.delete(this.game.state.roomCode);
-    liveRooms.delete(this.game.state.roomCode);
+    this.bots?.dispose();
+    if(this.game){codes.delete(this.game.state.roomCode);liveRooms.delete(this.game.state.roomCode);}
   }
 }
 const app = express();
@@ -203,11 +216,12 @@ app.get("/rooms/:code", async (req, res) => {
   try {
     await identity(req.headers.authorization?.replace(/^Bearer /, ""));
     const id = codes.get(String(req.params.code));
-    if (!id) {
+    const target=id?[...liveRooms.values()].find(r=>r.roomId===id):undefined;
+    if (!id||target?.game.state.operation.config.kind==='solo') {
       res.sendStatus(404);
       return;
     }
-    res.json({ roomId: id });
+    res.json({ roomId:id,mapId:target?.game.state.mapId });
   } catch {
     res.sendStatus(401);
   }
@@ -238,5 +252,7 @@ const gameServer = new Server({
 });
 gameServer.define("altstadt", CityRoom);
 // Room code lookup uses the normal matchmaking endpoint with metadata filtering.
+// Build map caches before accepting players so first-time generation cannot stall a live match.
+for(const map of mapIds){const navigation=await createNavigation(map);navigation.dispose();}
 await gameServer.listen(Number(process.env.PORT ?? 2567), process.env.BIND_HOST ?? "0.0.0.0");
 console.info("Altstadt multiplayer listening", process.env.PORT ?? 2567);

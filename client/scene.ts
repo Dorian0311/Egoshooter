@@ -1,3 +1,9 @@
+import {applyActionPose} from './actionPose';
+import {createBattleAudio} from './battleAudio';
+import {createAnatomy} from './anatomy';
+import {createGore} from './gore';
+import {createOperationScene,createThrowingStarGeometry} from './operationScene';
+import {isCrawling,eyeHeight as actorEyeHeight,armCount,hasLost} from '../shared/injuries';
 import {createInteriors} from './interiors';
 import {interiorWorld,insideBuilding,interiorFixtures} from '../shared/interiors';
 import {createChainsaw} from './chainsaw';
@@ -43,12 +49,13 @@ export function createScene(
   initialSettings:GameSettings=defaultSettings,
   onInteract:(id:string)=>void=()=>{},
   inspectionView?:{position:[number,number,number];target:[number,number,number]},
+  readOnly=false,
 ) {
   let settings=initialSettings,enabled=true;
   const pressed=(action:Action)=>keys.has(settings.bindings[action]);
   const world=getWorld(mapId),{boxes,buildings}=world;
   let collisionWorld=world;
-  const renderer = new T.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
+  const renderer = new T.WebGLRenderer({ canvas, antialias: false, preserveDrawingBuffer:readOnly, powerPreference: 'high-performance' });
   renderer.shadowMap.enabled = true;
   renderer.localClippingEnabled = true;
   renderer.shadowMap.type = T.PCFSoftShadowMap;
@@ -251,11 +258,11 @@ export function createScene(
   const chainsaw=createChainsaw();weapon.add(chainsaw.group);
   const muzzleEffects=createMuzzleEffects(scene);
   const avatars = new Map<string, T.Group>();
-  const wanderers=createWanderers(scene,mapId);
+  const wanderers=inspectionView?createWanderers(scene,mapId):{update(_time:number,_dt:number){},dispose(){}};
   function avatar(p:Player){
     const g=new T.Group();g.position.set(p.x,p.y,p.z);g.userData.team=p.team;g.userData.uniform=p.uniform;scene.add(g);avatars.set(p.id,g);
     const nameplate=createPlayerNameplate(canvas.parentElement!,p.name,p.team===local?.team);g.add(nameplate.anchor);g.userData.nameplate=nameplate;
-    void loadHuman(p.uniform).then(data=>{if(stopped||avatars.get(p.id)!==g)return;const human=createHuman(data,p.team,mapId,mat(p.team==='de'?'#232629':mapId==='cologne'?'#6c7250':'#7a795e'),p.uniform);g.add(human.group);g.userData.human=human;}).catch(e=>console.warn('Human asset unavailable',String(e)));
+    void loadHuman(p.uniform).then(data=>{if(stopped||avatars.get(p.id)!==g)return;const human=createHuman(data,p.team,mapId,mat(p.team==='de'?'#232629':mapId==='cologne'?'#6c7250':'#7a795e'),p.uniform,p.kind==='resident');g.add(human.group);g.userData.human=human;g.userData.anatomy=createAnatomy(human.group);g.userData.anatomy.setLost((g.userData.target as Player)?.injuries.lost??0);}).catch(e=>console.warn('Human asset unavailable',String(e)));
     return g;
   }
   let snapshot: Snapshot | null = null,
@@ -280,11 +287,17 @@ export function createScene(
   cube(.24,-.32,-.38,.055,.16,.085,'#674b32',smg);
   cube(.24,-.22,-.26,.07,.07,.2,'#674b32',smg);
   weapon.traverse(object=>object.layers.set(1));
+  const handStar=new T.Mesh(createThrowingStarGeometry(),new T.MeshStandardMaterial({color:'#aeb8b9',metalness:.9,roughness:.25}));handStar.position.set(-.08,-.05,-.45);handStar.layers.set(1);handStar.visible=false;weapon.add(handStar);
   const hitEffects=createHitEffects(scene);
+  const gore=createGore(scene,()=>collisionWorld),operationScene=createOperationScene(scene),seenEvents=new Set<string>();
+  let condition="",shakeAt=0,shakeStrength=0;
   const pending: Input[] = [];
   const traces:{line:T.Line;expires:number}[]=[];
   const keys = new Set<string>();
-  let audio: AudioContext | null = null;
+  let audio: AudioContext | null = null,audioOutput:GainNode|null=null,audioCapture:MediaStreamAudioDestinationNode|null=null;
+  const battleAudio=createBattleAudio(()=>audio,()=>audioOutput,camera),stepPositions=new Map<string,{x:number;z:number;distance:number}>();
+  async function startAudio(){if(!audio){audio=new AudioContext();audioOutput=audio.createGain();audioCapture=audio.createMediaStreamDestination();audioOutput.connect(audio.destination);audioOutput.connect(audioCapture);}await audio.resume();await battleAudio.load();}
+
   const listeners: (() => void)[] = [];
   function listen(target: EventTarget, event: string, fn: EventListener) {
     target.addEventListener(event, fn);
@@ -306,7 +319,9 @@ export function createScene(
     if (!locked()) return;
     keys.add(e.code);
     if(e.code===settings.bindings.sprint&&!e.repeat&&settings.sprintMode==='toggle')sprintToggled=!sprintToggled;
-    if(e.code===settings.bindings.interact&&!e.repeat&&local?.hp){const target=interiors.interaction(local,yaw);if(target)onInteract(target.id);}
+    if(e.code===settings.bindings.interact&&!e.repeat&&local?.hp){const target=operationScene.interaction(local,yaw)??interiors.interaction(local,yaw);if(target)onInteract(target.id);}
+    if(e.code===settings.bindings.throwStar&&!e.repeat&&local?.hp)onInteract('throw');
+    if(e.code===settings.bindings.bandage&&!e.repeat&&local?.hp)onInteract('bandage');
     if (Object.values(settings.bindings).includes(e.code)) e.preventDefault();
     if (e.code === settings.bindings.jump) jump = true;
     if (e.code === settings.bindings.reload) reload = true;
@@ -343,18 +358,20 @@ export function createScene(
     if (enabled && snapshot?.phase === "playing") {
       canvas.focus();
       if(!dragLook)try{Promise.resolve(canvas.requestPointerLock()).catch(()=>{dragLook=true;});}catch{dragLook=true;}
-      audio ??= new AudioContext();
-      void audio.resume();
+      void startAudio();
     }
   });
   function roomSound(glass=false){
     if(!audio||audio.state!=='running'||!settings.volume)return;
     const length=glass?.28:.15,buffer=audio.createBuffer(1,Math.ceil(audio.sampleRate*length),audio.sampleRate),data=buffer.getChannelData(0);
     for(let n=0;n<data.length;n++)data[n]=(Math.random()*2-1)*Math.pow(1-n/data.length,2);
-    const source=audio.createBufferSource(),filter=audio.createBiquadFilter(),gain=audio.createGain();source.buffer=buffer;filter.type=glass?'highpass':'lowpass';filter.frequency.value=glass?1800:400;gain.gain.value=(glass?.08:.045)*settings.volume;source.connect(filter).connect(gain).connect(audio.destination);source.start();
+    const source=audio.createBufferSource(),filter=audio.createBiquadFilter(),gain=audio.createGain();source.buffer=buffer;filter.type=glass?'highpass':'lowpass';filter.frequency.value=glass?1800:400;gain.gain.value=(glass?.08:.045)*settings.volume;source.connect(filter).connect(gain).connect(audioOutput??audio.destination);source.start();
   }
   function sound(p: Player | undefined, hit = false, step = false) {
     if (!audio || audio.state !== "running" || settings.volume===0) return;
+    if(step&&battleAudio.sample('footstep',p?new T.Vector3(p.x,p.y+.1,p.z):undefined,.15*settings.volume,p?.sprinting?1.15:1))return;
+    if(!hit&&!step&&p)battleAudio.shot(p.weapon,p.id===myId?undefined:new T.Vector3(p.x,p.y+actorEyeHeight(p),p.z),settings.volume,insideBuilding(world,p.x,p.z)!==insideBuilding(world,camera.position.x,camera.position.z));
+
     const room=local?insideBuilding(world,local.x,local.z):-1;
     const sourceRoom=p?insideBuilding(world,p.x,p.z):room;
     const muffled=room!==sourceRoom&&(room>=0||sourceRoom>=0);
@@ -383,26 +400,30 @@ export function createScene(
       pan.positionX.value = p.x;
       pan.positionY.value = p.y + 1;
       pan.positionZ.value = p.z;
-      const filter=audio.createBiquadFilter();filter.type="lowpass";filter.frequency.value=muffled?650:14000;oscillator.connect(filter).connect(gain).connect(pan).connect(audio.destination);
-    } else oscillator.connect(gain).connect(audio.destination);
+      const filter=audio.createBiquadFilter();filter.type="lowpass";filter.frequency.value=muffled?650:14000;oscillator.connect(filter).connect(gain).connect(pan).connect(audioOutput??audio.destination);
+    } else oscillator.connect(gain).connect(audioOutput??audio.destination);
     if(step&&local&&room>=0&&world.boxes.some(b=>b.kind==='stair'&&Math.abs(local!.x-b.x)<b.w/2&&Math.abs(local!.z-b.z)<b.d/2)){
-      const creak=audio.createOscillator(),cg=audio.createGain();creak.type='triangle';creak.frequency.setValueAtTime(240,audio.currentTime);creak.frequency.exponentialRampToValueAtTime(90,audio.currentTime+.25);cg.gain.setValueAtTime(.012*settings.volume,audio.currentTime);cg.gain.exponentialRampToValueAtTime(.0001,audio.currentTime+.3);creak.connect(cg).connect(audio.destination);creak.start();creak.stop(audio.currentTime+.31);
+      const creak=audio.createOscillator(),cg=audio.createGain();creak.type='triangle';creak.frequency.setValueAtTime(240,audio.currentTime);creak.frequency.exponentialRampToValueAtTime(90,audio.currentTime+.25);cg.gain.setValueAtTime(.012*settings.volume,audio.currentTime);cg.gain.exponentialRampToValueAtTime(.0001,audio.currentTime+.3);creak.connect(cg).connect(audioOutput??audio.destination);creak.start();creak.stop(audio.currentTime+.31);
     }
-    if(room>=0){const delay=audio.createDelay(.15),echo=audio.createGain();delay.delayTime.value=.065;echo.gain.value=.22;gain.connect(delay).connect(echo).connect(audio.destination);}
+    if(room>=0){const delay=audio.createDelay(.15),echo=audio.createGain();delay.delayTime.value=.065;echo.gain.value=.22;gain.connect(delay).connect(echo).connect(audioOutput??audio.destination);}
     oscillator.start();
     oscillator.stop(audio.currentTime + 0.16);
   }
   function update(s: Snapshot, id: string) {
     const oldPhase = snapshot?.phase;
     if(snapshot?.interiors&&s.interiors&&local){for(const f of interiorFixtures(world)){if(f.type==='door'&&snapshot.interiors.doors[f.id]!==s.interiors.doors[f.id]&&Math.hypot(f.box.x-local.x,f.box.z-local.z)<12){roomSound();break;}}}
-    snapshot = s;interiors.sync(s.interiors);collisionWorld=interiorWorld(world,s.interiors);
+    snapshot = s;interiors.sync(s.interiors);operationScene.sync(s);
+    if(condition!==s.operation.condition){condition=s.operation.condition;if(condition==='fog')scene.fog=new T.Fog('#a8b3b0',4,42);else if(condition==='night'){scene.fog=new T.Fog('#07101a',20,100);sun.intensity=.18;renderer.setClearColor('#07101a');}}collisionWorld=interiorWorld(world,s.interiors);
     myId = id;
+    for(const p of [...s.players,...s.npcs]){const prior=stepPositions.get(p.id),distance=prior?prior.distance+Math.hypot(p.x-prior.x,p.z-prior.z):0;if(p.id!==id&&p.hp&&distance>1.6){battleAudio.sample('footstep',new T.Vector3(p.x,p.y+.1,p.z),.11*settings.volume,p.sprinting?1.15:1);stepPositions.set(p.id,{x:p.x,z:p.z,distance:0});}else stepPositions.set(p.id,{x:p.x,z:p.z,distance});}
+
     const own = s.players.find((p) => p.id === id);
     if (own) {
       const before=local;
       const reset = !local || oldPhase !== s.phase || (!local.hp && own.hp > 0);
+      if(own.reloadAt&&own.reloadAt!==local?.reloadAt)battleAudio.sample('metal',undefined,.08*settings.volume,1.2);
       local = { ...own };
-      if (reset) {
+      if (reset||readOnly) {
         viewmodel.reset();
         yaw = own.yaw;
         pitch = own.pitch;
@@ -413,12 +434,13 @@ export function createScene(
       }
       cameraMotion.reconcile(before??undefined,local,reset);
     }
-    for (const p of s.players)
+    const actors=[...s.players,...s.npcs],corpses=new Set(actors.filter(p=>!p.hp&&!p.downedUntil&&p.diedAt>0&&s.now-p.diedAt<10000).sort((a,b)=>b.diedAt-a.diedAt).slice(0,8).map(p=>p.id));
+    for (const p of actors)
       if (p.id !== id) {
         let g = avatars.get(p.id);
         if (g && (g.userData.team !== p.team || g.userData.uniform !== p.uniform)) {
           g.userData.nameplate?.dispose();
-          g.userData.human?.dispose();scene.remove(g);
+          g.userData.anatomy?.dispose();g.userData.human?.dispose();scene.remove(g);
           g.traverse((o) => {
             if (o instanceof T.Mesh) o.geometry.dispose();
           });
@@ -428,34 +450,39 @@ export function createScene(
         g ??= avatar(p);
         g.userData.target = p;
         g.userData.nameplate?.update(p.name,p.team===own?.team);
+        if(g.userData.life!==p.life){g.userData.life=p.life;g.userData.headDestroyed=false;}
         if(p.hp>0)g.userData.headDestroyed=false;
-        g.visible = p.hp > 0 || !!g.userData.headDestroyed;
+        g.visible=p.hp>0||p.downedUntil>0||corpses.has(p.id);
+        g.userData.anatomy?.setLost(p.injuries.lost);
       }
     for (const [id, g] of avatars)
-      if (!s.players.some((p) => p.id === id)) {
+      if (!actors.some((p) => p.id === id)) {
         g.userData.nameplate?.dispose();
-        g.userData.human?.dispose();scene.remove(g);
+        g.userData.anatomy?.dispose();g.userData.human?.dispose();scene.remove(g);
         g.traverse((o) => {
           if (o instanceof T.Mesh) o.geometry.dispose();
         });
         avatars.delete(id);
       }
     for (const e of s.events) {
-      if(e.type==='glass'&&e.point&&local&&Math.hypot(e.point[0]-local.x,e.point[2]-local.z)<18)roomSound(true);
+      if(e.eventId){if(seenEvents.has(e.eventId))continue;seenEvents.add(e.eventId);if(seenEvents.size>2048)seenEvents.delete(seenEvents.values().next().value!);}
+      if(e.type==='glass'&&e.point){if(!battleAudio.sample('glass',new T.Vector3(...e.point),.25*settings.volume))roomSound(true);}
       if(e.type==='glass'||e.type==='shot'&&!s.events.some(hit=>hit.type==='hit'&&hit.id===e.id))interiors.impact(e);
+      if(e.type==='sever'&&e.target){const target=avatars.get(e.target);if(target&&e.bodyPart&&!settings.reducedGore){const piece=target.userData.anatomy?.detach(e.bodyPart);if(piece){const shooter=actors.find(p=>p.id===e.id);gore.add(piece,new T.Vector3(Math.sin(shooter?.yaw??0)*-1,.1,Math.cos(shooter?.yaw??0)*-1));}if(e.point)hitEffects.emit(e,false,new T.Vector3(0,1,0),actors.find(p=>p.id===e.target)?.y);}}
       if(e.type==='hit'||e.type==='kill'){
-        const shooter=s.players.find(p=>p.id===e.id),target=s.players.find(p=>p.id===e.target);
+        const shooter=actors.find(p=>p.id===e.id),target=actors.find(p=>p.id===e.target);
         const direction=shooter?new T.Vector3(-Math.sin(shooter.yaw)*Math.cos(shooter.pitch),Math.sin(shooter.pitch),-Math.cos(shooter.yaw)*Math.cos(shooter.pitch)):new T.Vector3(0,0,-1);
         if(shooter&&e.point)direction.set(e.point[0]-shooter.x,e.point[1]-shooter.y-(shooter.crouching?1:1.6),e.point[2]-shooter.z).normalize();
         const slowMotion=settings.headshotSlowMotion&&e.id===id;
         const lethalHeadshot=e.type==='kill'&&e.hitZone==='head';
-        if(e.type!=='hit'||!s.events.some(k=>k.type==='kill'&&k.hitZone==='head'&&k.target===e.target&&k.id===e.id))hitEffects.emit(e,slowMotion,direction,target?.y);
+        if(!settings.reducedGore&&(e.type!=='hit'||!s.events.some(k=>k.type==='kill'&&k.hitZone==='head'&&k.target===e.target&&k.id===e.id)))hitEffects.emit(e,slowMotion,direction,target?.y);
         if(lethalHeadshot&&e.target){const victim=avatars.get(e.target);if(victim){
           victim.userData.headDestroyed=true;victim.userData.deathAt=performance.now();victim.userData.deathSlowMotion=slowMotion;
           const horizontal=direction.clone().setY(0);if(horizontal.lengthSq()<.0001)horizontal.set(0,0,-1);horizontal.normalize().applyAxisAngle(new T.Vector3(0,1,0),-(target?.yaw??0));
           victim.userData.deathAxis=new T.Vector3(horizontal.z,0,-horizontal.x);victim.visible=true;
         }}
       }
+      if((e.type==='impact'||e.type==='shot'&&!s.events.some(hit=>hit.type==='hit'&&hit.id===e.id))&&e.point){const box=collisionWorld.boxes.find(b=>Math.abs(b.x-e.point![0])<b.w/2+.2&&Math.abs(b.y-e.point![1])<b.h/2+.2&&Math.abs(b.z-e.point![2])<b.d/2+.2),surface=box?.kind==='door'?'wood':['truck','container','fence'].includes(box?.kind??'')?'metal':'stone';battleAudio.sample(surface,new T.Vector3(...e.point),.18*settings.volume);}
       if (e.type === "shot") {
         if(e.point){const shooter=s.players.find(p=>p.id===e.id);if(shooter){
           const direction=new T.Vector3(-Math.sin(shooter.yaw)*Math.cos(shooter.pitch),Math.sin(shooter.pitch),-Math.cos(shooter.yaw)*Math.cos(shooter.pitch));
@@ -466,13 +493,15 @@ export function createScene(
           scene.add(line);traces.push({line,expires:performance.now()+90});
         }}
         sound(s.players.find((p) => p.id === e.id));
-        if (e.id === id){viewmodel.shot(e.weapon??0);pitch=Math.min(1.45,pitch+weapons[e.weapon??0].recoil*(aim?.7:1));yaw+=Math.sin(seq*2.3)*weapons[e.weapon??0].recoil*.2;}
+        if (e.id === id){shakeAt=performance.now();shakeStrength=.7;viewmodel.shot(e.weapon??0);pitch=Math.min(1.45,pitch+weapons[e.weapon??0].recoil*(aim?.7:1));yaw+=Math.sin(seq*2.3)*weapons[e.weapon??0].recoil*.2;}
       }
       if(e.type==="melee")sound(s.players.find(p=>p.id===e.id));
+      if(e.type==='hit'&&e.target===id){shakeAt=performance.now();shakeStrength=1;}
       if (e.type === "hit" && e.id === id) sound(undefined, true);
     }
   }
   const graphics=createGraphics(renderer,scene,camera,sun,graphicsQuality);
+  let captureFrame:(()=>void)|undefined;
   let raf = 0;
   function frame(t: number) {
     if (stopped) return;
@@ -484,7 +513,7 @@ export function createScene(
     acc += dt;
     while (acc >= STEP) {
       acc -= STEP;
-      if (local && snapshot?.phase === "playing") {
+      if (!readOnly&&local&&snapshot?.phase==="playing"&&!snapshot.operation.paused) {
         const i: Input = {
           ...neutral(++seq),
           forward: locked()
@@ -501,7 +530,7 @@ export function createScene(
           fire,
           reload,
           aim,
-          weapon: local.uniform==='leatherface'?4:weaponIndex,
+          weapon: local.uniform==='leatherface'?4:armCount(local)===1?1:weaponIndex,
           time: snapshot.now + (performance.now() - receivedAt),
         };
         jump = false;
@@ -512,20 +541,22 @@ export function createScene(
           pending.push(i);
           if (pending.length > 120) pending.shift();
         }
-        send(i);
+        if(!readOnly)send(i);
       }
     }
     if (local) {
       const rendered=cameraMotion.sample(local,acc/STEP,dt);
-      eyeHeight+=((local.crouching?1:1.6)-eyeHeight)*(1-Math.exp(-dt*16));
+      eyeHeight+=(actorEyeHeight(local)-eyeHeight)*(1-Math.exp(-dt*16));
       camera.position.set(
-        rendered.x,
+        rendered.x-(isCrawling(local)?Math.sin(yaw)*.55:0),
         rendered.y + eyeHeight,
-        rendered.z,
+        rendered.z-(isCrawling(local)?Math.cos(yaw)*.55:0),
       );
       camera.rotation.set(pitch, yaw, 0);
     }
     if(inspectionView){camera.position.set(...inspectionView.position);camera.lookAt(...inspectionView.target);}
+    if(!readOnly&&settings.cameraShake&&t-shakeAt<180){const amount=(1-(t-shakeAt)/180)*settings.cameraShake*shakeStrength;camera.rotation.z+=Math.sin(t*.07)*.012*amount;camera.position.y+=Math.sin(t*.09)*.012*amount;}
+    if(local&&!local.hp&&!local.downedUntil&&snapshot?.operation.config.kind==='coop'){const ally=snapshot.players.find(p=>p.kind==='human'&&p.hp>0&&p.id!==local?.id);if(ally){camera.position.set(ally.x,ally.y+actorEyeHeight(ally),ally.z);camera.rotation.set(ally.pitch,ally.yaw,0);}}
     camera.updateMatrixWorld();
     for (const g of avatars.values()) {
       const p = g.userData.target as Player;
@@ -533,34 +564,26 @@ export function createScene(
       const renderYaw=g.userData.renderYaw??p.yaw;
       g.userData.renderYaw=renderYaw+Math.atan2(Math.sin(p.yaw-renderYaw),Math.cos(p.yaw-renderYaw))*(1-Math.exp(-dt*18));
       g.rotation.set(0,g.userData.renderYaw,0);
-      if(!p.hp&&g.userData.headDestroyed){
-        const pose=headshotPose((t-g.userData.deathAt)/1000,g.userData.deathSlowMotion);
-        g.rotateOnAxis(g.userData.deathAxis,pose.fall*Math.PI/2+pose.recoil);g.position.y=p.y+pose.height;
+      if(!p.hp&&!p.downedUntil&&p.diedAt){
+        const pose=headshotPose(Math.max(0,((snapshot?.now??0)+t-receivedAt-p.diedAt)/1000),!!g.userData.deathSlowMotion);
+        g.rotateOnAxis(g.userData.deathAxis??new T.Vector3(1,0,0),pose.fall*Math.PI/2+pose.recoil);g.position.y=p.y+pose.height;
       }
-      g.userData.human?.setHeadVisible(!g.userData.headDestroyed);
+      if(isCrawling(p)&&(p.hp>0||p.downedUntil)){g.rotateX(-Math.PI/2);g.position.y=p.y+.32;g.position.x+=Math.sin(g.userData.renderYaw)*1.05;g.position.z+=Math.cos(g.userData.renderYaw)*1.05;}
+      if(!g.userData.anatomy)g.userData.human?.setHeadVisible(!g.userData.headDestroyed);
       g.scale.y=p.crouching&&!g.userData.human?.group.userData.hasCrouchAnimation?.66:1;
       const nameplate=g.userData.nameplate as ReturnType<typeof createPlayerNameplate>|undefined;
       if(nameplate){
-        nameplate.anchor.position.y=(p.crouching?1.43:2.06)/g.scale.y;
+        if(isCrawling(p)){g.updateWorldMatrix(true,false);nameplate.anchor.position.copy(g.worldToLocal(new T.Vector3(p.x,p.y+.85,p.z)));}else nameplate.anchor.position.set(0,(p.crouching?1.43:2.06)/g.scale.y,0);
         const distance=g.position.distanceTo(camera.position),nearby=p.hp>0&&p.connected&&distance<45;
         if(nearby&&t-(g.userData.labelCheckAt??-1000)>100){
           nameplate.anchor.getWorldPosition(avatarPosition);g.userData.labelOccluded=nameplateOccluded(camera.position,avatarPosition,collisionWorld.boxes);g.userData.labelCheckAt=t;
         }
         nameplate.render(camera,canvas.clientWidth,canvas.clientHeight,nearby&&!g.userData.labelOccluded,Math.min(1,Math.max(0,(45-distance)/12)));
       }
-      g.userData.human?.update(p,t,dt);
+      g.userData.human?.update(p,t,dt);if(g.userData.human)applyActionPose(g.userData.human.group,p,t,(snapshot?.now??0)+t-receivedAt);
     }
+    battleAudio.listener();
     if (local && audio) {
-      const l = audio.listener;
-      l.positionX.value = local.x;
-      l.positionY.value = local.y + 1.6;
-      l.positionZ.value = local.z;
-      l.forwardX.value = -Math.sin(yaw);
-      l.forwardY.value = 0;
-      l.forwardZ.value = -Math.cos(yaw);
-      l.upX.value = 0;
-      l.upY.value = 1;
-      l.upZ.value = 0;
       if (
         local.hp &&
         local.grounded &&
@@ -587,7 +610,9 @@ export function createScene(
     fallbackHands.animatePose(pose?.reloadProgress??0,pose?.aimBlend??0);
     pistol.visible=!saw&&local?.weapon===1&&!hasDetailedWeapon;smg.visible=!saw&&local?.weapon===2&&!hasDetailedWeapon;for(const part of rifleParts)part.visible=!saw&&local?.weapon===0&&!hasDetailedWeapon;
     for(const h of weaponHands)h.visible=!saw&&local?.weapon!==1&&!hasDetailedWeapon&&!hasFallbackHands;sleeve.visible=!saw&&local?.weapon!==1&&!hasDetailedWeapon&&!hasFallbackHands;
-    weapon.visible = !inspectionView && !!local?.hp && snapshot?.phase === "playing";
+    const throwRemaining=(local?.throwAt??0)-((snapshot?.now??0)+t-receivedAt);handStar.visible=throwRemaining>610&&throwRemaining<=750;if(throwRemaining>0&&throwRemaining<=750){weapon.rotation.x+=Math.sin((750-throwRemaining)/750*Math.PI)*.45;weapon.position.y-=Math.sin((750-throwRemaining)/750*Math.PI)*.12;}
+    weapon.scale.x=local&&armCount(local)===1&&hasLost(local,'armR')?-1:1;
+    weapon.visible = !inspectionView && !!local?.hp && armCount(local)>0 && snapshot?.phase === "playing";
     camera.fov = inspectionView?50:settings.fov-24*(pose?.aimBlend??0);
     camera.updateProjectionMatrix();
     ammoReadout.style.display=local?.hp&&snapshot?.phase==='playing'&&!saw?'block':'none';
@@ -605,17 +630,18 @@ export function createScene(
       ammoReadout.classList.toggle('is-empty',local.ammo===0);
     }
     for(let index=traces.length-1;index>=0;index--){const trace=traces[index];if(t>=trace.expires){scene.remove(trace.line);trace.line.geometry.dispose();(trace.line.material as T.Material).dispose();traces.splice(index,1);}}
-    hitEffects.update(dt);muzzleEffects.update(dt);
-    wanderers.update((snapshot?.now??0)+t-receivedAt,dt);
+    hitEffects.update(dt);muzzleEffects.update(dt);gore.update(dt);operationScene.update(t);
+    if(!snapshot?.npcs)wanderers.update((snapshot?.now??0)+t-receivedAt,dt);
     interiors.update(local??undefined,t,dt);
-    const target=local?.hp&&locked()?interiors.interaction(local,yaw):undefined;
-    interactionHint.style.display=target?'block':'none';if(target)interactionHint.textContent=`[${settings.bindings.interact.replace('Key','')}] ${interiors.label(target.id)}`;
+    const target=local?.hp&&locked()?(operationScene.interaction(local,yaw)??interiors.interaction(local,yaw)):undefined;
+    interactionHint.style.display=target?'block':'none';if(target)interactionHint.textContent=`[${settings.bindings.interact.replace('Key','')}] ${('label' in target?target.label:interiors.label(target.id))}`;
     const indoors=local&&insideBuilding(world,local.x,local.z)>=0;
     const hemisphere=scene.children.find(o=>o instanceof T.HemisphereLight) as T.HemisphereLight;
-    if(hemisphere)hemisphere.intensity+=( (indoors?.19:.45)-hemisphere.intensity)*Math.min(1,dt*4);
+    if(hemisphere)hemisphere.intensity+=( (condition==='night'?.10:indoors?.19:.45)-hemisphere.intensity)*Math.min(1,dt*4);
     river?.update(t/1000);
     mapDetails.update(t/1000);
     graphics.render(dt,pose?.aimBlend??0,!menu);
+    captureFrame?.();
     raf = requestAnimationFrame(frame);
   }
   let receivedAt = performance.now();
@@ -624,6 +650,10 @@ export function createScene(
     setQuality:graphics.setQuality,
     setSettings(value:GameSettings){settings=value;release();},
     setEnabled(value:boolean){enabled=value;if(!value){release();dragLook=false;if(document.pointerLockElement===canvas)document.exitPointerLock();}},
+    startAudio,
+    capture(callback?:()=>void){captureFrame=callback;},
+    audioStream:()=>audioCapture?.stream,
+    resetReplay(){seenEvents.clear();pending.length=0;gore.dispose();hitEffects.clear();},
     getRenderStats:()=>({calls:renderer.info.render.calls,triangles:renderer.info.render.triangles,...graphics.stats()}),
     update(s: Snapshot, id: string) {
       receivedAt = performance.now();
@@ -634,14 +664,14 @@ export function createScene(
       wanderers.dispose();interiors.dispose();interactionHint.remove();
       ammoReadout.remove();
       mapDetails.dispose();disposeMilitaryRoofs?.();disposeEnvironmentUpgrade();
-      hitEffects.dispose();
+      hitEffects.dispose();gore.dispose();operationScene.dispose();
       cancelAnimationFrame(raf);
       listeners.forEach((f) => f());
       if (locked()) document.exitPointerLock();
-      void audio?.close();
+      battleAudio.dispose();void audio?.close();
       fallbackHands.dispose();chainsaw.dispose();
       for(const trace of traces){trace.line.geometry.dispose();(trace.line.material as T.Material).dispose();}
-      for(const avatar of avatars.values()){avatar.userData.nameplate?.dispose();avatar.userData.human?.dispose();}
+      for(const avatar of avatars.values()){avatar.userData.nameplate?.dispose();avatar.userData.anatomy?.dispose();avatar.userData.human?.dispose();}
       scene.traverse((o) => {
         if (o instanceof T.Mesh) {
           if(o instanceof T.InstancedMesh)o.dispose();

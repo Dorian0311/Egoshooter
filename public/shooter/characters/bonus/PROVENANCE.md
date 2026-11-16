@@ -29,3 +29,7 @@ User-provided Texas_Chainsaw_-_Leatherface.usdz. Static mesh without skeleton or
 
 ## Commander Easter egg
 User-provided nazi-commander-1946-wolf-old-blood.zip. Static FBX with textures; no skeleton or animation. Now also selectable in the regular gallery at user request; fixed source pose, not a historically accurate uniform. 13,683 triangles, five meshes, 1024px textures. Conversion: scripts/convert-commander.mjs and scripts/pack-character-textures.py commander. Game-derived asset; redistribution permission not established.
+
+## Karl Ruprecht Kroenen
+
+Converted from the existing local `Karl_Ruprecht_Kroenen.usdz` provided in Downloads. The source has 55 joints and no usable timed locomotion clips. The GLB retains the skeleton and skin weights; materials are packed into 1024px albedo/normal atlases. Runtime animation supplies movement. Source and output checksums are recorded in `kroenen.json`. This does not establish redistribution rights.

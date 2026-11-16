@@ -293,7 +293,7 @@
   z-index: -1;
   pointer-events: none;
   background: linear-gradient(90deg,#070e0b44,transparent 72%),
-    url('/shooter/lobby/encampment-v1.png') center center / cover no-repeat;
+    url('/shooter/lobby/encampment-v2.webp') center center / cover no-repeat;
 }
 .city-lobby .city-top {
   padding: 18px 4.4%;

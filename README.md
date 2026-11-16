@@ -120,6 +120,54 @@ Die Herkunft der vom Nutzer gelieferten Modelle ist in
 
 ## Neue Kampf- und Komfortfunktionen
 
+### Einzelspieler, Koop und Einsätze
+
+Über **Einzelspieler & Koop** stehen alle vier Karten mit Training, Bot-Gefecht,
+fünf Überlebenswellen und drei Missionsarten zur Verfügung. Im Bot-Gefecht ist
+4 gegen 4 mit verbündeten Bots oder allein gegen ein bis vier Gegner möglich.
+Sabotage und Dokumenten-Bergung enden an der Extraktion; Stellung halten verlangt
+90 Sekunden Kontrolle. Missionen haben acht Minuten Zeitlimit.
+
+Solo-Einsätze sind privat. Koop unterstützt zwei bis vier Menschen, Raumcode und
+Einladungslink; alle müssen bereit sein. Nach dem Start sind keine neuen Beitritte
+möglich. Überlebenswellen skalieren beim Start mit der Teilnehmerzahl. Bei einem
+Solo-Verbindungsabbruch pausiert die Simulation während der zehnsekündigen
+Wiederverbindungsfrist. PvE-Ergebnisse bleiben außerhalb der Community-Rangliste;
+Bestwerte werden getrennt nach Einsatzkonfiguration im Browser gespeichert.
+
+- **E:** Geschenk, Verband oder Missionsgegenstand aufnehmen; Funkstation
+  sabotieren; verwundeten Mitspieler wiederbeleben. Nähe und freie Sicht sind nötig.
+- **G:** einen eingesammelten Wurfstern werfen. Acht Geschenkpakete enthalten je
+  drei hakenkreuzförmige Wurfsterne und können jeweils einmal pro Einsatz von einem
+  Spieler eingesammelt werden. Es gibt keinen Nachschub zwischen Wellen.
+- **H:** vier Sekunden lang verbinden. Vier Verband-Fundstücke pro Karte stoppen
+  Blutverlust; Bewegung, Angriff und Beschuss brechen die Behandlung ab. Gliedmaßen
+  und Lebenspunkte werden dadurch nicht wiederhergestellt.
+- Arme und Beine sind getrennte Trefferzonen. Abtrennung durch angesammelten
+  Fernkampfschaden oder Kettensäge verursacht Blutverlust. Beinverlust erzwingt
+  Kriechen, Armverlust beschränkt Waffen. Normale Respawns stellen den Körper
+  wieder her und erhalten eingesammelte Wurfsterne.
+- Im Koop bleiben 30 Sekunden für vier Sekunden Wiederbelebung. Danach stehen
+  30 Lebenspunkte ohne Blutverlust zur Verfügung; fehlende Gliedmaßen bleiben.
+  Kopfverlust ist endgültig. Ohne handlungsfähige Mitspieler endet der Einsatz.
+- **Karl Ruprecht Kroenen** ist als Bonusfigur mit drehbarer Vorschau verfügbar.
+  Das lokale USDZ-Modell wurde mit Skelett und Texturen in GLB konvertiert.
+- Standard, Nebel, Nacht und wechselnde Zugänge sind vor dem Einsatz wählbar.
+  Bots berücksichtigen Sicht, Geräusche, Deckung, Verletzungen und Türen; die
+  Recast-Navigationsdaten werden vor Annahme von Spielern erzeugt und je Raum
+  mit den Türzuständen abgeglichen.
+- Bis zu drei lokale Höhepunkte können nach dem Einsatz wiedergegeben und bei
+  Browser-Unterstützung als 720p-WebM mit Spielaudio gespeichert werden. Es findet
+  kein automatischer Upload statt. Kamerastöße, Gewalteffekte und neue Tasten
+  sind in den Einstellungen anpassbar.
+
+Gezielte Prüfung: `node --import tsx --test tests/operations.test.ts tests/navigation.test.ts tests/anatomy.test.ts tests/highlights.test.ts`.
+`node --import tsx tests/operation-network.ts` prüft separate lokale Server/Clients
+mit In-Memory-Profilen. Die visuellen Prüfseiten unter `tests/` sind ausschließlich
+für Vite-Entwicklung bestimmt und sind kein Bestandteil des Produktionsbuilds.
+Audio-Herkunft: `public/shooter/audio/CREDITS.json`; Bot-Referenz und Abhängigkeiten:
+`THIRD_PARTY_NOTICES.md`.
+
 - Charakter-Slider mit drehbarer 3D-Vorschau, Pfeiltasten und gespeicherter Auswahl.
 - Einstellungen für Maus- und Zielempfindlichkeit, Sichtfeld, Lautstärke und Tastenbelegung; Speicherung im Browser.
 - Waffen besitzen unterschiedliche Grundstreuung, Feuerraten, Rückstoß und Schadensabfall. Die Maschinenpistole ist für kurze, das G36 für größere Entfernungen ausgelegt.
@@ -284,7 +332,7 @@ Quellen und Konvertierung sind in THIRD_PARTY_NOTICES.md dokumentiert.
 
 ## Stadtbewohner
 
-Vier unbewaffnete Hintergrund-NPCs pro Karte nutzen das vorhandene Figurenmodell mit ziviler Kleidung, Flicken und Schultertaschen. Sie wandern auf festen, trockenen Straßenrouten mit Pausen. Ihre Positionen werden aus der Spielzeit abgeleitet; sie zählen nicht als Spieler, blockieren keine Treffer und vergeben keine Punkte. Die aktuelle Version hat keine Dialoge, Kampf-KI oder Schadensreaktionen.
+Vier unbewaffnete Hintergrund-NPCs pro Karte nutzen das vorhandene Figurenmodell mit ziviler Kleidung, Flicken und Schultertaschen. Sie wandern auf festen, trockenen Straßenrouten mit Pausen. Ihre Positionen werden aus der Spielzeit abgeleitet; sie zählen nicht als Spieler und vergeben keine Punkte. Im laufenden Spiel sind sie serververwaltete, verletzbare und tötbare NPCs; die reine Grafikvorschau verwendet weiterhin lokale Wanderer. Dialoge sind nicht enthalten.
 
 ## Begehbare Innenräume
 
@@ -295,3 +343,19 @@ Mit **E** (unter Einstellungen änderbar) werden nahe Türen und Lichtschalter b
 Innenraumlicht, leichter Staub, unterschiedliche Schritte auf Holz/Fliesen, Treppenknarren, Tür-/Glasgeräusche und gedämpfte Außenquellen ergänzen die Räume. Maximal vier lokale Lampen sind gleichzeitig aktiv; statische Einrichtung wird nach Material gebündelt. Geräusche sind synthetisiert. Die Fassadenfenster an Vorder- und Rückseiten bleiben dekorativ; zerstörbar sind die seitlichen Scheiben.
 
 Die Grafikprüfung bietet „Funkwache innen“, „Obergeschoss“ und „Bahnhof innen“ mit Licht-, Tür- und Glasvorschau. Diese Vorschauknöpfe prüfen die Darstellung; echte Serverinteraktionen werden separat mit acht Netzwerkclients getestet. Testports lassen sich über TEST_GAME_PORT / TEST_PROXY_PORT setzen.
+
+## Lobby-Fahrzeug
+
+Das Hintergrundbild verwendet einen deutschen VW Kübelwagen Typ 82 anstelle des amerikanischen Jeeps. Login und Lobby laden die cache-versionierte Datei `encampment-v2.webp`; Bildquelle und Bearbeitungsprompt stehen in `public/shooter/lobby/provenance.json`. Die Szene wurde mit dem eingebauten Imagegen-Werkzeug bearbeitet.
+
+## Prüfstand · 16. November 2026
+
+- 109 automatisierte Tests bestanden; TypeScript und Produktionsbuild erfolgreich.
+- Echte Netzwerkclients: Solo-Privatsphäre, Koop-Bereitschaft, Wiederverbindung, einmalige Geschenke, Projektilübertragung und Hostwechsel geprüft.
+- Zwei getrennte Browser starteten gemeinsam eine Alpen-Nachtmission; Raumcode-Beitritt wählte die richtige Karte. Mehrspieler mit Nebel wurde ebenfalls geprüft, ohne JavaScript-Fehler. Dieser UI-Test drosselt die Softwaregrafik und aktiviert Bereitschaft über DOM-Ereignisse; er ist keine FPS-Messung.
+- Alle 15 Figuren wurden intakt, verletzt/kriechend und wiederhergestellt dargestellt. Ein tatsächlicher 1280×720-WebM-Export mit VP8/Opus-Spielaudio wurde geprüft.
+- Nachweise liegen lokal unter `artifacts/operations-20261116/`. Kein Produktions-Rollout. Langzeitmessungen auf physischer Spielhardware und vollständige manuelle Gefechte auf jeder Karte bleiben offen.
+
+## Einmaliges Changelog
+
+Beim ersten App-Start für dieses Update erscheint eine Übersicht der Neuerungen. „Verstanden“ oder Escape bestätigt sie; weitere Starts und die anschließende Anmeldung öffnen sie im selben Browserprofil nicht erneut. Desktop, mobile Darstellung, Neuladen und Anmeldung sind mit `tests/release-notes-browser.py` geprüft.

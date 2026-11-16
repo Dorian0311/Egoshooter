@@ -1,9 +1,10 @@
+import {createStaticActorRig} from './staticActorRig';
 import * as T from 'three';
 import {GLTFLoader} from 'three/examples/jsm/loaders/GLTFLoader.js';
 import {clone} from 'three/examples/jsm/utils/SkeletonUtils.js';
 import type {Player} from '../shared/game';
 
-export const bonusIds=['deadpool','harley','rocket','homer','leatherface','commander'] as const;
+export const bonusIds=['deadpool','harley','rocket','homer','leatherface','commander','kroenen'] as const;
 export type BonusId=typeof bonusIds[number];
 export function isBonusId(value:string):value is BonusId{return (bonusIds as readonly string[]).includes(value);}
 type Entry={root:T.Group;refs:number};
@@ -15,10 +16,11 @@ export async function loadBonusCharacter(character:BonusId):Promise<BonusCharact
  return {character,entry:await pending};
 }
 
-const joints:Record<BonusId,{upper:string[];lower:string[];arms:string[];head:string}>= {
+export const joints:Record<BonusId,{upper:string[];lower:string[];arms:string[];head:string}>= {
  deadpool:{upper:['UN_j_L__Leg_00','UN_j_R__Leg_00'],lower:['UN_j_L__Leg_05','UN_j_R__Leg_05'],arms:['UN_j_L__Arm_00','UN_j_R__Arm_00'],head:'UN_j_Neck_01'},
  harley:{upper:['thigh_stretchl','thigh_stretchr'],lower:['leg_stretchl','leg_stretchr'],arms:['arm_stretchl','arm_stretchr'],head:'headx'},
  rocket:{upper:['Bip001-L-Thigh','Bip001-R-Thigh'],lower:['Bip001-L-Calf','Bip001-R-Calf'],arms:['Bip001-L-UpperArm','Bip001-R-UpperArm'],head:'Bip001-Head'},
+ kroenen:{upper:['n20','n24'],lower:['n21','n25'],arms:['n36','n57'],head:'n32'},
  commander:{upper:[],lower:[],arms:[],head:''},
  leatherface:{upper:[],lower:[],arms:[],head:''},
  homer:{upper:['Hip_L','Hip_R'],lower:['Knee_L','Knee_R'],arms:['Shoulder_L','Shoulder_R'],head:'Head'},
@@ -49,7 +51,9 @@ export function createBonusCharacter(data:BonusCharacterData){
    if(p&&c&&p!==c){p.attach(c);group.updateMatrixWorld(true);}
   }
  }
- const config=joints[data.character],parentQ=new T.Quaternion(),worldQ=new T.Quaternion(),delta=new T.Quaternion(),direction=new T.Vector3(),target=new T.Vector3();
+ const staticRig=bones.length?undefined:createStaticActorRig(group,geometries);
+ const config=joints[data.character];if(config.arms.length)group.userData.limbRoots={head:config.head,armL:config.arms[0],armR:config.arms[1],legL:config.upper[0],legR:config.upper[1]};
+ const parentQ=new T.Quaternion(),worldQ=new T.Quaternion(),delta=new T.Quaternion(),direction=new T.Vector3(),target=new T.Vector3();
  // Lower source T-pose arms into a neutral ready stance before recording rest rotations.
  for(const bone of bones){const side=config.arms.indexOf(bone.name);if(side<0)continue;
   const forearm=data.character==='rocket'?bones.find(b=>b.name===bone.name.replace('UpperArm','Forearm')):undefined;
@@ -75,8 +79,9 @@ export function createBonusCharacter(data:BonusCharacterData){
    const step=Math.min(.1,Math.max(.001,dt));
    const movement=initialized?Math.min(1,Math.hypot(player.x-previousX,player.z-previousZ)/step/4):0;
    initialized=true;previousX=player.x;previousZ=player.z;speed+=(movement-speed)*(1-Math.exp(-step*12));phase+=step*9*speed;
-   const walk=Math.sin(phase)*.38*speed;
+   const style=data.character==='kroenen'?.72:data.character==='homer'?1.12:data.character==='rocket'?1.22:1;const walk=Math.sin(phase)*.38*speed*style;
    if((data.character==='leatherface'||data.character==='commander')){body.position.y=Math.abs(Math.sin(phase))*.018*speed;body.rotation.z=Math.sin(phase)*.012*speed;}
+   staticRig?.update(player,phase,speed);
    for(const part of animated){let angle=0;
     if(part.upper>=0)angle=walk*(part.upper===0?1:-1);
     if(part.lower>=0)angle=Math.max(0,-walk*(part.lower===0?1:-1))*.8;
@@ -85,12 +90,13 @@ export function createBonusCharacter(data:BonusCharacterData){
    }
   },
   setHeadVisible(visible:boolean){
+   if(staticRig){staticRig.parts.head.visible=visible;headVisible=visible;return;}
    for(const head of heads)head.scale.setScalar(visible?1:.001);
    if(headVisible!==visible&&!heads.length){for(const material of materials){material.clippingPlanes=visible?null:[worldHeadCut];material.clipShadows=true;material.needsUpdate=true;}}
    headVisible=visible;
   },
   dispose(){
-   if(disposed)return;disposed=true;group.remove(body);geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());skeletons.forEach(s=>s.dispose());
+   if(disposed)return;disposed=true;group.clear();geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());skeletons.forEach(s=>s.dispose());
    if(--data.entry.refs===0){
     cache.delete(data.character);const textures=new Set<T.Texture>(),sourceGeometry=new Set<T.BufferGeometry>(),sourceMaterials=new Set<T.Material>();
     data.entry.root.traverse(o=>{if(!(o instanceof T.Mesh))return;sourceGeometry.add(o.geometry);for(const m of Array.isArray(o.material)?o.material:[o.material]){sourceMaterials.add(m);for(const v of Object.values(m))if(v instanceof T.Texture)textures.add(v);}});

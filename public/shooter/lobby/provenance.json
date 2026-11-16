@@ -10,6 +10,14 @@
     {
       "file": "maps-v1.png",
       "prompt": "Create a single landscape contact sheet for two realistic WWII game map thumbnails. Exactly two equal horizontal panels stacked vertically, no spacing, no divider, NO TEXT, NO UI, NO typography. Overall image aspect 2:1; each panel aspect4:1. TOP PANEL: cinematic photograph-style Cologne Hohenzollern railway bridge spanning the Rhine in 1945, dark iron truss arches on the RIGHT, stone riverbank, overcast olive charcoal palette, moody subdued contrast. BOTTOM PANEL: French Alpine Roche-la-Croix military fort inspired setting, snowy mountain pass, concrete low bunkers on the RIGHT, rugged peaks and snow, desaturated cold gray olive palette. Clear wide silhouettes visible in very small thumbnails, darkest space on LEFT for later HTML labels. No people, no flags, no insignia. Realistic detailed environment concept art, not cartoon."
+    },
+    {
+      "file": "encampment-v2.png",
+      "runtime": "encampment-v2.webp",
+      "tool": "built-in image_gen.imagegen",
+      "edit_target": "encampment-v1.png",
+      "prompt": "Replace only the American Willys jeep with a German WWII Volkswagen Kübelwagen Typ 82; preserve soldier, encampment, lighting, dark left UI space and composition. No American star, text or UI.",
+      "generated": "2026-11-16"
     }
   ]
 }

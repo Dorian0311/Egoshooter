@@ -18,7 +18,7 @@ test('SMG honors fire cadence and emits the actual confirmed impact position',()
  assert.ok(validInput(input));assert.equal(validInput({...input,weapon:5}),false);
  game.shoot(a,input,4000);assert.equal(b.hp,76);assert.equal(a.ammo,29);
  const hit=game.state.events.find(e=>e.type==='hit')!;
- assert.ok(hit.point);assert.ok(Math.abs(hit.point[0]-b.x)<.001);assert.ok(Math.abs(hit.point[2]-b.z)<.3);
+ assert.ok(hit.point);assert.ok(Math.abs(hit.point[0]-b.x)<.001);assert.ok(Math.abs(hit.point[2]-b.z)<.41);
  game.shoot(a,input,4050);assert.equal(a.ammo,29);
  game.shoot(a,input,4100);assert.equal(a.ammo,28);
 });

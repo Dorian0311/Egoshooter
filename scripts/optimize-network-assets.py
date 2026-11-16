@@ -20,7 +20,7 @@ for source in sources:
     original_bytes += source.stat().st_size
     runtime_bytes += destination.stat().st_size
 
-source = root / "public/shooter/lobby/encampment-v1.png"
+source = root / "public/shooter/lobby/encampment-v2.png"
 destination = source.with_suffix(".webp")
 with Image.open(source) as image:
     image.convert("RGB").save(destination, "WEBP", quality=82, method=6)

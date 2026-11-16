@@ -27,7 +27,7 @@ export function createHitEffects(scene:T.Scene){
  function remove(index:number){const p=particles[index];p.object.removeFromParent();if(p.object instanceof T.Sprite)p.object.material.dispose();particles.splice(index,1);}
  function emit(event:GameEvent,slowMotion=false,direction=new T.Vector3(0,0,-1),floorY?:number){
   if(!event.point)return;
-  const burst=event.type==='kill'&&event.hitZone==='head';
+  const burst=event.type==='sever'||event.type==='kill'&&event.hitZone==='head';
   if(event.type!=='hit'&&!burst)return;
   const forward=direction.clone();if(forward.lengthSq()<.0001)forward.set(0,0,-1);forward.normalize();
   const count=burst?72:16;
@@ -73,5 +73,5 @@ export function createHitEffects(scene:T.Scene){
   }
  }
  function dispose(){while(particles.length)remove(0);geometry.dispose();skullGeometry.dispose();blood.dispose();fragment.dispose();mistTexture.dispose();}
- return {emit,update,dispose};
+ return {emit,update,dispose,clear(){while(particles.length)remove(0);}};
 }

@@ -1,0 +1,13 @@
+{
+  "id": "kroenen",
+  "source": "Karl_Ruprecht_Kroenen.usdz",
+  "sourceSha256": "2759e6730b36fb1401c39c89c57551213a21bb3373b25b30d3ab74bfae6a6400",
+  "bones": 55,
+  "triangles": 6642,
+  "draws": 1,
+  "bytes": 2195992,
+  "sha256": "1afa0951fa6653b23b1ea565a5fa3d36736d56525fed3fd6e03435c130d65afd",
+  "maxTextureSize": 1024,
+  "license": "User-provided local asset; redistribution rights not established.",
+  "animation": "Preserved skeleton; source contains no timed motion. Runtime retargeting supplies movement."
+}

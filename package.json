@@ -15,8 +15,10 @@
   },
   "dependencies": {
     "@colyseus/core": "0.18.28",
-    "@colyseus/ws-transport": "0.18.5",
     "@colyseus/sdk": "0.18.10",
+    "@colyseus/ws-transport": "0.18.5",
+    "@recast-navigation/core": "0.43.1",
+    "@recast-navigation/generators": "0.43.1",
     "express": "^4.21.2",
     "jose": "^6.1.0",
     "pg": "^8.16.0",
@@ -32,9 +34,9 @@
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@types/three": "^0.170.0",
+    "@types/ws": "^8.18.0",
     "tsx": "^4.20.0",
     "typescript": "^5.9.0",
-    "vite": "^6.4.0",
-    "@types/ws": "^8.18.0"
+    "vite": "^6.4.0"
   }
 }
