@@ -85,8 +85,12 @@ for points, uv, indices, weights, material_index in parts:
     face = p.reshape(-1, 3, 3)
     n = np.cross(face[:, 1]-face[:, 0], face[:, 2]-face[:, 0])
     n /= np.maximum(np.linalg.norm(n, axis=1, keepdims=True), 1e-10)
+    # Source meshes use repeated UV tiles, including negative V coordinates.
+    # Shift the whole island together so boundary vertices remain at 0 and 1.
+    uv -= np.floor((uv.min(axis=0)+uv.max(axis=0))/2)
     uv[:, 0] = ((material_index % 3)*tile+2+uv[:, 0]*(tile-4))/atlas_size
-    uv[:, 1] = 1-((material_index//3)*tile+2+(1-uv[:, 1])*(tile-4))/atlas_size
+    # glTF images use a top-left origin (GLTFLoader keeps texture.flipY=false).
+    uv[:, 1] = ((material_index//3)*tile+2+(1-uv[:, 1])*(tile-4))/atlas_size
     position.extend(p);normals.extend(np.repeat(n, 3, axis=0));texcoords.extend(uv);skin_indices.extend(indices);skin_weights.extend(weights)
 
 doc = {'asset': {'version': '2.0', 'generator': 'Kroenen USDZ skin-preserving converter'}, 'scene': 0, 'scenes': [{'nodes': [0, len(joints)+1]}], 'nodes': [], 'meshes': [], 'skins': [], 'materials': [], 'images': [], 'textures': [], 'buffers': [], 'bufferViews': [], 'accessors': []}
@@ -119,10 +123,10 @@ for image, fmt in [(albedo, 'JPEG'), (normal, 'PNG')]:
     output = io.BytesIO();image.save(output, format=fmt, **({'quality': 92} if fmt == 'JPEG' else {}))
     doc['images'].append({'bufferView': view(output.getvalue()), 'mimeType': 'image/jpeg' if fmt == 'JPEG' else 'image/png'})
     doc['textures'].append({'source': len(doc['images'])-1})
-doc['materials'] = [{'name': 'Kroenen atlas', 'pbrMetallicRoughness': {'baseColorTexture': {'index': 0}, 'metallicFactor': .12, 'roughnessFactor': .72}, 'normalTexture': {'index': 1}, 'doubleSided': True}]
+doc['materials'] = [{'name': 'Kroenen black leather atlas', 'pbrMetallicRoughness': {'baseColorTexture': {'index': 0}, 'metallicFactor': .08, 'roughnessFactor': .42}, 'normalTexture': {'index': 1}, 'doubleSided': True}]
 binary.extend(b'\0'*(-len(binary) % 4));doc['buffers'] = [{'byteLength': len(binary)}]
 encoded = json.dumps(doc, separators=(',', ':')).encode();encoded += b' '*(-len(encoded) % 4)
 glb = struct.pack('<III', 0x46546c67, 2, 28+len(encoded)+len(binary))+struct.pack('<II', len(encoded), 0x4e4f534a)+encoded+struct.pack('<II', len(binary), 0x004e4942)+binary
 target = pathlib.Path('public/shooter/characters/bonus/kroenen.glb');target.write_bytes(glb)
-report = {'id': 'kroenen', 'source': source.name, 'sourceSha256': hashlib.sha256(source.read_bytes()).hexdigest(), 'bones': len(joints), 'triangles': len(position)//3, 'draws': 1, 'bytes': len(glb), 'sha256': hashlib.sha256(glb).hexdigest(), 'maxTextureSize': atlas_size, 'license': 'User-provided local asset; redistribution rights not established.', 'animation': 'Preserved skeleton; source contains no timed motion. Runtime retargeting supplies movement.'}
+report = {'id': 'kroenen', 'source': source.name, 'sourceSha256': hashlib.sha256(source.read_bytes()).hexdigest(), 'bones': len(joints), 'triangles': len(position)//3, 'draws': 1, 'bytes': len(glb), 'sha256': hashlib.sha256(glb).hexdigest(), 'maxTextureSize': atlas_size, 'appearance': 'Black leather coat matching the supplied reference; normalized source UV tile offsets and glTF top-left atlas UVs; roughness 0.42, metallic 0.08.', 'license': 'User-provided local asset; redistribution rights not established.', 'animation': 'Preserved skeleton; source contains no timed motion. Runtime retargeting supplies movement.'}
 target.with_suffix('.json').write_text(json.dumps(report, indent=2));print(json.dumps(report))

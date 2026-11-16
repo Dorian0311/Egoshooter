@@ -33,3 +33,5 @@ User-provided nazi-commander-1946-wolf-old-blood.zip. Static FBX with textures; 
 ## Karl Ruprecht Kroenen
 
 Converted from the existing local `Karl_Ruprecht_Kroenen.usdz` provided in Downloads. The source has 55 joints and no usable timed locomotion clips. The GLB retains the skeleton and skin weights; materials are packed into 1024px albedo/normal atlases. Runtime animation supplies movement. Source and output checksums are recorded in `kroenen.json`. This does not establish redistribution rights.
+
+Black leather appearance adjusted to the user's reference on 16 November 2026. Source UV tile offsets are normalized before atlas packing, and atlas V coordinates use the glTF top-left image convention. This restores the original black coat, uniform and boot textures instead of sampling blank atlas regions. Leather roughness is 0.42 with metallic factor 0.08; geometry, skin weights, skeleton and embedded texture images are preserved.

@@ -39,3 +39,15 @@ test('embedded character assets stay inside geometry and download budgets',()=>{
   if(id!=='leatherface'&&id!=='commander')assert.ok(json.skins.length>0);
  }
 });
+
+test('Kroenen UVs address painted atlas tiles rather than blank or repeated regions',()=>{
+ const bytes=readFileSync('public/shooter/characters/bonus/kroenen.glb');
+ const jsonLength=bytes.readUInt32LE(12),doc=JSON.parse(bytes.subarray(20,20+jsonLength).toString());
+ const attribute=doc.accessors[doc.meshes[0].primitives[0].attributes.TEXCOORD_0],view=doc.bufferViews[attribute.bufferView];
+ const start=28+jsonLength+(view.byteOffset??0)+(attribute.byteOffset??0),stride=view.byteStride??8;
+ for(let vertex=0;vertex<attribute.count;vertex++){
+  const u=bytes.readFloatLE(start+vertex*stride),v=bytes.readFloatLE(start+vertex*stride+4);
+  assert.ok(u>=0&&u<=1&&v>=0&&v<=1,`UV outside atlas at vertex ${vertex}`);
+  assert.ok(Math.floor(v*1024/340)*3+Math.floor(u*1024/340)<=6,`Unpainted atlas tile at vertex ${vertex}`);
+ }
+});

@@ -12,7 +12,7 @@ export type BonusCharacterData={character:BonusId;entry:Entry};
 const cache=new Map<BonusId,Promise<Entry>>();
 export async function loadBonusCharacter(character:BonusId):Promise<BonusCharacterData>{
  let pending=cache.get(character);
- if(!pending){pending=new GLTFLoader().loadAsync(`/shooter/characters/bonus/${character}.glb`).then(gltf=>({root:gltf.scene,refs:0})).catch(error=>{cache.delete(character);throw error;});cache.set(character,pending);}
+ if(!pending){const revision=character==='kroenen'?'?v=black-leather-20261116':'';pending=new GLTFLoader().loadAsync(`/shooter/characters/bonus/${character}.glb${revision}`).then(gltf=>({root:gltf.scene,refs:0})).catch(error=>{cache.delete(character);throw error;});cache.set(character,pending);}
  return {character,entry:await pending};
 }
 
