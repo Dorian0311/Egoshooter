@@ -4,7 +4,8 @@ import { getWorld,validMap,ground,withinPlayArea,type World,type MapId } from ".
 import {rockBlocks,rockSurface,rayRock} from './rocks.ts';
 import {Operation,createOperation,type OperationState,type Pickup,type Projectile,type Treatment} from './operations';
 import {freshInjuries,armCount,isCrawling,eyeHeight,eyePosition,hasLost,type Injuries,type BodyPart} from './injuries';
-export const VERSION = 12,
+import type {Corpse,BodyPartItem,AidTent} from './remains';
+export const VERSION = 14,
   STEP = 1 / 30;
 export type Team = "de" | "fr";
 export type Input = {
@@ -31,6 +32,10 @@ export type Player = {
   throwAt:number;
   downedUntil:number;
   diedAt:number;
+  gestureUntil:number;
+  heldPart:string|null;
+  carriedCorpse:string|null;
+  corpseShield:number;
   treatment?:Treatment;
   id: string;
   name: string;
@@ -72,6 +77,9 @@ export type Snapshot = {
   npcs:Player[];
   pickups:Pickup[];
   projectiles:Projectile[];
+  corpses:Corpse[];
+  bodyParts:BodyPartItem[];
+  aidTents:AidTent[];
   version: number;
   mapId: MapId;
   training:boolean;
@@ -90,7 +98,7 @@ export type Snapshot = {
   persistence: "pending" | "saved" | "failed" | "practice";
 };
 export type GameEvent = {
-  type: "shot" | "melee" | "hit" | "kill" | "glass" | 'sever' | 'down' | 'revive' | 'pickup' | 'throw' | 'impact';
+  type: "shot" | "melee" | "hit" | "kill" | "glass" | 'sever' | 'down' | 'revive' | 'pickup' | 'throw' | 'impact' | 'heal' | 'part-pickup' | 'part-throw' | 'part-melee' | 'corpse-carry' | 'corpse-drop' | 'harvest-start' | 'harvest' | 'shield' | 'medical-start' | 'medical-revive';
   eventId?:string;
   life?:number;
   bodyPart?:BodyPart;
@@ -110,6 +118,7 @@ export const weapons = [
   { name: "HK G36 (modern)", mag: 30, damage: 27, interval: 130, reload: 2600, spread: .003, recoil: .022, range: 55 },
   { name: "Kettensäge", mag: 1, damage: 38, interval: 320, reload: 0, spread: 0, recoil: 0, range: 2.2 },
   { name: "Wurfstern", mag: 3, damage: 40, interval: 750, reload: 0, spread: 0, recoil: 0, range: 72 },
+  { name: "Körperteil", mag: 1, damage: 32, interval: 800, reload: 0, spread: 0, recoil: 0, range: 2.65 },
 ];
 export function weaponDamage(index:number,distance:number){
   const w=weapons[index];
@@ -143,7 +152,7 @@ export function makePlayer(
 ): Player {
   const [x, z] = world.spawns[team][index % 4];
   return {
-    kind:'human',life:1,injuries:freshInjuries(),stars:0,bandages:0,throwAt:0,downedUntil:0,diedAt:0,
+    kind:'human',life:1,injuries:freshInjuries(),stars:0,bandages:0,throwAt:0,downedUntil:0,diedAt:0,gestureUntil:0,heldPart:null,carriedCorpse:null,corpseShield:0,
     id,
     name,
     team,
@@ -178,14 +187,15 @@ export function makePlayer(
 }
 export function move(p: Player, i: Input, dt = STEP,world:World=getWorld(),now=i.time) {
   if(p.downedUntil)return;
+  if(p.carriedCorpse)i={...i,sprint:false,jump:false};
   if(isCrawling(p))i={...i,sprint:false,jump:false,crouch:false};
   const boxes=world.boxes;
-  if(p.uniform==='leatherface'&&armCount(p)===2&&p.hp>0&&i.fire&&now>=p.powerReadyAt){
+  if(p.uniform==='leatherface'&&!p.carriedCorpse&&!p.heldPart&&armCount(p)===2&&p.hp>0&&i.fire&&now>=p.powerReadyAt){
     p.powerUntil=now+SAW_POWER_MS;p.powerReadyAt=p.powerUntil+SAW_RECOVERY_MS;
   }
   p.crouching=i.crouch;
   const moving=Math.hypot(i.forward,i.side)>.01;
-  const powered=p.uniform==='leatherface'&&armCount(p)===2&&i.fire&&now<p.powerUntil;
+  const powered=p.uniform==='leatherface'&&!p.carriedCorpse&&!p.heldPart&&armCount(p)===2&&i.fire&&now<p.powerUntil;
   p.stamina=Number.isFinite(p.stamina)?p.stamina:SPRINT_DURATION_MS;
   p.sprinting=!!(i.sprint&&moving&&!i.crouch&&!i.aim&&!p.sprintExhausted&&p.stamina>0&&!powered);
   if(p.sprinting){
@@ -195,7 +205,7 @@ export function move(p: Player, i: Input, dt = STEP,world:World=getWorld(),now=i
     p.stamina=Math.min(SPRINT_DURATION_MS,p.stamina+dt*1000*SPRINT_DURATION_MS/SPRINT_RECHARGE_MS);
     if(p.stamina>=SPRINT_DURATION_MS-.001){p.stamina=SPRINT_DURATION_MS;p.sprintExhausted=false;}
   }
-  const speed = isCrawling(p) ? 4.3*.3 : i.crouch ? 2.3 : powered ? 9.2 : p.sprinting ? 6.2 : 4.3,
+  const speed = (isCrawling(p) ? 4.3*.3 : i.crouch ? 2.3 : powered ? 9.2 : p.sprinting ? 6.2 : 4.3)*(p.carriedCorpse?.55:1),
     len = Math.max(1, Math.hypot(i.forward, i.side));
   const dx =
     ((Math.cos(i.yaw) * i.side - Math.sin(i.yaw) * i.forward) * speed * dt) /
@@ -333,7 +343,7 @@ export class Game {
       version: VERSION,
       mapId,
       training:false,
-      operation:createOperation(config,getWorld(mapId),random),npcs:[],pickups:[],projectiles:[],
+      operation:createOperation(config,getWorld(mapId),random),npcs:[],pickups:[],projectiles:[],corpses:[],bodyParts:[],aidTents:[],
       interiors:initialInteriors(getWorld(mapId)),
       roomCode: code,
       matchId: "",
@@ -355,7 +365,8 @@ export class Game {
     if(returning?.departed&&this.state.phase==='playing'){
       if(this.state.players.filter(p=>!p.departed).length>=8||this.count(returning.team)>=4)throw Error('Dein Team ist bereits voll.');
       const fresh=makePlayer(id,name,returning.team,returning.deaths,getWorld(this.state.mapId));
-      Object.assign(returning,fresh,{kills:returning.kills,deaths:returning.deaths,headshots:returning.headshots,ready:true,departed:false});return returning;
+      this.operation.remains.release(returning);
+      Object.assign(returning,fresh,{life:returning.life+1,treatment:undefined,kills:returning.kills,deaths:returning.deaths,headshots:returning.headshots,ready:true,departed:false});return returning;
     }
     if (
       this.state.players.filter(p=>!p.departed).length >= 8 ||
@@ -375,6 +386,7 @@ export class Game {
   remove(id: string) {
     this.inputs.delete(id);
     const p = this.player(id);
+    if(p)this.operation.remains.release(p);
     if (p && this.state.phase === "playing") {
       p.connected = false;
       p.departed = true;
@@ -488,7 +500,8 @@ export class Game {
     if (s.phase !== "playing") return;
     this.operation.beforeTick(now);
     for (const p of s.players) {
-      if(p.uniform==='leatherface'&&armCount(p)===2){p.weapon=4;p.ammo=1;p.reloadAt=0;}
+      if(p.carriedCorpse){p.weapon=1;p.ammo=p.ammoByWeapon[1];}
+      else if(p.uniform==='leatherface'&&armCount(p)===2){p.weapon=4;p.ammo=1;p.reloadAt=0;}
       if(armCount(p)===1&&p.uniform!=='leatherface'&&p.weapon!==1){p.weapon=1;p.ammo=p.ammoByWeapon[1];p.reloadAt=0;}
       if (!p.hp) {
         if (now >= p.respawnAt&&!p.downedUntil&&!(this.state.operation.config.mode==='survival'&&p.kind==='bot')) {
@@ -516,14 +529,14 @@ export class Game {
       if (i && p.connected) {
         move(p, i,STEP,this.world(),now);
         if(p.y < -4){this.operation.damage(p,'',0,100,'body',[p.x,p.y,p.z]);continue;}
-        if (p.uniform!=='leatherface' && armCount(p)===2 && i.weapon!==4 && i.weapon !== p.weapon) {
+        if (!p.carriedCorpse && !p.heldPart && p.uniform!=='leatherface' && armCount(p)===2 && i.weapon!==4 && i.weapon !== p.weapon) {
           p.ammoByWeapon[p.weapon] = p.ammo;
           p.weapon = i.weapon;
           p.ammo = p.ammoByWeapon[p.weapon];
           p.reloadAt = 0;
           p.fireAt = now + 350;
         }
-        if (p.uniform!=='leatherface' && i.reload && p.ammo < weapons[p.weapon].mag && !p.reloadAt)
+        if (!p.heldPart && (p.uniform!=='leatherface'||p.carriedCorpse) && i.reload && p.ammo < weapons[p.weapon].mag && !p.reloadAt)
           p.reloadAt = now + weapons[p.weapon].reload;
       }
       if (p.reloadAt && now >= p.reloadAt) {
@@ -550,8 +563,8 @@ export class Game {
   }
   interact(id:string,value:unknown){
     const p=this.player(id),state=this.state.interiors;
-    if(!p?.hp||!p.connected||this.state.phase!=='playing'||!state||typeof value!=='string'||this.state.now-(this.interactions.get(id)??-Infinity)<450)return false;
-    const handled=this.operation.interact(p,value);if(handled!==undefined){if(handled)this.interactions.set(id,this.state.now);return handled;}
+    if(!p?.hp||!p.connected||this.state.phase!=='playing'||!state||typeof value!=='string'||value!=='throw'&&this.state.now-(this.interactions.get(id)??-Infinity)<450)return false;
+    const handled=this.operation.interact(p,value);if(handled!==undefined){if(handled&&value!=='throw')this.interactions.set(id,this.state.now);return handled;}
     const f=interiorFixtures(getWorld(this.state.mapId)).find(f=>f.id===value&&f.type!=='glass');if(!f)return false;
     const x=f.type==='door'?f.box.x+f.box.w/2-.2:f.box.x,y=f.box.y,z=f.box.z;
     const eye=eyePosition(p),o=[eye.x,eye.y,eye.z],delta=[x-o[0],y-o[1],z-o[2]],distance=Math.hypot(...delta);
@@ -569,9 +582,11 @@ export class Game {
   shoot(p: Player, i: Input, now: number) {
     this.state.now=Math.max(this.state.now,now);
     if(!p.hp||armCount(p)<1||p.treatment)return;
-    if(p.uniform==='leatherface'){this.saw(p,i,now);return;}
+    if(p.heldPart){this.operation.remains.swing(p,now);return;}
+    if(p.carriedCorpse&&armCount(p)<2)return;
+    if(p.uniform==='leatherface'&&!p.carriedCorpse){this.saw(p,i,now);return;}
     if(p.weapon===4)return;
-    if (p.reloadAt || p.fireAt > now || !p.ammo || i.sprint) return;
+    if (p.reloadAt || p.fireAt > now || !p.ammo || i.sprint&&!p.carriedCorpse) return;
     p.fireAt = now + weapons[p.weapon].interval;
     p.ammo--;
     p.ammoByWeapon[p.weapon] = p.ammo;

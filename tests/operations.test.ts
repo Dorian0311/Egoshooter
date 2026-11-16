@@ -36,9 +36,19 @@ test('leg loss makes movement and hit volumes crawl; jump and sprint cannot bypa
 test('bleeding kills once and awards the originating attacker',()=>{
  const g=start(),p=g.player('b')!;g.operation.damage(p,'a',4,38,'armL',[0,1,0],true);p.hp=.2;g.tick(4100);assert.equal(p.hp,0);assert.equal(g.player('a')!.kills,1);g.tick(4200);assert.equal(g.player('a')!.kills,1);assert.equal(p.deaths,1);
 });
-test('bandages stop bleeding without restoring health or limbs; movement cancels treatment',()=>{
+test('medkits restore health and stop bleeding without restoring limbs; movement cancels treatment',()=>{
  const g=start(),p=g.player('a')!;p.bandages=2;p.injuries.lost=p.injuries.bleeding=2;p.hp=60;assert.ok(g.interact('a','bandage'));g.input('a',{...neutral(1),forward:1,time:4000});g.tick(4033);assert.equal(p.treatment,undefined);assert.equal(p.bandages,2);
- g.input('a',{...neutral(2),time:4033});g.tick(4500);assert.ok(g.interact('a','bandage'));for(let t=4533;t<=8533;t+=33)g.tick(t);assert.equal(p.bandages,1);assert.equal(p.injuries.bleeding,0);assert.equal(p.injuries.lost,2);assert.ok(p.hp<60);
+ g.input('a',{...neutral(2),time:4033});g.tick(4500);assert.ok(g.interact('a','bandage'));for(let t=4533;t<=8533;t+=33)g.tick(t);assert.equal(p.bandages,1);assert.equal(p.injuries.bleeding,0);assert.equal(p.injuries.lost,2);assert.ok(p.hp>80&&p.hp<=100);
+});
+test('H heals non-bleeding wounds, caps health and does not consume a kit at full health',()=>{
+ const g=start(),p=g.player('a')!;p.bandages=2;p.hp=80;assert.ok(g.interact('a','bandage'));for(let t=4033;t<=8033;t+=33)g.tick(t);assert.equal(p.hp,100);assert.equal(p.bandages,1);g.tick(9000);assert.equal(g.interact('a','bandage'),false);assert.equal(p.bandages,1);
+});
+test('teammate treatment uses the healer inventory, rejects enemies and cancels across lives or range',()=>{
+ const g=start(),a=g.player('a')!,b=g.player('b')!;Object.assign(a,{x:8,y:0,z:8,bandages:2});Object.assign(b,{x:8,y:0,z:9,hp:35});assert.equal(g.interact('a','heal:b'),false);b.team=a.team;assert.ok(g.interact('a','heal:b'));for(let t=4033;t<=8033;t+=33)g.tick(t);assert.equal(b.hp,85);assert.equal(a.bandages,1);assert.equal(b.bandages,0);
+ g.tick(9000);assert.ok(g.interact('a','heal:b'));b.life++;g.tick(9033);assert.equal(a.treatment,undefined);assert.equal(a.bandages,1);g.tick(10000);b.x=30;assert.equal(g.interact('a','heal:b'),false);
+});
+test('taking damage or attacking cancels teammate healing without consuming a medkit',()=>{
+ const g=start(),a=g.player('a')!,b=g.player('b')!;Object.assign(a,{x:8,y:0,z:8,bandages:1});Object.assign(b,{team:a.team,x:8,y:0,z:9,hp:50});assert.ok(g.interact('a','heal:b'));b.injuries.lastDamageAt=4010;g.tick(4033);assert.equal(a.treatment,undefined);assert.equal(a.bandages,1);g.tick(5000);assert.ok(g.interact('a','heal:b'));g.input('a',{...neutral(1),fire:true,time:5000});g.tick(5033);assert.equal(a.treatment,undefined);assert.equal(b.hp,50);
 });
 test('a gift can be claimed once globally and cannot be claimed from a distance',()=>{
  const g=start(),pickup=g.state.pickups[0],a=g.player('a')!,b=g.player('b')!;assert.equal(g.interact('a',pickup.id),false);Object.assign(a,{x:pickup.x,y:pickup.y,z:pickup.z+1});Object.assign(b,{x:pickup.x,y:pickup.y,z:pickup.z+1});assert.ok(g.interact('a',pickup.id));assert.equal(a.stars,3);assert.equal(g.interact('b',pickup.id),false);assert.equal(b.stars,0);
@@ -48,6 +58,9 @@ test('throwing consumes inventory and sweeps a projectile through a target betwe
 });
 test('civilians are authoritative, killable, unranked and do not use player slots',()=>{
  const g=start(),p=g.state.npcs[0];assert.equal(g.state.npcs.length,4);g.operation.damage(p,'a',0,100,'head',[p.x,1.6,p.z]);assert.equal(p.hp,0);assert.equal(g.player('a')!.kills,0);g.tick(20000);assert.equal(p.hp,0);assert.equal(g.state.players.length,2);
+});
+test('nearby unarmed residents sometimes gesture and pause their route while doing so',()=>{
+ const g=start(),npc=g.state.npcs[0],human=g.player('a')!;for(let now=4033;now<4300;now+=33)g.tick(now);Object.assign(human,{x:npc.x+2,y:npc.y,z:npc.z});g.tick(10001);assert.ok(npc.gestureUntil>g.state.now);const before=[npc.x,npc.z];g.tick(10100);assert.deepEqual([npc.x,npc.z],before);
 });
 test('survival uses finite reinforcements, no passive recovery and five winning waves',()=>{
  const g=start('survival','solo'),human=g.player('a')!;human.hp=73;human.injuries.lost=2;

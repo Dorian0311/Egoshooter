@@ -1,6 +1,7 @@
 import {OperationSetup} from './OperationSetup';
 import {ReleaseNotes} from './ReleaseNotes';
 import {OperationHud} from './OperationHud';
+import {VictimFace,CorpseShield} from './VictimFace';
 import {type OperationConfig,modeLabels} from '../shared/operationConfig';
 import {HighlightRecorder,type Highlight} from './highlights';
 import {HighlightPlayer} from './HighlightPlayer';
@@ -8,7 +9,7 @@ import {saveBest,readBests} from './operationRecords';
 import {GameSettingsPanel} from './GameSettingsPanel';
 import {MatchScoreboard} from './MatchScoreboard';
 import {loadSettings,settingsKey} from './gameSettings';
-import {weapons,SAW_POWER_MS,SAW_RECOVERY_MS,SPRINT_DURATION_MS} from '../shared/game';
+import {weapons,SAW_POWER_MS,SAW_RECOVERY_MS,SPRINT_DURATION_MS,VERSION} from '../shared/game';
 import {uniforms,uniformOptions,type UniformId} from '../shared/uniforms.ts';
 import {CharacterGallery} from './CharacterGallery';
 import {CharacterPicker} from './CharacterPicker';
@@ -50,7 +51,7 @@ export default function App({
   onClose?: () => void;
 }) {
   const [settings,setSettings]=useState(loadSettings),[settingsOpen,setSettingsOpen]=useState(false);
-  const [killfeed,setKillfeed]=useState<{key:number;killer:string;victim:string;weapon:string;headshot:boolean;mine:boolean;friendly:boolean;at:number}[]>([]);
+  const [killfeed,setKillfeed]=useState<{key:number;killer:string;victim:string;weapon:string;headshot:boolean;mine:boolean;friendly:boolean;at:number;victimUniform:UniformId;showFace:boolean}[]>([]);
   const [damage,setDamage]=useState<{angle:number;at:number}|null>(null),[deathReason,setDeathReason]=useState('');
   const feedSequence=useRef(0);
   const [headshotAt,setHeadshotAt]=useState(0);
@@ -203,7 +204,7 @@ export default function App({
       r.onMessage("snapshot", (packet: SnapshotPacket) => {
         const s = mergeSnapshot(last.current, packet);
         if (!s) return;
-        if(s.version!==12){setError('Spielversion geändert. Bitte die Seite neu laden.');void r.leave();return;}
+        if(s.version!==VERSION){setError('Spielversion geändert. Bitte die Seite neu laden.');void r.leave();return;}
         recorder.current.push(s,access.playerId);setClips([...recorder.current.clips]);
         if(s.phase==='finished'&&savedMatch.current!==s.matchId){saveBest(s,access.playerId);savedMatch.current=s.matchId;}
         const freshEvents=s.events.filter(e=>!e.eventId||!uiEvents.current.has(e.eventId));for(const e of freshEvents)if(e.eventId)uiEvents.current.add(e.eventId);if(uiEvents.current.size>2048)uiEvents.current=new Set([...uiEvents.current].slice(-1024));
@@ -211,12 +212,12 @@ export default function App({
         for(const event of freshEvents){if(event.type==='hit'&&event.id===access.playerId){setHitFeedback(event.hitZone??'body');if(feedbackTimer.current)clearTimeout(feedbackTimer.current);feedbackTimer.current=setTimeout(()=>setHitFeedback(null),220);}}
         const own=s.players.find(p=>p.id===access.playerId);
         if(own?.hp)setDeathReason('');
-        const newKills=freshEvents.filter(e=>e.type==='kill').map(e=>({key:++feedSequence.current,killer:s.players.find(p=>p.id===e.id)?.name??(e.id?'Spieler':'Umwelt'),victim:[...s.players,...s.npcs].find(p=>p.id===e.target)?.name??'Spieler',weapon:weapons[e.weapon??0].name,headshot:e.hitZone==='head',mine:e.id===access.playerId,friendly:s.players.find(p=>p.id===e.id)?.team===own?.team,at:s.now}));
+        const newKills=freshEvents.filter(e=>e.type==='kill').map(e=>{const victim=[...s.players,...s.npcs].find(p=>p.id===e.target)??s.corpses.find(c=>c.sourceId===e.target&&(!e.life||c.sourceLife===e.life));return {key:++feedSequence.current,killer:s.players.find(p=>p.id===e.id)?.name??(e.id?'Spieler':'Umwelt'),victim:victim?.name??'Spieler',victimUniform:victim?.uniform??'de-field',showFace:!!victim&&victim.kind!=='resident',weapon:weapons[e.weapon??0]?.name??'Nahkampf',headshot:e.hitZone==='head',mine:e.id===access.playerId,friendly:s.players.find(p=>p.id===e.id)?.team===own?.team,at:s.now};});
         setKillfeed(old=>[...old.filter(e=>s.now-e.at<6500),...newKills].slice(-4));
         for(const event of freshEvents){
           if(event.type==='hit'&&event.target===access.playerId&&own){const attacker=s.players.find(p=>p.id===event.id);if(attacker)setDamage({angle:(Math.atan2(attacker.x-own.x,-(attacker.z-own.z))+own.yaw)*180/Math.PI,at:s.now});}
           if(event.type==='kill'&&event.id===access.playerId&&event.hitZone==='head')setHeadshotAt(s.now);
-          if(event.type==='kill'&&event.target===access.playerId)setDeathReason(event.id?`Besiegt von ${s.players.find(p=>p.id===event.id)?.name??'Spieler'} mit ${weapons[event.weapon??0].name}`:'Durch Umweltschaden gefallen');
+          if(event.type==='kill'&&event.target===access.playerId)setDeathReason(event.id?`Besiegt von ${s.players.find(p=>p.id===event.id)?.name??'Spieler'} mit ${weapons[event.weapon??0]?.name??'Nahkampf'}`:'Durch Umweltschaden gefallen');
         }
         last.current = s;
         setSnapshot(s);
@@ -259,6 +260,7 @@ export default function App({
   }
   const me = snapshot?.players.find((p) => p.id === access?.playerId),
     active = snapshot?.phase === "playing";
+  const defeated=killfeed.filter(item=>item.mine&&item.showFace&&snapshot&&snapshot.now-item.at<4500).at(-1);
   return (
     <div ref={gameRoot} className={`city-app ${active?"city-playing":""} ${!snapshot?"city-lobby":""}`}>
       <ReleaseNotes/>
@@ -435,6 +437,7 @@ export default function App({
             <>
               <div className={`city-crosshair ${hitFeedback?"city-hit city-hit-"+hitFeedback:""}`}><i/><i/><i/><i/><b/></div>
               {settings.headshotSlowMotion&&headshotAt>0&&snapshot.now-headshotAt<850&&<div className="headshot-cinematic" key={headshotAt}><div><strong>KOPFTREFFER</strong><small>ZEITLUPE</small></div></div>}
+              {defeated&&<VictimFace name={defeated.victim} uniform={defeated.victimUniform} headshot={defeated.headshot}/>}
               <section className="combat-feed live-killfeed" aria-label="Live-Abschüsse"><header><span>ABSCHÜSSE</span><small>● LIVE</small></header><div role="log" aria-live="polite">{killfeed.length===0?<p className="killfeed-empty">Noch keine Abschüsse</p>:killfeed.map(item=><div key={item.key} className={`killfeed-entry ${item.mine?'is-mine':item.friendly?'is-friendly':'is-enemy'}`}><strong>{item.killer}</strong><span className="killfeed-weapon" title={item.weapon}>{item.headshot?'◎':'▸'}</span><b>{item.victim}</b></div>)}</div></section>
               {damage&&snapshot.now-damage.at<850&&<div className="damage-direction" aria-label="Beschussrichtung" style={{transform:`translate(-50%,-50%) rotate(${damage.angle}deg)`}}><span>▼</span></div>}
               {me?.uniform==='leatherface'&&<div className={`saw-power ${snapshot.now<me.powerUntil?'is-active':''}`}>
@@ -442,7 +445,7 @@ export default function App({
                 <progress max={1} value={snapshot.now<me.powerUntil?(me.powerUntil-snapshot.now)/SAW_POWER_MS:snapshot.now<me.powerReadyAt?1-(me.powerReadyAt-snapshot.now)/SAW_RECOVERY_MS:1}/>
                 <small>{snapshot.now<me.powerUntil?`${((me.powerUntil-snapshot.now)/1000).toFixed(1)} s Schub`:snapshot.now<me.powerReadyAt?`${Math.ceil((me.powerReadyAt-snapshot.now)/1000)} s bis zum nächsten Schub`:'Angriff halten · 2,2 s Schub · 7 s Erholung'}</small>
               </div>}
-              <div className="city-hud"><strong>{me?.hp??0}<small>GESUNDHEIT</small></strong></div>
+              <div className="city-hud"><strong>{Math.ceil(me?.hp??0)}<small>GESUNDHEIT</small></strong>{me?.carriedCorpse&&<CorpseShield value={me.corpseShield}/>}</div>
               <div className="personal-score" aria-label="Eigene Abschüsse und Tode"><span><b>{me?.kills??0}</b> KILLS</span><span><b>{me?.deaths??0}</b> TODE</span></div>
               <div className={`sprint-meter ${me?.sprinting?'is-sprinting':''}`} aria-label="Sprint-Ausdauer">
                 <div><span>{me?.sprinting?'SPRINT':me?.sprintExhausted?'ERHOLUNG':(me?.stamina??SPRINT_DURATION_MS)<SPRINT_DURATION_MS?'AUSDAUER':'SPRINT BEREIT'}</span><small>{((me?.stamina??SPRINT_DURATION_MS)/1000).toFixed(1)} s</small></div>

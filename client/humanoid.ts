@@ -6,6 +6,9 @@ import {defaultUniform,uniforms,type UniformId} from '../shared/uniforms.ts';
 import * as T from 'three';
 import type {Player} from '../shared/game.ts';
 import type {MapId} from '../shared/world.ts';
+import {createActorEquipment,rigArm} from './actorEquipment';
+import {applyActionPose} from './actionPose';
+import {createCivilianAppearance,tailorCivilian} from './civilianAppearance';
 type Joint={name:string;parent:number;head:number[];tail:number[]};
 type CoatPiece={name:string;positions:number[];normal:number[];uv:number[];indices:number[]|null;skinIndex:number[];skinWeight:number[];albedo:string;normalMap:string};
 let coatSource:Promise<CoatPiece[]>|null=null;
@@ -24,17 +27,17 @@ export async function loadHuman(uniformId?:UniformId){
 }
 export function createHuman(data:HumanData|BonusCharacterData,team:'de'|'fr',map:MapId,uniform:T.MeshStandardMaterial,uniformId:UniformId=defaultUniform(team,map),civilian=false){
  if('character' in data)return createBonusCharacter(data);
- uniform=uniform.clone();const outfit=uniforms[uniformId];if(!civilian)uniform.color.set(outfit.color);
+ const civilianLook=civilian?createCivilianAppearance():undefined;uniform=civilianLook?.cloth??uniform.clone();const outfit=uniforms[uniformId];if(!civilian)uniform.color.set(outfit.color);
  let isDisposed=false;
  const group=new T.Group(),geometry=new T.BufferGeometry();
- const tailored=data.positions.slice();
- for(let i=0;i<data.categories.length;i++){if(data.categories[i]!==0)continue;const x=tailored[i*3],y=tailored[i*3+1],z=tailored[i*3+2];if(y>.88&&y<1.43&&Math.abs(x)<.23){const ease=Math.sin((y-.88)/.55*Math.PI);tailored[i*3]=x*(1+.075*ease);tailored[i*3+2]=z*(1+.12*ease);}}
+ const tailored=data.positions.slice();if(civilian)tailorCivilian(tailored,data.categories,data.bones);
+ for(let i=0;!civilian&&i<data.categories.length;i++){if(data.categories[i]!==0)continue;const x=tailored[i*3],y=tailored[i*3+1],z=tailored[i*3+2];if(y>.88&&y<1.43&&Math.abs(x)<.23){const ease=Math.sin((y-.88)/.55*Math.PI);tailored[i*3]=x*(1+.075*ease);tailored[i*3+2]=z*(1+.12*ease);}}
  geometry.setAttribute('position',new T.Float32BufferAttribute(tailored,3));geometry.setAttribute('uv',new T.Float32BufferAttribute(data.uv,2));
  geometry.setAttribute('skinIndex',new T.Uint16BufferAttribute(data.skinIndex,4));geometry.setAttribute('skinWeight',new T.Float32BufferAttribute(data.skinWeight,4));
  const skin=new T.Texture(data.skinImage);skin.colorSpace=T.SRGBColorSpace;skin.anisotropy=4;skin.needsUpdate=true;
- const materials=[uniform,new T.MeshStandardMaterial({color:'#ffffff',map:skin,roughness:.82,envMapIntensity:.35}),new T.MeshStandardMaterial({color:'#272723',roughness:.85})];
- const ordered:number[][]=[[],[],[]];for(let i=0;i<data.indices.length;i+=3){if(data.coat&&!data.indices.slice(i,i+3).every(v=>data.positions[v*3+1]>1.40&&(data.positions[v*3+1]>1.62||Math.abs(data.positions[v*3])<.085)))continue;const tri=data.indices.slice(i,i+3),labels=tri.map(v=>data.categories[v]);const category=data.coat?1:labels.filter(v=>v===1).length>=2?1:labels.filter(v=>v===2).length>=2?2:0;ordered[category].push(...tri);}
- ordered[2]=[];geometry.setIndex(ordered.flat());let start=0;ordered.forEach((indices,index)=>{geometry.addGroup(start,indices.length,index);start+=indices.length;});geometry.computeVertexNormals();
+ const materials=[uniform,new T.MeshStandardMaterial({color:'#ffffff',map:skin,roughness:.82,envMapIntensity:.35}),civilianLook?.boots??new T.MeshStandardMaterial({color:'#272723',roughness:.85}),...(civilianLook?[civilianLook.cloth]:[])];
+ const ordered:number[][]=civilian?[[],[],[],[]]:[[],[],[]];for(let i=0;i<data.indices.length;i+=3){if(data.coat&&!data.indices.slice(i,i+3).every(v=>data.positions[v*3+1]>1.40&&(data.positions[v*3+1]>1.62||Math.abs(data.positions[v*3])<.085)))continue;const tri=data.indices.slice(i,i+3),labels=tri.map(v=>data.categories[v]);let category=data.coat?1:labels.filter(v=>v===1).length>=2?1:labels.filter(v=>v===2).length>=2?2:0;if(civilian&&category===2&&tri.every(v=>data.positions[v*3+1]<.09))continue;if(civilian&&category===0&&tri.reduce((sum,v)=>sum+data.positions[v*3+1],0)/3<.965)category=3;ordered[category].push(...tri);}
+ if(!civilian)ordered[2]=[];geometry.setIndex(ordered.flat());let start=0;ordered.forEach((indices,index)=>{geometry.addGroup(start,indices.length,index);start+=indices.length;});geometry.computeVertexNormals();civilianLook?.tintGeometry(geometry);
  const bones=data.bones.map(j=>{const b=new T.Bone();b.name=j.name;return b;});
  for(let i=0;i<bones.length;i++){const j=data.bones[i],parent=j.parent>=0?data.bones[j.parent].head:[0,0,0];bones[i].position.set(j.head[0]-parent[0],j.head[1]-parent[1],j.head[2]-parent[2]);if(j.parent>=0)bones[j.parent].add(bones[i]);else group.add(bones[i]);}
  const mesh=new T.SkinnedMesh(geometry,materials);mesh.castShadow=true;mesh.receiveShadow=true;mesh.frustumCulled=false;group.add(mesh);group.updateMatrixWorld(true);
@@ -48,10 +51,10 @@ export function createHuman(data:HumanData|BonusCharacterData,team:'de'|'fr',map
  }
 
  const named=new Map(bones.map(b=>[b.name,b]));
- const ownMaterials:T.Material[]=[uniform,materials[1],materials[2]];
+ const ownMaterials:T.Material[]=[uniform,materials[1],materials[2],...(civilianLook?civilianLook.materials.filter(m=>m!==uniform&&m!==materials[2]):[])];
  const detailMaterials=new Map<string,T.MeshStandardMaterial>();
  function detailMaterial(color:string,roughness=.85){const key=`${color}:${roughness}`;let material=detailMaterials.get(key);if(!material){material=new T.MeshStandardMaterial({color,roughness});detailMaterials.set(key,material);ownMaterials.push(material);}return material;}
- const equipment=new T.Group();group.add(equipment);if(data.coat||civilian)equipment.visible=false;
+ const equipment=new T.Group();group.add(equipment);if(data.coat||civilian){equipment.visible=false;equipment.userData.nonAnatomic=true;}
  function part(x:number,y:number,z:number,w:number,h:number,d:number,color:string,parent:T.Object3D=equipment){const m=new T.Mesh(new T.BoxGeometry(w,h,d),detailMaterial(color));m.position.set(x,y,z);m.castShadow=true;parent.add(m);return m;}
  const headBone=named.get('head')!;const headOrigin=data.bones.find(j=>j.name==='head')!.head;
  const headgear=new T.Group();headgear.position.set(0,1.72-headOrigin[1],data.bones.find(j=>j.name==='head')!.tail[2]-headOrigin[2]);headBone.add(headgear);
@@ -86,6 +89,7 @@ export function createHuman(data:HumanData|BonusCharacterData,team:'de'|'fr',map
   const bell=new T.Mesh(new T.ConeGeometry(.008,.018,12,1,true),hornMaterial);bell.position.set(.099,.012,-.166);bell.rotation.z=-.9;headgear.add(bell);
 
  }
+ if(!civilian){
  part(0,.94,0,.34,.035,.24,'#4a3e2b');part(.085,1.15,-.135,.105,.13,.014,outfit.color);part(-.085,1.15,-.135,.105,.13,.014,outfit.color);
  if(!civilian&&uniformId.startsWith('task-')){
   const vest=uniformId==='task-olive'?'#39473b':'#706c53';
@@ -117,10 +121,11 @@ export function createHuman(data:HumanData|BonusCharacterData,team:'de'|'fr',map
   for(let row=0;row<8;row++)part(side*.138,1.09+row*.014,-.148,.002,.006,.002,'#686b5e');
  }
  part(0,.94,-.13,.055,.038,.015,'#888a79');part(0,.94,-.14,.038,.023,.005,'#3b4038');
+ }
  // Eyeballs sit in the anatomical sockets, rather than painting a face on a primitive.
  for(const side of ['L','R']){const j=data.bones.find(j=>j.name===`eye.${side}`);if(!j)continue;const material=new T.MeshStandardMaterial({color:'#a5a399',roughness:.48});ownMaterials.push(material);const eye=new T.Mesh(new T.SphereGeometry(.0105,10,8),material);eye.position.set(j.head[0]-headOrigin[0],j.head[1]-headOrigin[1],j.head[2]-headOrigin[2]);headBone.add(eye);for(const [radius,color,depth] of [[.005,'#54432c',-.009],[.0023,'#101010',-.012]] as const){const m=new T.MeshStandardMaterial({color,roughness:.35});ownMaterials.push(m);const detail=new T.Mesh(new T.SphereGeometry(radius,12,8),m);detail.position.z=depth;eye.add(detail);}}
  for(const side of ['L','R']){
-  if(data.coat)continue;
+  if(data.coat||civilian)continue;
   const foot=named.get(`foot.${side}`),joint=data.bones.find(j=>j.name===`foot.${side}`);if(!foot||!joint)continue;
   const boot=new T.Group();boot.position.set(joint.head[0]-joint.head[0],-joint.head[1],.035-joint.head[2]);foot.add(boot);
   const leather=new T.MeshStandardMaterial({color:'#292a26',roughness:.75});ownMaterials.push(leather);
@@ -130,17 +135,20 @@ export function createHuman(data:HumanData|BonusCharacterData,team:'de'|'fr',map
   for(let i=0;i<4;i++){const lace=part(0,.095+i*.012,-.08-i*.018,.08,.006,.007,'#41413b',boot);lace.rotation.z=i%2?.12:-.12;}
   batchWeaponMeshes(boot);
  }
- // Rifle grip is kept in the same local pose as the articulated forearms.
- part(.14,1.18,-.42,.045,.055,.6,'#5c4732');part(.14,1.215,-.7,.022,.025,.35,'#414744');
+ if(civilianLook)civilianLook.addDetails(group,named,data.bones,mesh);
+ // Held weapons have their own hand targets instead of being baked into the torso.
  // Each branch is rigid in its own bone space. Never merge across animated bones.
  batchWeaponMeshes(equipment);batchWeaponMeshes(headgear);
  if(!civilian){group.updateMatrixWorld(true);named.get('spine01')?.attach(equipment);}
- const motion=data.motion?createCharacterMotion(group,named,data.motion,civilian):undefined;
+ const motion=data.motion&&!civilian?createCharacterMotion(group,named,data.motion,false):undefined;
+ group.userData.limbRoots={head:'head',armL:'upperarm01.L',armR:'upperarm01.R',legL:'upperleg01.L',legR:'upperleg01.R'};
+ const held=createActorEquipment(group,{armL:rigArm(group,['upperarm01.L','lowerarm01.L','wrist.L']),armR:rigArm(group,['upperarm01.R','lowerarm01.R','wrist.R'])},civilian);
  group.userData.hasCrouchAnimation=!!motion;
- let previous=new T.Vector3(),speed=0;
+ let previous=new T.Vector3(),speed=0,movementInitialized=!civilian;const rootHeight=named.get('root')?.position.y??0;
  const upperPose=new T.Quaternion(),upperParent=new T.Quaternion(),leanPose=new T.Quaternion(),poseAxis=new T.Vector3(1,0,0);
- function update(player:Player,time:number,dt:number){
-  motion?.update(player,group.position,dt);
+ function update(player:Player,time:number,dt:number,now=time){
+  civilianLook?.style(player.id);
+  motion?.update(player,player,dt);
   if(motion&&!civilian){
    // Locomotion drives hips/legs. Keep the armed chest and gaze aligned with aim.
    const chest=named.get('spine01')!;group.getWorldQuaternion(upperPose);
@@ -149,16 +157,18 @@ export function createHuman(data:HumanData|BonusCharacterData,team:'de'|'fr',map
    group.getWorldQuaternion(upperPose);upperPose.multiply(leanPose.setFromAxisAngle(poseAxis,-player.pitch*.35));
    headBone.parent!.getWorldQuaternion(upperParent).invert();headBone.quaternion.copy(upperParent.multiply(upperPose));
   }
-  const displacement=previous.distanceTo(new T.Vector3(player.x,player.y,player.z));speed=T.MathUtils.lerp(speed,Math.min(1,displacement/Math.max(.001,dt)/4),.25);previous.set(player.x,player.y,player.z);
-  const phase=time*.009,walk=Math.sin(phase)*.48*speed;
+  const displacement=movementInitialized?previous.distanceTo(new T.Vector3(player.x,player.y,player.z)):0;movementInitialized=true;speed=T.MathUtils.lerp(speed,Math.min(1,displacement/Math.max(.001,dt)/4),.25);previous.set(player.x,player.y,player.z);
+  const phase=time*(civilian?.0065:.009),walk=Math.sin(phase)*(civilian?.32*Math.min(1,speed*5):.48*speed);
   for(const side of ['L','R']){const sign=side==='L'?1:-1;const upper=named.get(`upperleg01.${side}`);if(upper&&!motion)upper.rotation.x=walk*sign;const knee=named.get(`lowerleg01.${side}`);if(knee&&!motion)knee.rotation.x=Math.max(0,-walk*sign)*.8;
    const shoulder=named.get(`upperarm01.${side}`);if(shoulder&&(!civilian||!motion)){shoulder.rotation.y=-sign*.95;shoulder.rotation.z=sign*.22;}
    const elbow=named.get(`lowerarm01.${side}`);if(elbow&&(!civilian||!motion))elbow.rotation.x=.55;
   }
   if(civilian&&!motion){for(const side of ['L','R']){const sign=side==='L'?1:-1,shoulder=named.get(`upperarm01.${side}`),elbow=named.get(`lowerarm01.${side}`);if(shoulder){shoulder.rotation.set(-walk*sign*.55,0,sign*.65);}if(elbow)elbow.rotation.x=.14;} }
+  if(civilian&&!motion){const hip=named.get('root');if(hip)hip.position.y=rootHeight-(1-Math.cos(walk))*.88;for(const side of ['L','R']){const foot=named.get(`foot.${side}`);if(foot)foot.rotation.x=-(named.get(`upperleg01.${side}`)?.rotation.x??0)-(named.get(`lowerleg01.${side}`)?.rotation.x??0);}}
   if(!motion||civilian)headBone.rotation.x=-player.pitch*.35;
-  for(const [name,bone]of named)if(name.startsWith('finger')&&!name.startsWith('finger1-1'))bone.rotation.z=(name.endsWith('.L')?1:-1)*.38;
+  for(const [name,bone]of named)if(name.startsWith('finger'))bone.rotation.set(0,0,name.startsWith('finger1-1')?0:(name.endsWith('.L')?1:-1)*.38);
+  applyActionPose(group,player,time,now);held.update(player,time,now);
  }
- function dispose(){if(isDisposed)return;isDisposed=true;motion?.dispose();for(const garment of coatMeshes)(garment.material as T.Material).dispose();for(const texture of coatTextures)releaseCoatTexture(texture);skin.dispose();skeleton.dispose();ownMaterials.forEach(m=>m.dispose());group.traverse(o=>{if(o instanceof T.Mesh){o.geometry.dispose();o.userData.ownedTexture?.dispose();}});group.clear();}
+ function dispose(){if(isDisposed)return;isDisposed=true;held.dispose();motion?.dispose();for(const garment of coatMeshes)(garment.material as T.Material).dispose();for(const texture of coatTextures)releaseCoatTexture(texture);skin.dispose();skeleton.dispose();ownMaterials.forEach(m=>m.dispose());group.traverse(o=>{if(o instanceof T.Mesh){o.geometry.dispose();o.userData.ownedTexture?.dispose();}});group.clear();}
  return {group,update,dispose,setHeadVisible:(visible:boolean)=>{headBone.scale.setScalar(visible?1:.001);}};
 }

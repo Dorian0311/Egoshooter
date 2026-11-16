@@ -36,9 +36,11 @@ export function initialInteriors(world:World):InteriorState{
 export function doorBox(f:Fixture,open:boolean):Box{
  return open?{...f.box,x:f.box.x-f.box.w/2,z:f.box.z+(f.id.endsWith('--1')?1:-1)*f.box.w/2,w:f.box.d,d:f.box.w}:f.box;
 }
+const collisionLayouts=new WeakMap<World,WeakMap<InteriorState,{signature:string;world:World}>>();
 export function interiorWorld(world:World,state:InteriorState|undefined):World{
  if(!state)return world;
+ let cache=collisionLayouts.get(world);if(!cache){cache=new WeakMap();collisionLayouts.set(world,cache);}let signature=state.broken.join('|');for(const fixture of interiorFixtures(world))if(fixture.type==='door')signature+=state.doors[fixture.id]?'1':'0';const previous=cache.get(state);if(previous?.signature===signature)return previous.world;
  const boxes=interiorFixtures(world).flatMap(f=>f.type==='door'?[doorBox(f,!!state.doors[f.id])]:f.type==='glass'&&!state.broken.includes(f.id)?[f.box]:[]);
- return {...world,boxes:[...world.boxes,...boxes]};
+ const collisionWorld={...world,boxes:[...world.boxes,...boxes]};cache.set(state,{signature,world:collisionWorld});return collisionWorld;
 }
 export function insideBuilding(world:World,x:number,z:number){return world.buildings.findIndex(b=>Math.abs(x-b.x)<b.w/2-.25&&Math.abs(z-b.z)<b.d/2-.25);}

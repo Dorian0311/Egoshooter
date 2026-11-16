@@ -1,0 +1,139 @@
+{
+  "purpose": "Static kill-confirmation portraits, rendered from the original game head geometry and textures. No runtime portrait WebGL context or AI-generated substitute face.",
+  "generator": "scripts/render-character-faces.py and tests/face-review.ts",
+  "size": [
+    192,
+    192
+  ],
+  "sourceRights": "Derived images retain the source model rights. Base humanoid/source-specific credits are documented in the character directories; no new license or redistribution permission is asserted for user-provided bonus characters.",
+  "renderInputs": {
+    "tests/face-review.ts": "7cead8890beeae9d7c360f8cc03d45e91e8a52d4124dcd4e433ca80d2550f54f",
+    "client/humanoid.ts": "5179c84ffb72710dd40aa1207516989667f4f33fb6d6566a4fcb698f1b21761b",
+    "client/bonusCharacters.ts": "5dce8b4a72403d69358392991fdd5c3baa559c5a1d424cc14f3047c1c3bab67e",
+    "client/anatomy.ts": "c61103772d0bff19b2c0393c0cc3cc143113c63ca4836ece66e4ddb0ae8e0442",
+    "shared/uniforms.ts": "0ea2ddc80660930cb9dc79b5a44eae9bc78620daf9901f0e9dfaf595d0084aca"
+  },
+  "entries": [
+    {
+      "id": "task-olive",
+      "file": "task-olive-face.webp",
+      "bytes": 5534,
+      "sha256": "e1f9876a36bc8ccbf4b7737eee7e5a7b98916613f59053c1fec0d82748c624ac",
+      "model": "public/shooter/characters/humanoid.json",
+      "modelSha256": "98fec427d1ded476cbb499fd4b6b26b6d41a0c55c48fe7081041a553ae9d09e6"
+    },
+    {
+      "id": "task-sand",
+      "file": "task-sand-face.webp",
+      "bytes": 5754,
+      "sha256": "ed9eb551d15e87ab45351fd428fbe5c2c237aa375c8363fef376f8dcef670dfe",
+      "model": "public/shooter/characters/humanoid.json",
+      "modelSha256": "98fec427d1ded476cbb499fd4b6b26b6d41a0c55c48fe7081041a553ae9d09e6"
+    },
+    {
+      "id": "de-panzer",
+      "file": "de-panzer-face.webp",
+      "bytes": 5536,
+      "sha256": "9126664d192fc0c11f7eb501a0a93fe4fe5fa8e5d91ef5b7ee506c76f80af4fe",
+      "model": "public/shooter/characters/humanoid.json",
+      "modelSha256": "98fec427d1ded476cbb499fd4b6b26b6d41a0c55c48fe7081041a553ae9d09e6"
+    },
+    {
+      "id": "de-greatcoat",
+      "file": "de-greatcoat-face.webp",
+      "bytes": 6632,
+      "sha256": "1289feac17385f3b1183e30c6016295ac8374bdb25ee475501a30e3ac4ce1455",
+      "model": "public/shooter/characters/humanoid.json",
+      "modelSha256": "98fec427d1ded476cbb499fd4b6b26b6d41a0c55c48fe7081041a553ae9d09e6"
+    },
+    {
+      "id": "de-field",
+      "file": "de-field-face.webp",
+      "bytes": 6632,
+      "sha256": "1289feac17385f3b1183e30c6016295ac8374bdb25ee475501a30e3ac4ce1455",
+      "model": "public/shooter/characters/humanoid.json",
+      "modelSha256": "98fec427d1ded476cbb499fd4b6b26b6d41a0c55c48fe7081041a553ae9d09e6"
+    },
+    {
+      "id": "us-field",
+      "file": "us-field-face.webp",
+      "bytes": 5526,
+      "sha256": "e518b23dfd13a342ba0c1f2e6b1eef963a31bd0b62a2d284cc3e132614fa7fe8",
+      "model": "public/shooter/characters/humanoid.json",
+      "modelSha256": "98fec427d1ded476cbb499fd4b6b26b6d41a0c55c48fe7081041a553ae9d09e6"
+    },
+    {
+      "id": "fr-alpine",
+      "file": "fr-alpine-face.webp",
+      "bytes": 4060,
+      "sha256": "306aa6dfc9699a5fd10aff49b62168b760c5db77f7601867f2fd6233e4090d0f",
+      "model": "public/shooter/characters/humanoid.json",
+      "modelSha256": "98fec427d1ded476cbb499fd4b6b26b6d41a0c55c48fe7081041a553ae9d09e6"
+    },
+    {
+      "id": "fr-liberation",
+      "file": "fr-liberation-face.webp",
+      "bytes": 4060,
+      "sha256": "306aa6dfc9699a5fd10aff49b62168b760c5db77f7601867f2fd6233e4090d0f",
+      "model": "public/shooter/characters/humanoid.json",
+      "modelSha256": "98fec427d1ded476cbb499fd4b6b26b6d41a0c55c48fe7081041a553ae9d09e6"
+    },
+    {
+      "id": "kroenen",
+      "file": "kroenen-face.webp",
+      "bytes": 5004,
+      "sha256": "3c424e439230e19d38582178931bed736b03f6a3a4e3ea1c30957d4801069d0d",
+      "model": "public/shooter/characters/bonus/kroenen.glb",
+      "modelSha256": "707ab686665d3d36a0869eae5404c8a50a0f05fd6b7f7d7da76eff078f9a128d"
+    },
+    {
+      "id": "deadpool",
+      "file": "deadpool-face.webp",
+      "bytes": 3118,
+      "sha256": "ab77426a9afc2bb90bc5a6a7860321abf626c2c2c04a74e0db17762c510f980b",
+      "model": "public/shooter/characters/bonus/deadpool.glb",
+      "modelSha256": "163ef752da23b80267e4e387daa033bf03763555d9449ccf8e49854036af4029"
+    },
+    {
+      "id": "harley",
+      "file": "harley-face.webp",
+      "bytes": 6660,
+      "sha256": "cd0545627fe60da61b89002f51ac031232d774f5b2d79d51aea68eec90d209a9",
+      "model": "public/shooter/characters/bonus/harley.glb",
+      "modelSha256": "c14f9bfffc46dcdd2106ad160ffe2dc8438d2cfc442ff24238f0ab4e8480f832"
+    },
+    {
+      "id": "rocket",
+      "file": "rocket-face.webp",
+      "bytes": 9982,
+      "sha256": "34d9123ce0dbb5147583d2fd122f9b7c55ec2a06df15738b7d26cd820f8525d4",
+      "model": "public/shooter/characters/bonus/rocket.glb",
+      "modelSha256": "08a213894be23c59daa122aa347c70af4fbce4b6f21553f71de12b18cd25d625"
+    },
+    {
+      "id": "commander",
+      "file": "commander-face.webp",
+      "bytes": 7836,
+      "sha256": "a635aa46bb26cd6bb360252aadea8b2876ad65f07428db2bd41c49382908f766",
+      "model": "public/shooter/characters/bonus/commander.glb",
+      "modelSha256": "8b6bfe7ea14b16a38166b36d1fb5bf7f1a82b0396b91e6bd66d6380bc555cdd8"
+    },
+    {
+      "id": "leatherface",
+      "file": "leatherface-face.webp",
+      "bytes": 6146,
+      "sha256": "ba086cba00d1e5692bfe5f17f2c2398fba60a256cc55bc247acdc00a2534fa06",
+      "model": "public/shooter/characters/bonus/leatherface.glb",
+      "modelSha256": "5931296ddca7ca790ef079752feaaee8af60c35b1f258db8cadade036a1e0dc0"
+    },
+    {
+      "id": "homer",
+      "file": "homer-face.webp",
+      "bytes": 4452,
+      "sha256": "26c3e0aaeab24a175bb9775178b711a017412721cb8b1f14c8f6c134ff8dd078",
+      "model": "public/shooter/characters/bonus/homer.glb",
+      "modelSha256": "a1fdd79aa51c7b3cdac2398fd9a25fccf619dcfd55ee47473d710b9464c6dfbd"
+    }
+  ],
+  "errors": []
+}

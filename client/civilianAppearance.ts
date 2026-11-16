@@ -1,0 +1,39 @@
+import * as T from 'three';
+import {batchWeaponMeshes} from './batchWeaponMeshes';
+
+type Joint={name:string;head:number[];tail:number[]};
+const palettes=[['#645f4f','#343c3c','#30251d','#493b2b'],['#454f42','#3c3730','#302821','#3c3025'],['#4e5558','#35383b','#32271e','#40342b'],['#655348','#343c40','#30251e','#514333']];
+let fabric:T.DataTexture|undefined;
+function weave(){if(fabric)return fabric;const size=128,pixels=new Uint8Array(size*size*4);for(let y=0;y<size;y++)for(let x=0;x<size;x++){const stitch=((x+y)%4<2?1:-1)*2,grain=Math.sin(x*17.31+y*43.17)*2,wear=Math.sin(x*.075)*Math.sin(y*.11)*4,value=Math.round(222+stitch+grain+wear),i=(y*size+x)*4;pixels[i]=pixels[i+1]=pixels[i+2]=value;pixels[i+3]=255;}fabric=new T.DataTexture(pixels,size,size);fabric.wrapS=fabric.wrapT=T.RepeatWrapping;fabric.repeat.set(3,3);fabric.colorSpace=T.SRGBColorSpace;fabric.magFilter=fabric.minFilter=T.LinearFilter;fabric.needsUpdate=true;return fabric;}
+export function tailorCivilian(positions:number[],categories:number[],joints:Joint[]){
+ const named=new Map(joints.map(j=>[j.name,j])),point=new T.Vector3(),start=new T.Vector3(),end=new T.Vector3(),closest=new T.Vector3(),radial=new T.Vector3();
+ const inflate=(index:number,a:number[],b:number[],amount:number,minimum=0)=>{point.fromArray(positions,index*3);start.fromArray(a);end.fromArray(b);closest.copy(end).sub(start);const along=T.MathUtils.clamp(radial.copy(point).sub(start).dot(closest)/closest.lengthSq(),0,1);closest.multiplyScalar(along).add(start);radial.copy(point).sub(closest);if(radial.lengthSq()<1e-8)return;const length=radial.length();point.addScaledVector(radial.normalize(),Math.max(amount,minimum-length));point.toArray(positions,index*3);};
+ for(let i=0;i<categories.length;i++){if(categories[i]!==0)continue;const x=positions[i*3],y=positions[i*3+1],z=positions[i*3+2],side=x<0?'L':'R';
+  if(y>.94&&y<1.47&&Math.abs(x)<.25){const ease=Math.sin((y-.94)/.53*Math.PI);positions[i*3]=x*(1+.16*ease);positions[i*3+2]=z*(1+.22*ease);}
+  else if(y>.99&&Math.abs(x)>.23){const upper=named.get(`upperarm01.${side}`)!,elbow=named.get(`lowerarm01.${side}`)!,wrist=named.get(`wrist.${side}`)!;inflate(i,y>elbow.head[1]?upper.head:elbow.head,y>elbow.head[1]?elbow.head:wrist.head,.011);}
+  else if(y<.94&&y>.17){const hip=named.get(`upperleg01.${side}`)!,knee=named.get(`lowerleg01.${side}`)!,foot=named.get(`foot.${side}`)!;inflate(i,y>knee.head[1]?hip.head:knee.head,y>knee.head[1]?knee.head:foot.head,.012,y>.5?.09:.063+.014*T.MathUtils.clamp((y-.17)/.33,0,1));}
+ }
+}
+export function createCivilianAppearance(){
+ const jacket=new T.MeshStandardMaterial({color:palettes[0][0],map:weave(),bumpMap:weave(),bumpScale:.00065,roughness:.96}),trousers=new T.MeshStandardMaterial({color:palettes[0][1],map:weave(),bumpMap:weave(),bumpScale:.00045,roughness:.98}),boots=new T.MeshStandardMaterial({color:palettes[0][2],roughness:.76}),leather=new T.MeshStandardMaterial({color:palettes[0][3],map:weave(),bumpScale:.00025,roughness:.85}),seam=new T.MeshStandardMaterial({color:'#35342c',roughness:1}),hair=new T.MeshStandardMaterial({color:'#403128',map:weave(),bumpMap:weave(),bumpScale:.0008,roughness:1,polygonOffset:true,polygonOffsetFactor:-1,polygonOffsetUnits:-1}),sole=new T.MeshStandardMaterial({color:'#181914',roughness:.95});
+ const cloth=new T.MeshStandardMaterial({map:weave(),bumpMap:weave(),bumpScale:.0005,roughness:.97,vertexColors:true}),materials=[cloth,jacket,trousers,boots,leather,seam,hair,sole];let current='',body:T.BufferGeometry|undefined;
+ function tint(){if(!body)return;const position=body.getAttribute('position'),colors=new Float32Array(position.count*3),color=new T.Color();for(let i=0;i<position.count;i++){color.copy(trousers.color).lerp(jacket.color,T.MathUtils.smoothstep(position.getY(i),.94,.99));color.toArray(colors,i*3);}body.setAttribute('color',new T.BufferAttribute(colors,3));}
+ function addDetails(root:T.Group,named:Map<string,T.Bone>,joints:Joint[],source:T.SkinnedMesh){
+  const box=(parent:T.Group,x:number,y:number,z:number,w:number,h:number,d:number,material:T.Material)=>{const mesh=new T.Mesh(new T.BoxGeometry(w,h,d),material);mesh.position.set(x,y,z);mesh.castShadow=true;parent.add(mesh);return mesh;};
+  // Low workwear collar sits inside the neckline, with no floating military accessories.
+  const collar=new T.Mesh(new T.CylinderGeometry(.059,.09,.12,24,1,true),jacket);collar.position.set(0,1.535,-.024);root.add(collar);root.updateWorldMatrix(true,true);named.get('neck01')?.attach(collar);
+  for(const side of ['L','R']){const joint=joints.find(j=>j.name===`wrist.${side}`)!,elbow=joints.find(j=>j.name===`lowerarm01.${side}`)!,direction=new T.Vector3().fromArray(joint.head).sub(new T.Vector3().fromArray(elbow.head)).normalize(),cuff=new T.Mesh(new T.CylinderGeometry(.043,.047,.07,14,1,true),jacket);cuff.position.fromArray(joint.head).addScaledVector(direction,-.018);cuff.quaternion.setFromUnitVectors(new T.Vector3(0,1,0),direction);root.add(cuff);root.updateWorldMatrix(true,true);named.get(`wrist.${side}`)?.parent?.attach(cuff);}
+  for(const side of ['L','R']){const joint=joints.find(j=>j.name===`foot.${side}`)!,knee=joints.find(j=>j.name===`lowerleg01.${side}`)!,foot=named.get(`foot.${side}`)!,shoe=new T.Group();shoe.name='civilian-leather-shoe';root.add(shoe);
+   const upper=new T.Mesh(new T.CapsuleGeometry(.062,.12,4,12),boots);upper.rotation.x=Math.PI/2;upper.scale.set(1.12,1,.8);upper.position.set(joint.head[0]*.93,.06,-.105);upper.castShadow=true;shoe.add(upper);
+   const bottom=new T.Mesh(new T.CapsuleGeometry(.063,.12,3,12),sole);bottom.rotation.x=Math.PI/2;bottom.scale.set(1.12,1,.12);bottom.position.set(joint.head[0]*.93,.011,-.105);shoe.add(bottom);const shaft=new T.Mesh(new T.CylinderGeometry(.046,.052,.13,14),boots);shaft.position.set(joint.head[0],.137,-.018);shoe.add(shaft);
+   for(let n=0;n<3;n++)box(shoe,joint.head[0]*.93,.104,-.073-n*.017,.061,.003,.006,leather);batchWeaponMeshes(shoe);root.updateWorldMatrix(true,true);foot.attach(shoe);
+   const direction=new T.Vector3().fromArray(joint.head).sub(new T.Vector3().fromArray(knee.head)).normalize(),cuff=new T.Mesh(new T.CylinderGeometry(.077,.072,.056,14,1,true),trousers);cuff.position.fromArray(joint.head).addScaledVector(direction,-.142);cuff.quaternion.setFromUnitVectors(new T.Vector3(0,1,0),direction);root.add(cuff);root.updateWorldMatrix(true,true);foot.parent?.attach(cuff);
+  }
+  // Reuse the actual scalp topology instead of placing a detached spherical hair cap.
+  const position=source.geometry.getAttribute('position'),sourceIndices=source.geometry.index!.array,indices:number[]=[];
+  for(let n=0;n<sourceIndices.length;n+=3){const covered=[0,1,2].every(j=>{const i=sourceIndices[n+j],x=position.getX(i),y=position.getY(i),z=position.getZ(i);return y>1.746||y>1.69&&z>-.035||y>1.716&&Math.abs(x)>.071;});if(covered)indices.push(sourceIndices[n],sourceIndices[n+1],sourceIndices[n+2]);}
+  const geometry=new T.BufferGeometry();for(const [name,attribute]of Object.entries(source.geometry.attributes))geometry.setAttribute(name,attribute);geometry.setIndex(indices);const crop=new T.SkinnedMesh(geometry,hair);crop.name='civilian-cropped-hair';crop.castShadow=true;crop.frustumCulled=false;root.add(crop);crop.bind(source.skeleton,source.bindMatrix);
+
+ }
+ return {cloth,jacket,trousers,boots,materials,addDetails,tintGeometry(geometry:T.BufferGeometry){body=geometry;tint();},style(id:string){if(id===current)return;current=id;const suffix=Number(id.match(/\d+$/)?.[0]??0),palette=palettes[suffix%palettes.length];jacket.color.set(palette[0]);trousers.color.set(palette[1]);boots.color.set(palette[2]);leather.color.set(palette[3]);hair.color.set(['#403128','#282721','#5a5144','#3c3028'][suffix%4]);tint();},dispose(){for(const material of materials)material.dispose();}};
+}

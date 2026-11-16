@@ -1,7 +1,8 @@
-import {applyActionPose} from './actionPose';
 import {createBattleAudio} from './battleAudio';
 import {createAnatomy} from './anatomy';
 import {createGore} from './gore';
+import {createRemainsScene} from './remainsScene';
+import {retainWorldWeaponSession,worldWeaponStats} from './worldWeapons';
 import {createOperationScene,createThrowingStarGeometry} from './operationScene';
 import {isCrawling,eyeHeight as actorEyeHeight,armCount,hasLost} from '../shared/injuries';
 import {createInteriors} from './interiors';
@@ -56,6 +57,7 @@ export function createScene(
   const world=getWorld(mapId),{boxes,buildings}=world;
   let collisionWorld=world;
   const renderer = new T.WebGLRenderer({ canvas, antialias: false, preserveDrawingBuffer:readOnly, powerPreference: 'high-performance' });
+  const releaseWorldWeapons=retainWorldWeaponSession();
   renderer.shadowMap.enabled = true;
   renderer.localClippingEnabled = true;
   renderer.shadowMap.type = T.PCFSoftShadowMap;
@@ -290,6 +292,7 @@ export function createScene(
   const handStar=new T.Mesh(createThrowingStarGeometry(),new T.MeshStandardMaterial({color:'#aeb8b9',metalness:.9,roughness:.25}));handStar.position.set(-.08,-.05,-.45);handStar.layers.set(1);handStar.visible=false;weapon.add(handStar);
   const hitEffects=createHitEffects(scene);
   const gore=createGore(scene,()=>collisionWorld),operationScene=createOperationScene(scene),seenEvents=new Set<string>();
+  const remainsScene=createRemainsScene(scene,camera,weapon,mapId,id=>avatars.get(id)?.userData.human?.group);
   let condition="",shakeAt=0,shakeStrength=0;
   const pending: Input[] = [];
   const traces:{line:T.Line;expires:number}[]=[];
@@ -319,12 +322,13 @@ export function createScene(
     if (!locked()) return;
     keys.add(e.code);
     if(e.code===settings.bindings.sprint&&!e.repeat&&settings.sprintMode==='toggle')sprintToggled=!sprintToggled;
-    if(e.code===settings.bindings.interact&&!e.repeat&&local?.hp){const target=operationScene.interaction(local,yaw)??interiors.interaction(local,yaw);if(target)onInteract(target.id);}
+    if(e.code===settings.bindings.interact&&!e.repeat&&local?.hp){const target=remainsScene.interaction(local,yaw)??operationScene.interaction(local,yaw)??interiors.interaction(local,yaw);if(target){const alternate='alternateId' in target&&typeof target.alternateId==='string'?target.alternateId:undefined;onInteract((e.shiftKey||pressed('sprint'))&&alternate?alternate:target.id);}}
     if(e.code===settings.bindings.throwStar&&!e.repeat&&local?.hp)onInteract('throw');
     if(e.code===settings.bindings.bandage&&!e.repeat&&local?.hp)onInteract('bandage');
     if (Object.values(settings.bindings).includes(e.code)) e.preventDefault();
     if (e.code === settings.bindings.jump) jump = true;
     if (e.code === settings.bindings.reload) reload = true;
+    if(!e.repeat&&local&&(['weapon1','weapon2','weapon3','weapon4'] as Action[]).some(action=>e.code===settings.bindings[action])){if(local.heldPart)onInteract('part:drop');else if(local.carriedCorpse&&e.code!==settings.bindings.weapon2)onInteract('corpse:drop');}
     if (e.code === settings.bindings.weapon1) weaponIndex = 0;
     if (e.code === settings.bindings.weapon2) weaponIndex = 1;
     if (e.code === settings.bindings.weapon3) weaponIndex = 2;
@@ -412,7 +416,7 @@ export function createScene(
   function update(s: Snapshot, id: string) {
     const oldPhase = snapshot?.phase;
     if(snapshot?.interiors&&s.interiors&&local){for(const f of interiorFixtures(world)){if(f.type==='door'&&snapshot.interiors.doors[f.id]!==s.interiors.doors[f.id]&&Math.hypot(f.box.x-local.x,f.box.z-local.z)<12){roomSound();break;}}}
-    snapshot = s;interiors.sync(s.interiors);operationScene.sync(s);
+    snapshot = s;interiors.sync(s.interiors);operationScene.sync(s);remainsScene.sync(s);
     if(condition!==s.operation.condition){condition=s.operation.condition;if(condition==='fog')scene.fog=new T.Fog('#a8b3b0',4,42);else if(condition==='night'){scene.fog=new T.Fog('#07101a',20,100);sun.intensity=.18;renderer.setClearColor('#07101a');}}collisionWorld=interiorWorld(world,s.interiors);
     myId = id;
     for(const p of [...s.players,...s.npcs]){const prior=stepPositions.get(p.id),distance=prior?prior.distance+Math.hypot(p.x-prior.x,p.z-prior.z):0;if(p.id!==id&&p.hp&&distance>1.6){battleAudio.sample('footstep',new T.Vector3(p.x,p.y+.1,p.z),.11*settings.volume,p.sprinting?1.15:1);stepPositions.set(p.id,{x:p.x,z:p.z,distance:0});}else stepPositions.set(p.id,{x:p.x,z:p.z,distance});}
@@ -452,7 +456,8 @@ export function createScene(
         g.userData.nameplate?.update(p.name,p.team===own?.team);
         if(g.userData.life!==p.life){g.userData.life=p.life;g.userData.headDestroyed=false;}
         if(p.hp>0)g.userData.headDestroyed=false;
-        g.visible=p.hp>0||p.downedUntil>0||corpses.has(p.id);
+        const body=s.corpses.find(c=>c.sourceId===p.id&&c.sourceLife===p.life);
+        g.visible=p.hp>0||p.downedUntil>0||corpses.has(p.id)&&!(body&&remainsScene.isReady(body.id));
         g.userData.anatomy?.setLost(p.injuries.lost);
       }
     for (const [id, g] of avatars)
@@ -468,7 +473,11 @@ export function createScene(
       if(e.eventId){if(seenEvents.has(e.eventId))continue;seenEvents.add(e.eventId);if(seenEvents.size>2048)seenEvents.delete(seenEvents.values().next().value!);}
       if(e.type==='glass'&&e.point){if(!battleAudio.sample('glass',new T.Vector3(...e.point),.25*settings.volume))roomSound(true);}
       if(e.type==='glass'||e.type==='shot'&&!s.events.some(hit=>hit.type==='hit'&&hit.id===e.id))interiors.impact(e);
-      if(e.type==='sever'&&e.target){const target=avatars.get(e.target);if(target&&e.bodyPart&&!settings.reducedGore){const piece=target.userData.anatomy?.detach(e.bodyPart);if(piece){const shooter=actors.find(p=>p.id===e.id);gore.add(piece,new T.Vector3(Math.sin(shooter?.yaw??0)*-1,.1,Math.cos(shooter?.yaw??0)*-1));}if(e.point)hitEffects.emit(e,false,new T.Vector3(0,1,0),actors.find(p=>p.id===e.target)?.y);}}
+      if(e.type==='sever'&&e.target){const target=avatars.get(e.target);if(target&&e.bodyPart&&!settings.reducedGore){const persistent=s.bodyParts.some(part=>part.sourceId===e.target&&part.sourceLife===(e.life??target.userData.target?.life)&&part.part===e.bodyPart);const piece=persistent?undefined:target.userData.anatomy?.detach(e.bodyPart);if(piece){const shooter=actors.find(p=>p.id===e.id),contact=e.point?new T.Vector3(...e.point):piece.position.clone(),direction=shooter?contact.clone().sub(new T.Vector3(shooter.x,shooter.y+actorEyeHeight(shooter),shooter.z)):new T.Vector3(0,.1,-1);gore.add(piece,direction,contact,e.weapon);}if(e.point)hitEffects.emit(e,false,new T.Vector3(0,1,0),actors.find(p=>p.id===e.target)?.y);}}
+      if(e.type==='harvest'&&e.target){const point=remainsScene.eventPoint(e.target);if(point&&!settings.reducedGore)hitEffects.emit({...e,type:'sever',point:point.toArray() as [number,number,number]},false,new T.Vector3(0,.7,.2),point.y-.1);if(e.id===id){shakeAt=performance.now();shakeStrength=.9;}battleAudio.sample('wood',point,.22*settings.volume,.7);}
+      if(e.type==='part-throw'){const root=avatars.get(e.id)?.userData.human?.group;if(root)root.userData.partThrowUntil=s.now+900;}
+      if(e.type==='part-melee'){const root=avatars.get(e.id)?.userData.human?.group;if(root)root.userData.partSwingUntil=s.now+800;battleAudio.sample('wood',undefined,.16*settings.volume,.75);}
+      if(e.type==='shield')battleAudio.sample('stone',e.point?new T.Vector3(...e.point):undefined,.2*settings.volume,.8);
       if(e.type==='hit'||e.type==='kill'){
         const shooter=actors.find(p=>p.id===e.id),target=actors.find(p=>p.id===e.target);
         const direction=shooter?new T.Vector3(-Math.sin(shooter.yaw)*Math.cos(shooter.pitch),Math.sin(shooter.pitch),-Math.cos(shooter.yaw)*Math.cos(shooter.pitch)):new T.Vector3(0,0,-1);
@@ -503,11 +512,14 @@ export function createScene(
   const graphics=createGraphics(renderer,scene,camera,sun,graphicsQuality);
   let captureFrame:(()=>void)|undefined;
   let raf = 0;
+  const frameTimes:number[]=[],cpuTimes:number[]=[];
   function frame(t: number) {
     if (stopped) return;
+    if(document.hidden&&!readOnly){release();last=t;acc=0;raf=requestAnimationFrame(frame);return;}
     // The waiting-room backdrop shares the GPU with the character preview.
     const menu=snapshot?.phase==='waiting'||snapshot?.phase==='finished';
     if(menu&&t-last<1000/15){raf=requestAnimationFrame(frame);return;}
+    const cpuStarted=performance.now();frameTimes.push(t-last);if(frameTimes.length>180)frameTimes.shift();
     const dt = Math.min((t - last) / 1000, 0.1);
     last = t;
     acc += dt;
@@ -560,6 +572,8 @@ export function createScene(
     camera.updateMatrixWorld();
     for (const g of avatars.values()) {
       const p = g.userData.target as Player;
+      if(!p.hp&&!p.downedUntil&&snapshot?.corpses.some(c=>c.sourceId===p.id&&c.sourceLife===p.life&&remainsScene.isReady(c.id)))g.visible=false;
+      if(!g.visible){g.userData.nameplate?.render(camera,canvas.clientWidth,canvas.clientHeight,false,0);continue;}
       g.position.lerp(avatarPosition.set(p.x, p.y, p.z), 1 - Math.exp(-dt * 14));
       const renderYaw=g.userData.renderYaw??p.yaw;
       g.userData.renderYaw=renderYaw+Math.atan2(Math.sin(p.yaw-renderYaw),Math.cos(p.yaw-renderYaw))*(1-Math.exp(-dt*18));
@@ -570,7 +584,7 @@ export function createScene(
       }
       if(isCrawling(p)&&(p.hp>0||p.downedUntil)){g.rotateX(-Math.PI/2);g.position.y=p.y+.32;g.position.x+=Math.sin(g.userData.renderYaw)*1.05;g.position.z+=Math.cos(g.userData.renderYaw)*1.05;}
       if(!g.userData.anatomy)g.userData.human?.setHeadVisible(!g.userData.headDestroyed);
-      g.scale.y=p.crouching&&!g.userData.human?.group.userData.hasCrouchAnimation?.66:1;
+      g.scale.y=(p.crouching||p.treatment?.kind==='harvest')&&!g.userData.human?.group.userData.hasCrouchAnimation?.66:1;
       const nameplate=g.userData.nameplate as ReturnType<typeof createPlayerNameplate>|undefined;
       if(nameplate){
         if(isCrawling(p)){g.updateWorldMatrix(true,false);nameplate.anchor.position.copy(g.worldToLocal(new T.Vector3(p.x,p.y+.85,p.z)));}else nameplate.anchor.position.set(0,(p.crouching?1.43:2.06)/g.scale.y,0);
@@ -580,7 +594,8 @@ export function createScene(
         }
         nameplate.render(camera,canvas.clientWidth,canvas.clientHeight,nearby&&!g.userData.labelOccluded,Math.min(1,Math.max(0,(45-distance)/12)));
       }
-      g.userData.human?.update(p,t,dt);if(g.userData.human)applyActionPose(g.userData.human.group,p,t,(snapshot?.now??0)+t-receivedAt);
+      const distance=g.position.distanceTo(camera.position),animationInterval=distance>45?1000/15:distance>20?1000/30:0,animationElapsed=t-(g.userData.animatedAt??t-100);
+      if(animationElapsed>=animationInterval){g.userData.human?.update({...p,crouching:p.crouching||p.treatment?.kind==='harvest',x:g.position.x,y:g.position.y,z:g.position.z},t,Math.min(.1,animationElapsed/1000),(snapshot?.now??0)+t-receivedAt);g.userData.animatedAt=t;}
     }
     battleAudio.listener();
     if (local && audio) {
@@ -596,9 +611,10 @@ export function createScene(
       }
     }
     flash.visible = false;
-    const saw=local?.uniform==='leatherface';
+    const special=!!local?.heldPart||local?.treatment?.kind==='harvest';
+    const saw=local?.uniform==='leatherface'&&!special&&!local?.carriedCorpse;
     if(saw)aim=false;
-    const hasDetailedWeapon=local?detailedWeapons.update(local.team,mapId,saw?4:local.weapon):false;
+    const hasDetailedWeapon=local?detailedWeapons.update(local.team,mapId,saw||special?4:local.weapon):false;
     chainsaw.group.visible=saw;chainsaw.update(t,!!(saw&&fire&&locked()));
     const pose=local?viewmodel.update({dt,now:t,weaponIndex:local.weapon,aim,yaw,pitch,
       moving:locked()?Math.min(1,Math.hypot(Number(pressed('forward'))-Number(pressed('back')),Number(pressed('right'))-Number(pressed('left')))):0,
@@ -606,16 +622,18 @@ export function createScene(
       reloadRemainingMs:Math.max(0,local.reloadAt-((snapshot?.now??0)+t-receivedAt)),
       reloadDurationMs:weapons[local.weapon].reload,muzzleY:detailedWeapons.muzzleLocal().y,sightY:detailedWeapons.sightY()}):undefined;
     detailedWeapons.animatePose(pose?.reloadProgress??0,pose?.aimBlend??0);
-    const hasFallbackHands=local?fallbackHands.update(local.weapon,local.team,mapId,!hasDetailedWeapon&&!saw):false;
+    const heldPart=local?.heldPart,heldHead=heldPart&&snapshot?.bodyParts.some(part=>part.id===heldPart&&part.part==='head');
+    const hasFallbackHands=local?fallbackHands.update(special?heldHead?1:0:local.weapon,local.team,mapId,!hasDetailedWeapon&&!saw):false;
     fallbackHands.animatePose(pose?.reloadProgress??0,pose?.aimBlend??0);
-    pistol.visible=!saw&&local?.weapon===1&&!hasDetailedWeapon;smg.visible=!saw&&local?.weapon===2&&!hasDetailedWeapon;for(const part of rifleParts)part.visible=!saw&&local?.weapon===0&&!hasDetailedWeapon;
+    pistol.visible=!special&&!saw&&local?.weapon===1&&!hasDetailedWeapon;smg.visible=!special&&!saw&&local?.weapon===2&&!hasDetailedWeapon;for(const part of rifleParts)part.visible=!special&&!saw&&local?.weapon===0&&!hasDetailedWeapon;
     for(const h of weaponHands)h.visible=!saw&&local?.weapon!==1&&!hasDetailedWeapon&&!hasFallbackHands;sleeve.visible=!saw&&local?.weapon!==1&&!hasDetailedWeapon&&!hasFallbackHands;
-    const throwRemaining=(local?.throwAt??0)-((snapshot?.now??0)+t-receivedAt);handStar.visible=throwRemaining>610&&throwRemaining<=750;if(throwRemaining>0&&throwRemaining<=750){weapon.rotation.x+=Math.sin((750-throwRemaining)/750*Math.PI)*.45;weapon.position.y-=Math.sin((750-throwRemaining)/750*Math.PI)*.12;}
+    const renderNow=(snapshot?.now??0)+t-receivedAt,partThrown=local?remainsScene.threwPart(local.id,renderNow):false;
+    const throwRemaining=(local?.throwAt??0)-renderNow;handStar.visible=!special&&!partThrown&&throwRemaining>610&&throwRemaining<=750;if(throwRemaining>0&&throwRemaining<=(partThrown?850:750)){weapon.rotation.x+=Math.sin(((partThrown?850:750)-throwRemaining)/(partThrown?850:750)*Math.PI)*.45;weapon.position.y-=Math.sin(((partThrown?850:750)-throwRemaining)/(partThrown?850:750)*Math.PI)*.12;}
     weapon.scale.x=local&&armCount(local)===1&&hasLost(local,'armR')?-1:1;
-    weapon.visible = !inspectionView && !!local?.hp && armCount(local)>0 && snapshot?.phase === "playing";
+    weapon.visible = !inspectionView && !!local?.hp && armCount(local)>0 && (!local.carriedCorpse||armCount(local)>1) && snapshot?.phase === "playing";
     camera.fov = inspectionView?50:settings.fov-24*(pose?.aimBlend??0);
     camera.updateProjectionMatrix();
-    ammoReadout.style.display=local?.hp&&snapshot?.phase==='playing'&&!saw?'block':'none';
+    ammoReadout.style.display=local?.hp&&snapshot?.phase==='playing'&&!saw&&!special?'block':'none';
     if(local&&!saw){
       weapon.updateWorldMatrix(true,false);weapon.localToWorld(ammoAnchor.set(.34,-.15,-.52));
       const projected=projectWeaponMuzzle(ammoAnchor,camera,62-12*(pose?.aimBlend??0)).project(camera);
@@ -630,17 +648,18 @@ export function createScene(
       ammoReadout.classList.toggle('is-empty',local.ammo===0);
     }
     for(let index=traces.length-1;index>=0;index--){const trace=traces[index];if(t>=trace.expires){scene.remove(trace.line);trace.line.geometry.dispose();(trace.line.material as T.Material).dispose();traces.splice(index,1);}}
-    hitEffects.update(dt);muzzleEffects.update(dt);gore.update(dt);operationScene.update(t);
+    hitEffects.update(dt);muzzleEffects.update(dt);gore.update(dt);operationScene.update(t);remainsScene.update(t,local,dt);
     if(!snapshot?.npcs)wanderers.update((snapshot?.now??0)+t-receivedAt,dt);
     interiors.update(local??undefined,t,dt);
-    const target=local?.hp&&locked()?(operationScene.interaction(local,yaw)??interiors.interaction(local,yaw)):undefined;
-    interactionHint.style.display=target?'block':'none';if(target)interactionHint.textContent=`[${settings.bindings.interact.replace('Key','')}] ${('label' in target?target.label:interiors.label(target.id))}`;
+    const target=local?.hp&&locked()?(remainsScene.interaction(local,yaw)??operationScene.interaction(local,yaw)??interiors.interaction(local,yaw)):undefined;
+    interactionHint.style.display=target?'block':'none';if(target)interactionHint.textContent=`[${settings.bindings.interact.replace('Key','')}] ${('label' in target?target.label:interiors.label(target.id))}${'alternateLabel' in target&&target.alternateLabel?` · [${settings.bindings.sprint.replace('Left','').replace('Right','')}+${settings.bindings.interact.replace('Key','')}] ${target.alternateLabel}`:''}`;
     const indoors=local&&insideBuilding(world,local.x,local.z)>=0;
     const hemisphere=scene.children.find(o=>o instanceof T.HemisphereLight) as T.HemisphereLight;
     if(hemisphere)hemisphere.intensity+=( (condition==='night'?.10:indoors?.19:.45)-hemisphere.intensity)*Math.min(1,dt*4);
     river?.update(t/1000);
     mapDetails.update(t/1000);
     graphics.render(dt,pose?.aimBlend??0,!menu);
+    cpuTimes.push(performance.now()-cpuStarted);if(cpuTimes.length>180)cpuTimes.shift();
     captureFrame?.();
     raf = requestAnimationFrame(frame);
   }
@@ -654,7 +673,7 @@ export function createScene(
     capture(callback?:()=>void){captureFrame=callback;},
     audioStream:()=>audioCapture?.stream,
     resetReplay(){seenEvents.clear();pending.length=0;gore.dispose();hitEffects.clear();},
-    getRenderStats:()=>({calls:renderer.info.render.calls,triangles:renderer.info.render.triangles,...graphics.stats()}),
+    getRenderStats:()=>{const frames=[...frameTimes].sort((a,b)=>a-b),cpu=[...cpuTimes].sort((a,b)=>a-b);return {calls:renderer.info.render.calls,triangles:renderer.info.render.triangles,frameP95:frames[Math.floor(frames.length*.95)]??0,frameMax:frames.at(-1)??0,cpuP95:cpu[Math.floor(cpu.length*.95)]??0,...hitEffects.stats(),...remainsScene.stats(),...worldWeaponStats(),...graphics.stats()};},
     update(s: Snapshot, id: string) {
       receivedAt = performance.now();
       update(s, id);
@@ -664,7 +683,7 @@ export function createScene(
       wanderers.dispose();interiors.dispose();interactionHint.remove();
       ammoReadout.remove();
       mapDetails.dispose();disposeMilitaryRoofs?.();disposeEnvironmentUpgrade();
-      hitEffects.dispose();gore.dispose();operationScene.dispose();
+      hitEffects.dispose();gore.dispose();operationScene.dispose();remainsScene.dispose();
       cancelAnimationFrame(raf);
       listeners.forEach((f) => f());
       if (locked()) document.exitPointerLock();
@@ -685,6 +704,7 @@ export function createScene(
       });
       viewmodel.dispose();detailedWeapons.dispose();muzzleEffects.dispose();disposeAssets();graphics.dispose();environment.dispose();materialLibrary.dispose();
       renderer.dispose();
+      releaseWorldWeapons();
     },
   };
 }

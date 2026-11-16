@@ -1,17 +1,18 @@
 import React,{useEffect,useRef,useState} from 'react';
 import './releaseNotes.css';
 
-const release='operations-2026-11-16';
+const release='remains-2026-11-16';
 const storageKey='eiserne-front-changelog';
 let acknowledgedInSession=false;
 const changes=[
  ['Einzelspieler & Koop','Training, Bot-Gefechte, fünf Überlebenswellen und drei Missionen auf allen vier Karten. Koop für 2–4 Spieler mit Raumcode, Wiederbelebung und Zuschauen.'],
- ['Bots & Missionen','Drei Schwierigkeiten, Deckung, Flankieren, Sicht und Gehör sowie Navigation über Treppen und durch Türen. Sabotage, Dokumente bergen und Stellung halten.'],
- ['Verletzungen & Versorgung','Stadtbewohner sind verwundbar. Gliedmaßenverlust, Blutverlust und Kriechen beeinflussen den Kampf. Verbände stoppen Blutungen; reduzierte Gewalteffekte sind einstellbar.'],
- ['Geschenke & Wurfsterne','Acht Geschenkpakete mit je drei hakenkreuzförmigen Wurfsternen und vier Verband-Fundstücke pro Karte. E: aufnehmen · G: werfen · H: verbinden. Alle Tasten sind umbelegbar.'],
- ['Kroenen & Kübelwagen','Karl Ruprecht Kroenen ist mit drehbarer 3D-Vorschau spielbar. Ein deutscher VW Kübelwagen Typ 82 ersetzt den amerikanischen Jeep im Lobbybild.'],
- ['Atmosphäre & Animationen','Nebel, Nacht und wechselnde Zugänge, zusätzliche Bewegungs- und Treffereffekte, neue Geräusche sowie einstellbare Kamerastöße.'],
- ['Bestwerte & Höhepunkte','Getrennte lokale PvE-Bestwerte und bis zu drei Höhepunkte pro Einsatz. Wiedergabe und 720p-WebM-Export mit Spielaudio bei Browser-Unterstützung.'],
+ ['Bots & Einsatzbedingungen','Drei Schwierigkeiten, Deckung, Flankieren, Sicht und Gehör sowie Wege durch Türen und über Treppen. Nebel, Nacht und wechselnde Zugänge sind vor dem Einsatz wählbar.'],
+ ['Medkits & Erste Hilfe','H heilt dich um 50 Lebenspunkte und stoppt Blutungen. Mit E behandelst du nahe Mitspieler. Im Koop kannst du einen gefallenen Partner zum Erste-Hilfe-Zelt tragen: Nach acht Sekunden Behandlung kehrt er vollständig geheilt zurück.'],
+ ['Leichen tragen & Schild','Leichen bleiben bis zum Einsatzende liegen. E hebt eine Leiche auf oder legt sie ab. Eine getragene Leiche schützt von vorn mit bis zu 150 Schildpunkten; der verbleibende Schild steht neben deiner Gesundheit.'],
+ ['Körperteile als Waffen','Arme, Beine und Köpfe mit E aufheben, im Nahkampf einsetzen oder mit G werfen. Shift+E löst den Kopf einer Leiche nach drei Sekunden. Waffen 1–4 legen das getragene Körperteil ab.'],
+ ['Geschenke & Wurfsterne','Acht Geschenkpakete mit je drei hakenkreuzförmigen Wurfsternen und vier Medkit-Fundstücke pro Karte. G wirft einen Wurfstern, wenn du kein Körperteil trägst. Tasten sind unter Einstellungen umbelegbar.'],
+ ['Figuren & Bewegung','Kroenens schwarzer Ledermantel bewegt sich beim Laufen, Sprinten und Kämpfen mit. Figuren bewegen ihre Beine und halten ihre Waffe an den Griffen. Stadtbewohner zeigen gelegentlich einen Mittelfinger. Ein deutscher Kübelwagen steht im Lobbybild.'],
+ ['Details & Höhepunkte','Überarbeitete Trennstellen, fliegende Körperteile und das Original-Gesicht deines besiegten Gegners. Optimierte Treffer- und Leicheneffekte, lokale PvE-Bestwerte sowie bis zu drei Höhepunkte mit 720p-WebM-Export und Spielaudio.'],
 ] as const;
 
 export function ReleaseNotes(){

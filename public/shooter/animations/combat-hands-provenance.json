@@ -1,0 +1,30 @@
+{
+  "author": "Quaternius; CC0 export by KinemIQ",
+  "source": "https://quaternius.com/packs/universalanimationlibrary.html",
+  "mirror": "https://huggingface.co/datasets/Kinemiq/free-game-animations",
+  "license": "CC0-1.0",
+  "sources": [
+    {
+      "clip": "Sword_slash",
+      "sha256": "390ad08b2b4c3334bfe7066e41946738b718509c8c846c5e1797d96e324e2c43"
+    },
+    {
+      "clip": "Walk_carrying",
+      "sha256": "6c545eb477e8a2cb890084629c9978db2a9f15984068ac0aba571ec424e46ce6"
+    },
+    {
+      "clip": "Action_interact",
+      "sha256": "6a96164d72a8108b6243fbdb8e587556ef7f3284f8412c697af919aed5a9d676"
+    },
+    {
+      "clip": "Action_pick_up_from_a_table",
+      "sha256": "5fdd3c2a8476c74119b4a5f1e56c74f5b3410338d8103144052a0fa7de41e2c4"
+    }
+  ],
+  "output": {
+    "file": "combat-hands.json",
+    "bytes": 10038,
+    "sha256": "8b16aa4ea60484c2ce4fc7ec32cbeacf2930e2612ff88aa94df2b178fc20e67c",
+    "modifications": "Retargeted to MakeHuman; upright1.78m, forward-Z negative, no horizontal root motion. Hand trajectories sampled30Hz for universal IK; no source meshes included."
+  }
+}

@@ -14,6 +14,7 @@ export class Bots {
  update(now:number){
   const g=this.game,s=g.state;if(s.phase!=='playing'||s.operation.nextWaveAt)return;this.navigation.sync(s.interiors);
   const config=s.operation.config,rules=difficultyRules[config.difficulty],world=getWorld(s.mapId),points=safePoints(world),bots=s.players.filter(p=>p.kind==='bot'&&p.hp>0&&p.connected);
+  let replans=0;
   for(const p of bots){
    let b=this.brains.get(p.id);if(!b||b.life!==p.life){b={life:p.life,seq:p.seq,seenAt:0,acquired:now,target:'',path:[],replanAt:0,patrol:Number(p.id.replace(/\D/g,''))||0,lastX:p.x,lastZ:p.z,stuck:0};this.brains.set(p.id,b);}
    b.seq=Math.max(b.seq,p.seq)+1;
@@ -32,7 +33,8 @@ export class Bots {
     if(p.hp<40){const cover=points.filter(q=>Math.hypot(q.x-p.x,q.z-p.z)<12&&Math.hypot(q.x-goal.x,q.z-goal.z)>8).find(q=>{const v=[goal.x-q.x,goal.y+1.5-q.y,goal.z-q.z],length=Math.hypot(...v);return g.operation.obstacleDistance([q.x,q.y+1.5,q.z],v.map(n=>n/length))<length-1;});if(cover)goal=cover;}
     else if(visible&&Math.abs(p.y-goal.y)<1&&b.patrol%2&&nearest>12)goal=safeNear(world,goal.x+Math.cos(p.yaw)*7,goal.z-Math.sin(p.yaw)*7);
    }else{goal=config.mode==='mission'?s.operation.objective.point:points[(b.patrol*37+19)%points.length];if(Math.hypot(goal.x-p.x,goal.z-p.z)<2)b.patrol++;}
-   if(now>=b.replanAt){
+   if(now>=b.replanAt&&replans<1){
+    replans++;
     b.path=this.navigation.path(p,goal);b.replanAt=now+650;b.door=undefined;
     const end=b.path.at(-1);
     if(!end||Math.hypot(end.x-goal.x,end.z-goal.z)>2||Math.abs(end.y-goal.y)>1){

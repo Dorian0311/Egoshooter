@@ -41,6 +41,8 @@ with sync_playwright() as p:
  page.get_by_role('button',name='Bein abtrennen',exact=True).click();page.wait_for_timeout(500)
  page.screenshot(path=str(output/'kroenen-crawl.png'))
  report['checks'].append('Kroenen intact, severed arm and crawling poses rendered')
+ # Keep the software-GPU source small; the exported file still has 1280x720 pixels.
+ page.set_viewport_size({'width':480,'height':320})
  page.goto('http://127.0.0.1:5173/tests/replay-review.html',wait_until='networkidle')
  page.wait_for_timeout(6000)
  with page.expect_download(timeout=45000) as capture:

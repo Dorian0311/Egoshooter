@@ -1,13 +1,14 @@
 import * as T from 'three';
 import type {Snapshot,Player} from '../shared/game';
 import {eyePosition} from '../shared/injuries';
+import {throwingStarQuaternion} from './projectileMotion';
 export function createThrowingStarGeometry(){
  const cells=new Set<string>(['0,0']);for(let r=0;r<4;r++)for(const [x,y]of [[0,1],[0,2],[1,2],[2,2]]){let a=x,b=y;for(let n=0;n<r;n++)[a,b]=[b,-a];cells.add(`${a},${b}`);}
  const edges=new Map<string,[[number,number],[number,number]]>();
  for(const cell of cells){const [x,y]=cell.split(',').map(Number),v:[[number,number],[number,number],[number,number],[number,number]]=[[x,y],[x+1,y],[x+1,y+1],[x,y+1]];for(let n=0;n<4;n++){const a=v[n],b=v[(n+1)%4],key=`${a}:${b}`,reverse=`${b}:${a}`;if(edges.has(reverse))edges.delete(reverse);else edges.set(key,[a,b]);}}
  const outline=[...edges.values()],start=outline[0][0],points:T.Vector2[]=[];let current=start;
  for(let n=0;n<=outline.length;n++){points.push(new T.Vector2((current[0]-.5)*.055,(current[1]-.5)*.055));const edge=outline.find(e=>e[0][0]===current[0]&&e[0][1]===current[1]);if(!edge)break;current=edge[1];if(current[0]===start[0]&&current[1]===start[1])break;}
- const shape=new T.Shape(points),geometry=new T.ExtrudeGeometry(shape,{depth:.018,bevelEnabled:true,bevelSize:.004,bevelThickness:.003,bevelSegments:1,steps:1});geometry.center();return geometry;
+ const shape=new T.Shape(points),geometry=new T.ExtrudeGeometry(shape,{depth:.004,bevelEnabled:true,bevelSize:.0015,bevelThickness:.0005,bevelSegments:1,steps:1});geometry.center();return geometry;
 }
 export function createOperationScene(scene:T.Scene){
  const root=new T.Group();root.name='operation-items';scene.add(root);
@@ -29,12 +30,13 @@ export function createOperationScene(scene:T.Scene){
    missionProps.position.set(o.point.x,o.point.y,o.point.z);missionProps.visible=marker.visible;radio.visible=s.operation.config.mission==='sabotage';documents.visible=s.operation.config.mission==='documents'&&o.stage==='target';flag.visible=s.operation.config.mission==='hold';
   },
   interaction(p:Player,yaw:number){if(!snapshot||!p.hp)return undefined;const eye=eyePosition(p),candidates:{id:string;label:string;x:number;y:number;z:number}[]=[];
-   for(const q of snapshot.pickups)if(!q.taken)candidates.push({...q,label:q.kind==='gift'?'Geschenk öffnen · 3 Wurfsterne':'Verband aufnehmen'});
+   for(const q of snapshot.pickups)if(!q.taken)candidates.push({...q,label:q.kind==='gift'?'Geschenk öffnen · 3 Wurfsterne':'Medkit aufnehmen · +50 LP'});
    if(snapshot.operation.config.kind==='coop')for(const q of snapshot.players)if(q.downedUntil)candidates.push({...q,id:`revive:${q.id}`,label:`${q.name} wiederbeleben`});
+   if(p.bandages>0)for(const q of snapshot.players)if(q.id!==p.id&&q.team===p.team&&q.hp>0&&q.connected&&!q.departed&&(q.hp<100||q.injuries.bleeding))candidates.push({...q,id:`heal:${q.id}`,label:`${q.name} behandeln · +50 LP · 1 Medkit`});
    const o=snapshot.operation;if(o.config.mode==='mission'&&o.objective.stage==='target'&&o.config.mission!=='hold')candidates.push({...o.objective.point,id:'objective',label:o.config.mission==='documents'?'Dokumente bergen':'Funkstation sabotieren'});
    return candidates.map(q=>({q,distance:Math.hypot(q.x-eye.x,q.y+.5-eye.y,q.z-eye.z),dot:(q.x-eye.x)*-Math.sin(yaw)+(q.z-eye.z)*-Math.cos(yaw)})).filter(q=>q.distance<2.7&&q.dot>-.1).sort((a,b)=>a.distance-b.distance)[0]?.q;
   },
-  update(time:number){if(!snapshot)return;const dt=Math.min(.1,(time-received)/1000);for(const p of snapshot.projectiles){const mesh=projectiles.get(p.id)!;mesh.position.set(p.x+p.vx*dt,p.y+p.vy*dt-4.9*dt*dt,p.z+p.vz*dt);mesh.rotation.set(Math.PI/2,time*.035,Math.atan2(p.vx,p.vz));}marker.material.opacity=.5+.25*Math.sin(time*.004);},
+  update(time:number){if(!snapshot)return;const dt=Math.max(0,Math.min(.1,(time-received)/1000));for(const p of snapshot.projectiles){const mesh=projectiles.get(p.id)!;mesh.position.set(p.x+p.vx*dt,p.y+p.vy*dt-4.9*dt*dt,p.z+p.vz*dt);throwingStarQuaternion({...p,vy:p.vy-9.8*dt},Math.max(0,(snapshot.now-p.spawnedAt)/1000+dt),mesh.quaternion);}marker.material.opacity=.5+.25*Math.sin(time*.004);},
   dispose(){root.removeFromParent();box.dispose();ribbonA.dispose();ribbonB.dispose();star.dispose();marker.geometry.dispose();marker.material.dispose();for(const g of propGeometries)g.dispose();for(const m of [...propMaterials,giftMaterial,ribbonMaterial,medicalMaterial,crossMaterial,metal])m.dispose();},
  };
 }

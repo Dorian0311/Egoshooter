@@ -1,0 +1,30 @@
+import * as T from 'three';
+import {loadHuman,createHuman} from '../client/humanoid';
+import {createAnatomy} from '../client/anatomy';
+import {createGore} from '../client/gore';
+import {getWorld} from '../shared/world';
+import {uniforms,type UniformId} from '../shared/uniforms';
+import {makePlayer,type Player} from '../shared/game';
+import {limbBits,isCrawling,type BodyPart} from '../shared/injuries';
+import type {ArmChain} from '../client/actorEquipment';
+const select=document.querySelector<HTMLSelectElement>('#character')!,motion=document.querySelector<HTMLSelectElement>('#motion')!,weapon=document.querySelector<HTMLSelectElement>('#weapon')!,limb=document.querySelector<HTMLSelectElement>('#limb')!,status=document.querySelector<HTMLOutputElement>('#status')!;
+const renderer=new T.WebGLRenderer({canvas:document.querySelector('canvas')!,antialias:true});renderer.setPixelRatio(1);renderer.setSize(innerWidth,innerHeight);renderer.setClearColor('#19231e');renderer.toneMapping=T.ACESFilmicToneMapping;
+const scene=new T.Scene(),camera=new T.PerspectiveCamera(35,innerWidth/innerHeight,.01,30);camera.position.set(.6,1.25,3.7);camera.lookAt(0,.95,0);scene.add(new T.HemisphereLight('#e6edff','#5f604e',2));const key=new T.DirectionalLight('#fff0dc',3.5);key.position.set(2,3,3);scene.add(key);const ground=new T.Mesh(new T.CircleGeometry(8,40),new T.MeshStandardMaterial({color:'#3e4939'}));ground.rotation.x=-Math.PI/2;ground.position.y=-.015;scene.add(ground);
+const gore=createGore(scene,()=>({...getWorld('cologne'),boxes:[]})),player=makePlayer('review','Figur','de');Object.assign(player,{x:0,z:0,yaw:0});
+const civilianReview=new URLSearchParams(location.search).has('civilian');
+let human:ReturnType<typeof createHuman>|undefined,anatomy:ReturnType<typeof createAnatomy>|undefined,token=0,previous=0,shotAt=0,lastPartVertices=0,frames:number[]=[],cpu:number[]=[];
+for(const [id,entry]of Object.entries(uniforms))select.add(new Option(entry.name,id));select.value=new URLSearchParams(location.search).get('character')??'kroenen';
+async function load(){const request=++token;status.value='Lädt …';const id=select.value as UniformId,data=await loadHuman(id);if(request!==token)return;anatomy?.dispose();if(human){human.group.removeFromParent();human.dispose();}human=createHuman(data,'de','storm',new T.MeshStandardMaterial(),id,civilianReview||motion.value==='taunt');scene.add(human.group);human.group.rotation.y=Math.PI;player.uniform=id;player.injuries.lost=0;player.hp=100;player.kind=civilianReview||motion.value==='taunt'?'resident':'human';human.update(player,0,1/60,0);anatomy=createAnatomy(human.group);status.value=`Bereit · ${id}`;}
+select.onchange=()=>void load();motion.onchange=()=>{if(player.kind==='resident'||motion.value==='taunt')void load();};
+document.querySelector<HTMLButtonElement>('#detach')!.onclick=()=>{if(!human||!anatomy)return;const part=limb.value as BodyPart,fragment=anatomy.detach(part);lastPartVertices=0;fragment?.traverse(o=>{if(o instanceof T.Mesh)lastPartVertices+=o.geometry.getAttribute('position').count;});if(fragment)gore.add(fragment,new T.Vector3(.9,.15,.1),fragment.position.clone().add(new T.Vector3(0,.15,0)),0);player.injuries.lost|=limbBits[part];anatomy.setLost(player.injuries.lost);};
+document.querySelector<HTMLButtonElement>('#restore')!.onclick=()=>{player.injuries.lost=0;anatomy?.setLost(0);gore.dispose();};
+function sample(){if(!human)return {};human.group.updateWorldMatrix(true,true);const root=human.group,names=root.userData.limbRoots??{legL:'upperleg01.L',legR:'upperleg01.R'},chain=root.userData.armChains as Partial<Record<'armL'|'armR',ArmChain>>,mount=root.getObjectByName('held-weapon'),errors:number[]=[];
+ if(mount?.visible&&chain)for(const side of ['armR','armL'] as const){const hand=chain[side]?.hand;if(!hand)continue;const target=mount.localToWorld(new T.Vector3(0,side==='armR'?.025:.015,side==='armR'?.035:player.weapon===1?-.025:-.22));errors.push(hand.getWorldPosition(new T.Vector3()).distanceTo(target));}
+ const q=(name:string)=>root.getObjectByName(name)?.quaternion.toArray()??[];let hem:number[]=[];root.traverse(o=>{if(hem.length||!(o instanceof T.SkinnedMesh))return;const uv=o.geometry.getAttribute('uv'),p=o.geometry.getAttribute('position');if(!uv)return;for(let i=0;i<uv.count;i++)if(p.getY(i)<.4&&Math.floor(uv.getX(i)*1024/340)===0&&Math.floor(uv.getY(i)*1024/340)===1){hem=[p.getX(i),p.getY(i),p.getZ(i)];break;}});
+ const sorted=[...frames].sort((a,b)=>a-b),cost=[...cpu].sort((a,b)=>a-b);return {left:q(names.legL),right:q(names.legR),gripErrors:errors,held:!!mount?.visible,hem,lastPartVertices,drawCalls:renderer.info.render.calls,frameP95:sorted[Math.floor(sorted.length*.95)]??0,cpuP95:cost[Math.floor(cost.length*.95)]??0,finger:root.getObjectByName('finger3-1.L')?.getWorldPosition(new T.Vector3()).toArray(),middle:root.getObjectByName('finger3-2.L')?.getWorldPosition(new T.Vector3()).toArray()};
+}
+Object.assign(window,{actorReview:{sample,root:()=>human?.group,resetTimings:()=>{frames=[];cpu=[];},setView:(angle:number)=>{camera.position.set(Math.sin(angle)*3.8,1.25,Math.cos(angle)*3.8);camera.lookAt(0,.95,0);}}});
+function frame(now:number){const start=performance.now(),raw=now-previous,dt=Math.min(.1,Math.max(.001,raw/1000));previous=now;frames.push(raw);if(frames.length>180)frames.shift();
+ const mode=motion.value;player.sprinting=mode==='sprint';if(mode==='walk'||mode==='sprint'){player.z-=(civilianReview?.8:mode==='sprint'?6.2:3.4)*dt;}player.weapon=Number(weapon.value) as Player['weapon'];if(mode==='fight'&&now>=shotAt){player.fireAt=now+310;shotAt=now+310;}player.gestureUntil=mode==='taunt'?now+1000:0;
+ if(human){human.group.rotation.set(0,Math.PI,0);human.group.position.set(0,0,0);if(isCrawling(player)){human.group.rotateX(-Math.PI/2);human.group.position.set(0,.32,-1.05);}human.update(player,now,dt,now);anatomy?.setLost(player.injuries.lost);}gore.update(dt);renderer.render(scene,camera);cpu.push(performance.now()-start);if(cpu.length>180)cpu.shift();requestAnimationFrame(frame);
+}requestAnimationFrame(frame);void load();

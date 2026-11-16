@@ -83,3 +83,23 @@ scripts/retarget-locomotion.mjs.
 
 The new gift packages, throwing-star geometry, wound caps and procedural animation
 code are generated directly in this repository and do not require external artwork.
+
+## Combat hand motion and victim portraits
+
+Four additional hand trajectories derive from Quaternius Universal Animation Library
+(CC0): `Sword_slash`, `Walk_carrying`, `Action_interact` and
+`Action_pick_up_from_a_table`. The KinemIQ GLB exports are retargeted to the existing
+MakeHuman proportions, facing negative Z, and sampled at 30 Hz. Only hand positions
+are bundled; no source character meshes are included. Source/output SHA-256 hashes
+and modifications are in `public/shooter/animations/combat-hands-provenance.json`.
+Conversion: `scripts/prepare-combat-hands.mjs`.
+
+Victim portraits are rendered from the existing character models and retain their
+source licensing; they are not AI-generated faces. The offline renderer is
+`scripts/render-character-faces.py`; the character portrait manifest records the
+output hashes. Runtime portraits do not create additional WebGL renderers.
+
+Animation research also reviewed the official Universal Animation Library 2:
+https://quaternius.com/packs/universalanimationlibrary2.html . Its newer animations
+are not bundled. Three.js physics examples are implementation references, not
+included animation assets: https://github.com/mrdoob/three.js/tree/dev/examples .

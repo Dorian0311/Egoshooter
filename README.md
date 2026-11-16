@@ -359,3 +359,64 @@ Das Hintergrundbild verwendet einen deutschen VW Kübelwagen Typ 82 anstelle des
 ## Einmaliges Changelog
 
 Beim ersten App-Start für dieses Update erscheint eine Übersicht der Neuerungen. „Verstanden“ oder Escape bestätigt sie; weitere Starts und die anschließende Anmeldung öffnen sie im selben Browserprofil nicht erneut. Desktop, mobile Darstellung, Neuladen und Anmeldung sind mit `tests/release-notes-browser.py` geprüft.
+
+## Heilung, Überreste und Tragen
+
+- **H** verwendet ein Medkit: nach vier ungestörten Sekunden +50 Lebenspunkte und
+  gestoppter Blutverlust. Fehlende Gliedmaßen bleiben bestehen. **E** heilt einen
+  nahen verletzten Mitspieler mit dem eigenen Medkit. Die Tasten sind umbelegbar.
+- Leichen und abgetrennte Teile bleiben bis zum neuen Einsatz liegen. **E** hebt
+  einen Arm, ein Bein oder einen Kopf auf; Angriff schwingt das Teil als Keule,
+  **G** wirft es. Ohne gehaltenes Teil wirft G wie bisher einen Wurfstern.
+  Die Waffentasten 1–4 legen das gehaltene Teil ab.
+- **Umschalt+E** startet am Kopf einer Leiche eine dreisekündige Aktion. Bewegung,
+  Angriff, Schaden und Verbindungsabbruch unterbrechen sie. Der Kopf behält das
+  ursprüngliche Gesicht und die Kleidung des Opfers.
+- **E** trägt eine Leiche oder legt sie ab. Sie absorbiert frontale Treffer mit
+  bis zu 150 zusätzlichen Schildpunkten; der verbleibende Wert steht neben den
+  Lebenspunkten. Er füllt sich beim erneuten Aufheben nicht auf. Tragen verlangsamt
+  die Bewegung und verhindert Sprint und Sprung.
+- Im Koop kann die Leiche des aktuellen Partnerlebens am eigenen Erste-Hilfe-Zelt
+  mit **E** abgegeben werden. Nach acht Sekunden steht der Partner vollständig
+  wiederhergestellt dort auf. Gegner und Leichen früherer Leben sind ausgeschlossen.
+
+Überreste, Schild, Heilung, Würfe und Wiederbelebung werden vom Server verwaltet.
+Ruhende Überreste benötigen keine laufende Physiksimulation; Netzwerkpakete
+übertragen nur geänderte Leichen und Teile. Figurenanimationen außerhalb der Nähe
+werden seltener aktualisiert, statische Kollisionsdaten zwischengespeichert und
+gleichzeitige Trefferpartikel in drei Zeichenaufrufen gebündelt.
+
+Zusätzliche Prüfungen: `tests/remains.test.ts`, `tests/protocol.test.ts`,
+`tests/remains-network.ts` (drei echte WebSocket-Clients),
+`tests/remains-browser.py`, `tests/movement-browser.py` und
+`tests/static-skinning.test.ts`. Die Browserprüfungen verwenden Softwaregrafik;
+sie belegen keine Bildrate auf physischer Spielhardware. Die vorhandenen Modelle
+bleiben die gestalterische Grundlage; insbesondere ein nachträglich erzeugtes
+Skelett ersetzt keine vollständig neu modellierte Figur.
+
+Kostenlose zivile Ersatzkandidaten wurden separat beschafft und im Renderer
+geprüft. Quelle, Lizenz, lokale Dateien und verbleibende Integrationsschritte:
+[Kostenlose Figurenkandidaten](docs/free-character-candidates.md).
+
+## Ergänzende Prüfung · Bewegung und Überreste
+
+- 159 automatisierte Tests bestanden; TypeScript und Produktionsbuild erfolgreich.
+- Alle 15 Figuren erneut unter WebGL geprüft: Beinbewegung, alle fünf abtrennbaren
+  Regionen und passende Waffengriffe; keine JavaScriptfehler.
+- Drei echte WebSocket-Clients prüfen Medkit-Heilung am Partner, einmalige Aufnahme,
+  sofortiges Werfen nach E, Schildschaden und die Wiederherstellung im Sanitätszelt.
+  Solo-/Koop-Raumregeln sowie der bestehende Acht-Client-Latenz-/Rematchtest bestanden.
+- Changelog auf Desktop und Mobilgerät, Bestätigung, Neuladen und Anmeldung geprüft.
+- Trefferpartikel benötigen im WebGL-Vergleich drei statt bis zu 256 Zeichenaufrufe.
+  Die lokalen CPU-/Softwaregrafikmessungen sind keine FPS-Abnahme auf Spielhardware.
+- Videoexport separat mit kleiner Softwaregrafik-Vorschau und 1280×720-Zieldatei
+  geprüft. `tests/replay-browser.py` benötigt zusätzlich PyAV und prüft echte
+  unterschiedliche Frames sowie Video-/Audiospuren; `VIDEO_QA_WIDTH` und
+  `VIDEO_QA_HEIGHT` steuern nur die Quellvorschau. Hohe Aufnahme-Bildraten auf
+  physischer Spielhardware sind weiterhin offen.
+- Zusammenbrechen und fliegende Teile sind animiert; ein vollständiges physikalisches
+  Ragdoll ist nicht enthalten. Die Modellqualität bleibt bei einzelnen Bonusfiguren
+  und den vorhandenen zivilen Grundfiguren sichtbar begrenzt.
+
+Nachweise: `artifacts/movement-combat-20261116/`, `artifacts/remains-client/` und
+`artifacts/static-skinning-20261116/`. Kein Produktions-Rollout.

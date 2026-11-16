@@ -1,7 +1,7 @@
 import React,{useEffect,useRef,useState} from 'react';
 import {defaultSettings,validBinding,type Action,type GameSettings} from './gameSettings';
 import {graphicsPresets,type GraphicsQuality} from './graphicsSettings';
-const labels:Record<Action,string>={forward:'Vorwärts',back:'Rückwärts',left:'Links',right:'Rechts',jump:'Springen',reload:'Nachladen',sprint:'Sprint',crouch:'Ducken',interact:'Benutzen',throwStar:'Wurfstern werfen',bandage:'Verband verwenden',weapon1:'Gewehr',weapon2:'Pistole',weapon3:'Maschinenpistole',weapon4:'G36'};
+const labels:Record<Action,string>={forward:'Vorwärts',back:'Rückwärts',left:'Links',right:'Rechts',jump:'Springen',reload:'Nachladen',sprint:'Sprint',crouch:'Ducken',interact:'Benutzen',throwStar:'Wurfstern werfen',bandage:'Medkit verwenden',weapon1:'Gewehr',weapon2:'Pistole',weapon3:'Maschinenpistole',weapon4:'G36'};
 export function GameSettingsPanel({value,onChange,onClose,graphics,onLeave}:{value:GameSettings;onChange:(value:GameSettings)=>void;onClose:()=>void;onLeave?:()=>void;graphics?:{value:GraphicsQuality;onChange:(value:GraphicsQuality)=>void}}){
   const dialog=useRef<HTMLDialogElement>(null),[notice,setNotice]=useState('');
   useEffect(()=>{dialog.current?.showModal();return()=>dialog.current?.close();},[]);
