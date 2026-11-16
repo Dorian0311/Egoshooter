@@ -1,25 +1,37 @@
 # Kostenlose Figurenkandidaten · 16. November 2026
 
-Die Kandidaten wurden lokal beschafft und geprüft, noch nicht als Spielfiguren
-eingebunden. Die heruntergeladenen Originale bleiben unter dem ignorierten Ordner
-`research/free-characters/`; sie werden nicht zusätzlich an jeden Spielclient ausgeliefert.
+Microsoft Rocketbox Male_Adult_03 ist als Stadtbewohner eingebunden. Die übrigen
+hier genannten Modelle bleiben Kandidaten. Die heruntergeladenen Originale bleiben
+unter dem ignorierten Ordner `research/free-characters/`; ausgeliefert wird nur das
+vorbereitete Laufzeitmodell mit Lizenz und Herkunftsnachweis.
 
-## Bevorzugte zivile Basis
+## Eingebauter Stadtbewohner
 
 [Microsoft Rocketbox Male_Adult_03](https://github.com/microsoft/Microsoft-Rocketbox/tree/0943055db6ec570bcef9f2c8b41c9e5467c808f9/Assets/Avatars/Adults/Male_Adult_03)
 mit Sakko, langer Hose und Lederschuhen. Kostenlose
 [MIT-Lizenz](https://github.com/microsoft/Microsoft-Rocketbox/blob/0943055db6ec570bcef9f2c8b41c9e5467c808f9/LICENSE.md).
 
-- Lokal: `research/free-characters/rocketbox-male-adult-03/male-adult-03-candidate.glb`.
-- 9.222.804 Bytes, 7.200 Dreiecke, 80 Skin-Knochen, fünf eingebettete 1024px-Texturen.
-- SHA-256: `1dbabd3e8fb1fe211f1c1f152a84ac4f9e3885ff6e8504344e0844c8da6a8369`.
-- Original-FBX und konvertierter GLB wurden tatsächlich im WebGL-Renderer angesehen;
-  beim Reimport keine Seitenfehler oder fehlgeschlagenen Anfragen.
-- Quellcommit, Originaldateien, Lizenz und Prüfsummen: `manifest.json` im selben Ordner.
-- Das Modell ist eine ältere zivile Basis. Vor Einbindung: neun Materialgruppen
-  zusammenfassen, Bewegungen/Griffposen übertragen, Verletzungstrennstellen und
-  Haardarstellung prüfen. Keine bestätigte historische Uniform und keine Abnahme
-  als Ersatz für die Bonusfiguren.
+- Laufzeitdatei: `public/shooter/characters/civilian/civilian-male.glb`.
+- 9.266.020 Bytes, 7.200 Dreiecke, 80 Skin-Knochen, drei Materialprimitives statt
+  neun; ursprüngliche Geometrie, UVs und 1024px-Texturen erhalten.
+- SHA-256: `7a28fd96e85e29e043dda06f5f4b685a5bf0a6297b1e41d107f86a9c7f7f41ff`.
+- Quellcommit, Originaldateien, Verarbeitung und Prüfsummen stehen im benachbarten
+  `manifest.json`; `LICENSE.md` enthält den unveränderten Microsoft-MIT-Lizenztext.
+- Im echten lokalen WebGL-Renderer geprüft: Front, 45 Grad und Seite bei Stehen,
+  Gehen und Mittelfingergeste. Schwarze Haar-Overlays werden ausgeblendet; die
+  originale texturierte Kopfhaut bleibt erhalten. Ruhehände folgen dem nativen Rig.
+- Beide Arme, beide Beine und Kopf lassen sich als Originalgeometrie abtrennen;
+  Wiederherstellung stellt die ursprüngliche Topologie vollständig wieder her.
+  Kroenen und Deadpool behalten Beinbewegung und korrekten Waffengriff.
+- Reproduzierbare Browserprüfung: `tests/civilian-browser.py`; 17 Ansichten und
+  JSON-Bericht unter `artifacts/movement-combat-20261116/civilian-quality/`, ohne
+  JavaScript-Seitenfehler. Die Fixture hält ihren Code für die Prüfung konstant.
+- Der Gang bleibt eine prozedurale Animation. Das Sakko ist keine bestätigte
+  historische Uniform; dieses Modell ersetzt keine Bonusfigur.
+
+Der unveränderte Forschungskandidat bleibt unter
+`research/free-characters/rocketbox-male-adult-03/` mit seinem ursprünglichen
+Prüfprotokoll erhalten.
 
 Ein zweiter vollständig beschaffter Kandidat, Male_Adult_01, trägt Polo und Shorts
 und passt deshalb weniger gut zur Spielzeit. Sein unverkleinerter Forschungs-GLB

@@ -103,3 +103,19 @@ Animation research also reviewed the official Universal Animation Library 2:
 https://quaternius.com/packs/universalanimationlibrary2.html . Its newer animations
 are not bundled. Three.js physics examples are implementation references, not
 included animation assets: https://github.com/mrdoob/three.js/tree/dev/examples .
+
+## Microsoft Rocketbox civilian
+
+`public/shooter/characters/civilian/civilian-male.glb` derives from Microsoft
+Rocketbox **Male_Adult_03**, Copyright (c) 2020 Microsoft, under the MIT License.
+The unchanged license is distributed beside the runtime model as `LICENSE.md`.
+Pinned source and license:
+https://github.com/microsoft/Microsoft-Rocketbox/tree/0943055db6ec570bcef9f2c8b41c9e5467c808f9/Assets/Avatars/Adults/Male_Adult_03
+https://github.com/microsoft/Microsoft-Rocketbox/blob/0943055db6ec570bcef9f2c8b41c9e5467c808f9/LICENSE.md
+
+The runtime manifest in that directory records conversion and optimization.
+Original textured clothing, head and skeleton are retained; the project adapts
+scale, materials, animation and injury handling for its city residents. This
+asset is a civilian model, with no claim of a historically authenticated uniform.
+It does not replace the existing user-provided bonus characters or change their
+licensing.

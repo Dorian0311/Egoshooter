@@ -1,0 +1,102 @@
+{
+  "project": "Microsoft Rocketbox",
+  "sourceCommit": "0943055db6ec570bcef9f2c8b41c9e5467c808f9",
+  "sourceUrl": "https://github.com/microsoft/Microsoft-Rocketbox/tree/0943055db6ec570bcef9f2c8b41c9e5467c808f9/Assets/Avatars/Adults/Male_Adult_03",
+  "license": "MIT",
+  "licenseUrl": "https://raw.githubusercontent.com/microsoft/Microsoft-Rocketbox/0943055db6ec570bcef9f2c8b41c9e5467c808f9/LICENSE.md",
+  "assessment": "Integrated as the game city-resident model through client/civilianCharacter.ts. Original MIT Rocketbox rig and source identity retained. Period authenticity unverified; does not replace player bonus characters.",
+  "files": [
+    {
+      "file": "Export/Male_Adult_03.fbx",
+      "url": "https://raw.githubusercontent.com/microsoft/Microsoft-Rocketbox/0943055db6ec570bcef9f2c8b41c9e5467c808f9/Assets/Avatars/Adults/Male_Adult_03/Export/Male_Adult_03.fbx",
+      "bytes": 513728,
+      "sha256": "7064a9f50c95975c6d64ab0c5f5504364bad4ac987750728d0b5f1788fd59dcf"
+    },
+    {
+      "file": "Textures/m004_body_color.tga",
+      "url": "https://raw.githubusercontent.com/microsoft/Microsoft-Rocketbox/0943055db6ec570bcef9f2c8b41c9e5467c808f9/Assets/Avatars/Adults/Male_Adult_03/Textures/m004_body_color.tga",
+      "bytes": 12582956,
+      "sha256": "13686c52f5a8552a7263545f22d79aeef7269112f8b48fc1e7864a13de0b045b"
+    },
+    {
+      "file": "Textures/m004_body_normal.tga",
+      "url": "https://raw.githubusercontent.com/microsoft/Microsoft-Rocketbox/0943055db6ec570bcef9f2c8b41c9e5467c808f9/Assets/Avatars/Adults/Male_Adult_03/Textures/m004_body_normal.tga",
+      "bytes": 12582956,
+      "sha256": "27cba209d0091dc9865a08f0e5e8cf9521c673c68fddbdf9feca9a3dd2f14b05"
+    },
+    {
+      "file": "Textures/m004_body_specular.tga",
+      "url": "https://raw.githubusercontent.com/microsoft/Microsoft-Rocketbox/0943055db6ec570bcef9f2c8b41c9e5467c808f9/Assets/Avatars/Adults/Male_Adult_03/Textures/m004_body_specular.tga",
+      "bytes": 12582956,
+      "sha256": "8aaa39ab5c7dd4b55d456c3268996f62cbb929d1916ffdf6ae3ca0c43c9f3e05"
+    },
+    {
+      "file": "Textures/m004_head_color.tga",
+      "url": "https://raw.githubusercontent.com/microsoft/Microsoft-Rocketbox/0943055db6ec570bcef9f2c8b41c9e5467c808f9/Assets/Avatars/Adults/Male_Adult_03/Textures/m004_head_color.tga",
+      "bytes": 12582956,
+      "sha256": "96130ef4c94702d8ee6004ce7d1c48f4b5fb6383ad70410f7316ff4031b031e4"
+    },
+    {
+      "file": "Textures/m004_head_normal.tga",
+      "url": "https://raw.githubusercontent.com/microsoft/Microsoft-Rocketbox/0943055db6ec570bcef9f2c8b41c9e5467c808f9/Assets/Avatars/Adults/Male_Adult_03/Textures/m004_head_normal.tga",
+      "bytes": 12582956,
+      "sha256": "bd2b02627b56103f33e8c74b5ac1ac6f32fd396884869dcb6d3d2bcca5173a6a"
+    },
+    {
+      "file": "Textures/m004_head_specular.tga",
+      "url": "https://raw.githubusercontent.com/microsoft/Microsoft-Rocketbox/0943055db6ec570bcef9f2c8b41c9e5467c808f9/Assets/Avatars/Adults/Male_Adult_03/Textures/m004_head_specular.tga",
+      "bytes": 12582956,
+      "sha256": "5ef06d4323549e77c0d2e267d44e6ef9e2b83292d387d87eeb1c21500466c391"
+    },
+    {
+      "file": "Textures/m004_opacity_color.tga",
+      "url": "https://raw.githubusercontent.com/microsoft/Microsoft-Rocketbox/0943055db6ec570bcef9f2c8b41c9e5467c808f9/Assets/Avatars/Adults/Male_Adult_03/Textures/m004_opacity_color.tga",
+      "bytes": 8388652,
+      "sha256": "7b7255ae4042577edbf3dff253b2a32231db6fe281cd8781306d9e26fcf9d03a"
+    }
+  ],
+  "derivedGlb": {
+    "file": "male-adult-03-candidate.glb",
+    "bytes": 9222804,
+    "sha256": "1dbabd3e8fb1fe211f1c1f152a84ac4f9e3885ff6e8504344e0844c8da6a8369",
+    "embeddedTextureDimensions": [
+      [
+        1024,
+        1024
+      ],
+      [
+        1024,
+        1024
+      ],
+      [
+        1024,
+        1024
+      ],
+      [
+        1024,
+        1024
+      ],
+      [
+        1024,
+        1024
+      ]
+    ],
+    "method": "Local Three FBXLoader/TGALoader and GLTFExporter; canvas-backed TGA images preserve flipY; height 1.78m; maximum texture size1024px; original skin preserved."
+  },
+  "licenseSha256": "17474e386e0b9e1a700cc3d06b2b0882a2c376d9c6b49c7f8274409b8f8d2352",
+  "reimportVerified": true,
+  "previewFiles": [
+    "webgl-preview.png",
+    "glb-reimport-preview.png"
+  ],
+  "runtimeAsset": {
+    "file": "civilian-male.glb",
+    "bytes": 9266020,
+    "sha256": "7a28fd96e85e29e043dda06f5f4b685a5bf0a6297b1e41d107f86a9c7f7f41ff",
+    "triangles": 7200,
+    "skinBones": 80,
+    "materialPrimitives": 3,
+    "maxTextureDimension": 1024,
+    "preparation": "scripts/prepare-civilian.py merges material-equivalent index groups only; original skin, UVs, geometry and 1k textures preserved."
+  }
+}

@@ -7,7 +7,7 @@ export function CharacterPicker({map,value,onSelect,onClose}:{map:MapId;value:Un
  const dialog=useRef<HTMLDialogElement>(null);
  useEffect(()=>{dialog.current?.showModal();return()=>dialog.current?.close();},[]);
  return <dialog className="character-picker" ref={dialog} onCancel={onClose} aria-labelledby="character-picker-title">
-  <header><div><h2 id="character-picker-title">Figur für deinen Einsatz</h2><small>{getWorld(map).name}</small></div><button onClick={onClose} aria-label="Charakterauswahl schließen">×</button></header>
-  <CharacterGallery compact actionLabel="Mit dieser Figur starten" team="de" map={map} value={value} onChange={onSelect}/>
+  <header><div><h2 id="character-picker-title">Schritt 1 · Charakter wählen</h2><small>{getWorld(map).name}</small></div><button onClick={onClose} aria-label="Charakterauswahl schließen">×</button></header>
+  <CharacterGallery compact actionLabel="Weiter zur Waffenauswahl" team="de" map={map} value={value} onChange={onSelect}/>
  </dialog>;
 }

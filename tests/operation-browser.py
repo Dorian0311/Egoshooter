@@ -1,6 +1,7 @@
 """Local browser acceptance checks; test profiles live only in the QA server's memory."""
 import pathlib, json, time
 from playwright.sync_api import sync_playwright
+from loadout_browser_helpers import choose_loadout
 output=pathlib.Path('artifacts/operations-20261116');output.mkdir(parents=True,exist_ok=True)
 report={'checks':[],'errors':[]}
 with sync_playwright() as p:
@@ -19,7 +20,7 @@ with sync_playwright() as p:
  # Select the new figure through the existing character carousel.
  page.get_by_role('button',name='Karl Ruprecht Kroenen',exact=False).click()
  page.screenshot(path=str(output/'kroenen-selection.png'))
- page.get_by_role('button',name='Mit dieser Figur starten',exact=False).click()
+ choose_loadout(page)
  page.get_by_label('Einsatz und Vorräte').wait_for(timeout=60000)
  page.get_by_text('Klicken zum Spielen',exact=False).wait_for(timeout=30000)
  page.wait_for_timeout(5000)

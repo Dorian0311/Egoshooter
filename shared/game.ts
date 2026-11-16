@@ -1,3 +1,5 @@
+import {weapons,defaultLoadout,isWeaponId,validLoadout,startingWeapon,fallbackSidearm,type WeaponId,type Loadout} from './weapons';
+export {weapons,defaultLoadout,validLoadout,type WeaponId,type Loadout} from './weapons';
 import {initialInteriors,interiorFixtures,interiorWorld,doorBox,type InteriorState} from './interiors';
 import {defaultUniform,validUniform,type UniformId} from './uniforms.ts';
 import { getWorld,validMap,ground,withinPlayArea,type World,type MapId } from "./world.ts";
@@ -5,7 +7,7 @@ import {rockBlocks,rockSurface,rayRock} from './rocks.ts';
 import {Operation,createOperation,type OperationState,type Pickup,type Projectile,type Treatment} from './operations';
 import {freshInjuries,armCount,isCrawling,eyeHeight,eyePosition,hasLost,type Injuries,type BodyPart} from './injuries';
 import type {Corpse,BodyPartItem,AidTent} from './remains';
-export const VERSION = 14,
+export const VERSION = 15,
   STEP = 1 / 30;
 export type Team = "de" | "fr";
 export type Input = {
@@ -20,7 +22,7 @@ export type Input = {
   fire: boolean;
   reload: boolean;
   aim: boolean;
-  weapon: 0 | 1 | 2 | 3 | 4;
+  weapon: WeaponId;
   time: number;
 };
 export type Player = {
@@ -54,9 +56,10 @@ export type Player = {
   ready: boolean;
   connected: boolean;
   seq: number;
-  weapon: 0 | 1 | 2 | 3 | 4;
+  weapon: WeaponId;
   ammo: number;
-  ammoByWeapon: [number, number, number, number, number];
+  ammoByWeapon: number[];
+  loadout: Loadout;
   powerUntil: number;
   powerReadyAt: number;
   reserve: number;
@@ -111,15 +114,6 @@ export type GameEvent = {
 };
 export const SAW_POWER_MS = 2200, SAW_RECOVERY_MS = 7000;
 export const SPRINT_DURATION_MS=3200,SPRINT_RECHARGE_MS=4000,SPRINT_REST_MS=900;
-export const weapons = [
-  { name: "Repetiergewehr", mag: 5, damage: 65, interval: 1100, reload: 2600, spread: .001, recoil: .026, range: 90 },
-  { name: "Pistole", mag: 8, damage: 28, interval: 310, reload: 1600, spread: .004, recoil: .018, range: 22 },
-  { name: "Maschinenpistole", mag: 30, damage: 24, interval: 85, reload: 2400, spread: .009, recoil: .012, range: 20 },
-  { name: "HK G36 (modern)", mag: 30, damage: 27, interval: 130, reload: 2600, spread: .003, recoil: .022, range: 55 },
-  { name: "Kettensäge", mag: 1, damage: 38, interval: 320, reload: 0, spread: 0, recoil: 0, range: 2.2 },
-  { name: "Wurfstern", mag: 3, damage: 40, interval: 750, reload: 0, spread: 0, recoil: 0, range: 72 },
-  { name: "Körperteil", mag: 1, damage: 32, interval: 800, reload: 0, spread: 0, recoil: 0, range: 2.65 },
-];
 export function weaponDamage(index:number,distance:number){
   const w=weapons[index];
   return w.damage*Math.max(.5,1-Math.max(0,distance-w.range)/(w.range*2));
@@ -137,7 +131,7 @@ export function validInput(v: unknown): v is Input {
     Math.abs(i.side) <= 1 &&
     Math.abs(i.yaw) <= Math.PI * 2 &&
     Math.abs(i.pitch) <= 1.5 &&
-    [0, 1, 2, 3, 4].includes(i.weapon) &&
+    isWeaponId(i.weapon) &&
     ["sprint", "crouch", "jump", "fire", "reload", "aim"].every(
       (k) => typeof i[k as keyof Input] === "boolean",
     )
@@ -172,7 +166,8 @@ export function makePlayer(
     seq: -1,
     weapon: 0,
     ammo: 5,
-    ammoByWeapon: [5, 8, 30, 30, 1],
+    ammoByWeapon: weapons.map(w=>w.mag),
+    loadout: [...defaultLoadout],
     powerUntil: 0,
     powerReadyAt: 0,
     reserve: 999,
@@ -190,12 +185,12 @@ export function move(p: Player, i: Input, dt = STEP,world:World=getWorld(),now=i
   if(p.carriedCorpse)i={...i,sprint:false,jump:false};
   if(isCrawling(p))i={...i,sprint:false,jump:false,crouch:false};
   const boxes=world.boxes;
-  if(p.uniform==='leatherface'&&!p.carriedCorpse&&!p.heldPart&&armCount(p)===2&&p.hp>0&&i.fire&&now>=p.powerReadyAt){
+  if(p.uniform==='leatherface'&&p.weapon===4&&!p.carriedCorpse&&!p.heldPart&&armCount(p)===2&&p.hp>0&&i.fire&&now>=p.powerReadyAt){
     p.powerUntil=now+SAW_POWER_MS;p.powerReadyAt=p.powerUntil+SAW_RECOVERY_MS;
   }
   p.crouching=i.crouch;
   const moving=Math.hypot(i.forward,i.side)>.01;
-  const powered=p.uniform==='leatherface'&&!p.carriedCorpse&&!p.heldPart&&armCount(p)===2&&i.fire&&now<p.powerUntil;
+  const powered=p.uniform==='leatherface'&&p.weapon===4&&!p.carriedCorpse&&!p.heldPart&&armCount(p)===2&&i.fire&&now<p.powerUntil;
   p.stamina=Number.isFinite(p.stamina)?p.stamina:SPRINT_DURATION_MS;
   p.sprinting=!!(i.sprint&&moving&&!i.crouch&&!i.aim&&!p.sprintExhausted&&p.stamina>0&&!powered);
   if(p.sprinting){
@@ -379,7 +374,7 @@ export class Game {
     this.state.host ||= id;
     return p;
   }
-  selectMap(id:string,mapId:unknown){if(id!==this.state.host||this.state.phase!=='waiting'||!validMap(mapId))return false;this.state.mapId=mapId;this.state.interiors=initialInteriors(getWorld(mapId));this.history=[];this.inputs.clear();for(const p of this.state.players){const fresh=makePlayer(p.id,p.name,p.team,0,getWorld(mapId));Object.assign(p,fresh,{connected:p.connected});}return true;}
+  selectMap(id:string,mapId:unknown){if(id!==this.state.host||this.state.phase!=='waiting'||!validMap(mapId))return false;this.state.mapId=mapId;this.state.interiors=initialInteriors(getWorld(mapId));this.history=[];this.inputs.clear();for(const p of this.state.players){const fresh=makePlayer(p.id,p.name,p.team,0,getWorld(mapId));Object.assign(p,fresh,{uniform:validUniform(p.uniform,p.team,mapId)?p.uniform:fresh.uniform,connected:p.connected,loadout:p.loadout,weapon:p.loadout[0],ammo:weapons[p.loadout[0]].mag});}return true;}
   count(t: Team) {
     return this.state.players.filter((p) => p.team === t&&!p.departed).length;
   }
@@ -413,14 +408,22 @@ export class Game {
       return false;
     p.team = t;
     p.uniform=defaultUniform(t,this.state.mapId);
-    p.weapon=0;p.ammo=p.ammoByWeapon[0];p.powerUntil=p.powerReadyAt=0;
+    if(p.loadout.includes(4))p.loadout=[...defaultLoadout];p.weapon=p.loadout[0];p.ammo=p.ammoByWeapon[p.weapon];p.powerUntil=p.powerReadyAt=0;
     p.ready = false;
     return true;
   }
   selectUniform(id:string,value:unknown){
     const p=this.player(id);
     if(!p||this.state.phase!=='waiting'||!validUniform(value,p.team,this.state.mapId))return false;
-    p.uniform=value;p.weapon=value==='leatherface'?4:0;p.ammo=p.ammoByWeapon[p.weapon];p.powerUntil=p.powerReadyAt=0;p.ready=false;return true;
+    p.uniform=value;
+    if(value==='leatherface'&&!p.loadout.includes(4))p.loadout=[4,...p.loadout.filter(w=>w!==4).slice(0,4)] as Loadout;
+    else if(value!=='leatherface'&&p.loadout.includes(4))p.loadout=[...defaultLoadout];
+    p.weapon=startingWeapon(p.loadout,value);p.ammo=p.ammoByWeapon[p.weapon];p.powerUntil=p.powerReadyAt=0;p.ready=false;return true;
+  }
+  selectLoadout(id:string,value:unknown){
+    const p=this.player(id);
+    if(!p||this.state.phase!=='waiting'||!validLoadout(value,p.uniform))return false;
+    p.loadout=[...value];p.weapon=startingWeapon(p.loadout,p.uniform);p.ammoByWeapon=weapons.map(w=>w.mag);p.ammo=p.ammoByWeapon[p.weapon];p.reloadAt=0;p.ready=false;return true;
   }
   player(id: string) {
     return this.state.players.find((p) => p.id === id);
@@ -493,24 +496,24 @@ export class Game {
             s.players.filter((q) => q.team === p.team).indexOf(p),
             getWorld(s.mapId),
           ),
-          { protectedUntil: now + 2000,uniform:p.uniform,kind:p.kind,life:p.life+1 },
+          { protectedUntil: now + 2000,uniform:p.uniform,kind:p.kind,life:p.life+1,loadout:p.loadout,weapon:startingWeapon(p.loadout,p.uniform),ammo:weapons[startingWeapon(p.loadout,p.uniform)].mag },
         );
       this.operation.onStart();
     }
     if (s.phase !== "playing") return;
     this.operation.beforeTick(now);
     for (const p of s.players) {
-      if(p.carriedCorpse){p.weapon=1;p.ammo=p.ammoByWeapon[1];}
-      else if(p.uniform==='leatherface'&&armCount(p)===2){p.weapon=4;p.ammo=1;p.reloadAt=0;}
-      if(armCount(p)===1&&p.uniform!=='leatherface'&&p.weapon!==1){p.weapon=1;p.ammo=p.ammoByWeapon[1];p.reloadAt=0;}
+      if(p.carriedCorpse){const sidearm=fallbackSidearm(p.loadout,p.weapon);if(p.weapon!==sidearm)p.reloadAt=0;p.weapon=sidearm;p.ammo=p.ammoByWeapon[sidearm];}
+      if(armCount(p)===1){const sidearm=fallbackSidearm(p.loadout,p.weapon);if(p.weapon!==sidearm){p.weapon=sidearm;p.ammo=p.ammoByWeapon[sidearm];p.reloadAt=0;}}
       if (!p.hp) {
         if (now >= p.respawnAt&&!p.downedUntil&&!(this.state.operation.config.mode==='survival'&&p.kind==='bot')) {
           const fresh = makePlayer(p.id, p.name, p.team, p.deaths,getWorld(s.mapId));
           Object.assign(p, {
             ...fresh,
             uniform:p.uniform,
-            weapon:p.uniform==='leatherface'?4:0,
-            ammo:p.uniform==='leatherface'?1:fresh.ammo,
+            loadout:p.loadout,
+            weapon:startingWeapon(p.loadout,p.uniform),
+            ammo:weapons[startingWeapon(p.loadout,p.uniform)].mag,
             kills: p.kills,
             headshots:p.headshots,
             deaths: p.deaths,
@@ -529,14 +532,14 @@ export class Game {
       if (i && p.connected) {
         move(p, i,STEP,this.world(),now);
         if(p.y < -4){this.operation.damage(p,'',0,100,'body',[p.x,p.y,p.z]);continue;}
-        if (!p.carriedCorpse && !p.heldPart && p.uniform!=='leatherface' && armCount(p)===2 && i.weapon!==4 && i.weapon !== p.weapon) {
+        if (!p.carriedCorpse && !p.heldPart && armCount(p)===2 && p.loadout.includes(i.weapon) && (i.weapon!==4||p.uniform==='leatherface') && i.weapon !== p.weapon) {
           p.ammoByWeapon[p.weapon] = p.ammo;
           p.weapon = i.weapon;
           p.ammo = p.ammoByWeapon[p.weapon];
           p.reloadAt = 0;
           p.fireAt = now + 350;
         }
-        if (!p.heldPart && (p.uniform!=='leatherface'||p.carriedCorpse) && i.reload && p.ammo < weapons[p.weapon].mag && !p.reloadAt)
+        if (!p.heldPart && p.weapon!==4 && i.reload && p.ammo < weapons[p.weapon].mag && !p.reloadAt)
           p.reloadAt = now + weapons[p.weapon].reload;
       }
       if (p.reloadAt && now >= p.reloadAt) {
@@ -584,7 +587,7 @@ export class Game {
     if(!p.hp||armCount(p)<1||p.treatment)return;
     if(p.heldPart){this.operation.remains.swing(p,now);return;}
     if(p.carriedCorpse&&armCount(p)<2)return;
-    if(p.uniform==='leatherface'&&!p.carriedCorpse){this.saw(p,i,now);return;}
+    if(p.weapon===4&&p.uniform==='leatherface'&&!p.carriedCorpse){this.saw(p,i,now);return;}
     if(p.weapon===4)return;
     if (p.reloadAt || p.fireAt > now || !p.ammo || i.sprint&&!p.carriedCorpse) return;
     p.fireAt = now + weapons[p.weapon].interval;

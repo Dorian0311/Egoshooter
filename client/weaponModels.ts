@@ -1,4 +1,5 @@
 import * as T from 'three';
+import {createGermanWeapon,germanWeaponNames,germanWeaponId} from './germanWeaponModels';
 import {GLTFLoader} from 'three/examples/jsm/loaders/GLTFLoader.js';
 import {surface} from './vendor/muster/surface';
 import {reloadEnvelope} from './viewmodel';
@@ -23,9 +24,17 @@ export function createWeaponModels(parent:T.Group) {
     if(models.has(name)||pending.has(name)||failed.has(name)||disposed)return;
     pending.add(name);
     try {
-      const gltf=await new GLTFLoader().loadAsync(`/shooter/models/${name==='luger'?'viewmodel-hands':name}.glb`);
+      const germanId=germanWeaponId(name);
+      const gltf=await new GLTFLoader().loadAsync(`/shooter/models/${name==='luger'||germanId!==undefined?'viewmodel-hands':name}.glb`);
       if(disposed){release(gltf.scene);return;}
       let textured:T.Group|undefined;
+      if(germanId!==undefined){
+        textured=createGermanWeapon(germanId);
+        const removed=new T.Group(),meshes:T.Mesh[]=[];
+        gltf.scene.traverse(o=>{if(o instanceof T.Mesh&&!/^(hand-|view-sleeve-)/.test(o.name))meshes.push(o);});
+        for(const mesh of meshes){mesh.removeFromParent();removed.add(mesh);}release(removed);
+        if(germanId===11)gltf.scene.traverse(o=>{if(/^(hand-|view-sleeve-)l$/.test(o.name))o.visible=false;});
+      }
       if(name in realisticWeapons){
         try{
           const imported=await new GLTFLoader().loadAsync(`/shooter/models/realistic/${name}.glb`);
@@ -82,7 +91,7 @@ export function createWeaponModels(parent:T.Group) {
       model.rotation.y=Math.PI;model.position.set(.24,-.23,-.4);
       const authored=gltf.scene.children.find(c=>Array.isArray(c.userData.muzzle));
       model.userData.muzzle=textured?.userData.muzzle??authored?.userData.muzzle??(name==='g36'?[0,.06,.75]:[0,.06,.8]);
-      model.userData.sightY=name in realisticWeapons?realisticWeapons[name as RealisticWeapon].top:name==='g36'?.15:model.userData.muzzle[1]+.05;
+      model.userData.sightY=textured?.userData.sightY??(name in realisticWeapons?realisticWeapons[name as RealisticWeapon].top:name==='g36'?.15:model.userData.muzzle[1]+.05);
       arms.set(model,createViewmodelArms(model));
       const parts:MovingPart[]=[];
       model.traverse(object=>{
@@ -97,7 +106,7 @@ export function createWeaponModels(parent:T.Group) {
   return {
     update(team:'de'|'fr',map:string,index:number){
       // French weapon replacements remain separate; do not label a US mesh MAS-38.
-      const name=index===4?null:index===3?'g36':index===1?'luger':team==='fr'&&map==='alpine'?null:team==='de'?(index===0?'kar98k':'mp40'):(index===0?'m1-garand':'thompson');
+      const name=germanWeaponNames[index]??(index===4?null:index===3?'g36':index===1?'luger':index===0?'kar98k':'mp40');
       if(name)void load(name);
       active=name?models.get(name):undefined;
       for(const model of models.values())model.visible=model===active;

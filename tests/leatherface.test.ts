@@ -7,7 +7,7 @@ function duel(){
  game.selectUniform('a','leatherface');game.ready('a',true,1000);game.ready('b',true,1000);game.tick(4000);
  Object.assign(a,{x:8,z:8,y:0,yaw:0,pitch:0,protectedUntil:0});Object.assign(b,{x:8,z:6.4,y:0,protectedUntil:0});return {game,a,b};
 }
-test('Leatherface keeps only the saw through start, forged weapon switches, reload and respawn',()=>{
+test('Leatherface keeps the saw against unselected switches, reload and respawn',()=>{
  const {game,a}=duel();assert.equal(a.weapon,4);
  game.input(a.id,{...neutral(1),weapon:3,reload:true});game.tick(4033);assert.equal(a.weapon,4);assert.equal(a.reloadAt,0);
  a.hp=0;a.respawnAt=4100;game.tick(4100);game.tick(4133);assert.equal(a.weapon,4);assert.equal(a.uniform,'leatherface');
@@ -32,7 +32,7 @@ test('saw honors spawn protection, friendlies and solid walls',()=>{
  Object.assign(a,{x:wall.x,z:wall.z+.7,y:wall.y-wall.h/2,yaw:0});Object.assign(b,{x:wall.x,z:wall.z-.7,y:a.y});game.shoot(a,input,4640);assert.equal(b.hp,100);
 });
 test('power boost expires under held attack and cannot restart before recovery',()=>{
- const p=makePlayer('a','A','de');Object.assign(p,{uniform:'leatherface',x:8,z:8});
+ const p=makePlayer('a','A','de');Object.assign(p,{uniform:'leatherface',weapon:4,x:8,z:8});
  const world={...getWorld(),boxes:[]},input={...neutral(),forward:1,fire:true};
  move(p,input,STEP,world,1000);assert.equal(p.powerUntil,1000+SAW_POWER_MS);assert.equal(p.powerReadyAt,1000+SAW_POWER_MS+SAW_RECOVERY_MS);
  assert.ok(Math.abs(8-p.z-9.2*STEP)<1e-6);

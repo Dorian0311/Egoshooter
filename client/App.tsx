@@ -13,6 +13,8 @@ import {weapons,SAW_POWER_MS,SAW_RECOVERY_MS,SPRINT_DURATION_MS,VERSION} from '.
 import {uniforms,uniformOptions,type UniformId} from '../shared/uniforms.ts';
 import {CharacterGallery} from './CharacterGallery';
 import {CharacterPicker} from './CharacterPicker';
+import {WeaponPicker} from './WeaponPicker';
+import {validLoadout,type Loadout} from '../shared/weapons';
 import {LiveRooms} from './LiveRooms';
 import './mapCards.css';
 import React, { lazy, Suspense, useEffect, useRef, useState } from "react";
@@ -78,6 +80,7 @@ export default function App({
   const [fullscreen,setFullscreen]=useState(false),[hudNotice,setHudNotice]=useState('');
   useEffect(()=>{const changed=()=>setFullscreen(!!document.fullscreenElement);document.addEventListener('fullscreenchange',changed);return()=>document.removeEventListener('fullscreenchange',changed);},[]);
   async function toggleFullscreen(){try{if(document.fullscreenElement)await document.exitFullscreen();else await gameRoot.current?.requestFullscreen({navigationUI:'hide'});}catch{setHudNotice('Vollbild ist in diesem Browserfenster nicht verfügbar.');}}
+  const [choosingWeapons,setChoosingWeapons]=useState(false);
   const [startIntent,setStartIntent]=useState<{create:boolean;training:boolean;operation?:OperationConfig}|null>(null);
   const [scoreboardOpen,setScoreboardOpen]=useState(false),[scoreboardHeld,setScoreboardHeld]=useState(false);
   const tabAssigned=Object.values(settings.bindings).includes('Tab');
@@ -178,9 +181,10 @@ export default function App({
     try{const current=await refreshAccess(),response=await fetch(`${current.serverUrl.replace(/^ws/,'http')}/rooms/${encodeURIComponent(code.toUpperCase())}`,{headers:{Authorization:`Bearer ${current.ticket}`}});if(!response.ok)throw Error('Raum nicht gefunden oder nicht zugänglich');const info=await response.json();if(mapIds.includes(info.mapId))setSelectedMap(info.mapId);setStartIntent({create:false,training:false});}
     catch(error){setError(message(error));}finally{setBusy(false);}
   }
-  async function connect(create: boolean,training=false,chosenUniform=preferredUniform,operation?:OperationConfig) {
+  async function connect(create: boolean,training=false,chosenUniform=preferredUniform,operation?:OperationConfig,loadout?:Loadout) {
     if (!access || busy) return;
     if (!chosenUniform) {setError("Bitte wähle zuerst deinen Charakter aus.");return;}
+    if(!validLoadout(loadout,chosenUniform)){setError("Bitte genau fünf unterschiedliche Waffen auswählen.");return;}
     setBusy(true);
     setError("");
     try {
@@ -188,7 +192,7 @@ export default function App({
       const client = new Client(access.serverUrl);
       let r: Room;
       if (create)
-        r = await client.create("altstadt", { ticket: access.ticket,mapId:selectedMap,training,operation,uniform:chosenUniform });
+        r = await client.create("altstadt", { ticket: access.ticket,mapId:selectedMap,training,operation,uniform:chosenUniform,loadout });
       else {
         const response = await fetch(
           `${access.serverUrl.replace(/^ws/, "http")}/rooms/${encodeURIComponent(code.toUpperCase())}`,
@@ -197,7 +201,7 @@ export default function App({
         if (!response.ok)
           throw Error("Raum nicht gefunden oder nicht zugänglich");
         const info = await response.json();
-        r = await client.joinById(info.roomId, { ticket: access.ticket,uniform:chosenUniform });
+        r = await client.joinById(info.roomId, { ticket: access.ticket,uniform:chosenUniform,loadout });
       }
       r.reconnection.minUptime = 0;
       room.current = r;recorder.current=new HighlightRecorder();savedMatch.current='';uiEvents.current.clear();setClips([]);setKillfeed([]);setDamage(null);setDeathReason('');setConnection('');
@@ -223,7 +227,7 @@ export default function App({
         setSnapshot(s);
         scene.current?.update(s, access.playerId);
       });
-      r.send("uniform",chosenUniform);
+      setStartIntent(null);setChoosingWeapons(false);
       r.send("sync");
       if(training)r.send("ready",true);
       r.onError((_code: number, msg?: string) =>
@@ -267,8 +271,9 @@ export default function App({
       {snapshot && <canvas ref={canvas} className="city-canvas" />}
       {showCommander&&(!snapshot||snapshot.phase==='waiting'||snapshot.phase==='finished')&&<Suspense fallback={null}><CommanderEasterEgg onClose={()=>setShowCommander(false)}/></Suspense>}
       {settingsOpen&&<GameSettingsPanel value={settings} onChange={setSettings} onClose={()=>setSettingsOpen(false)} graphics={{value:graphicsQuality,onChange:setGraphicsQuality}} onLeave={snapshot?()=>void leaveGame():undefined}/>}
-      {startIntent&&!snapshot&&<CharacterPicker map={selectedMap} value={preferredUniform} onClose={()=>setStartIntent(null)} onSelect={id=>{const intent=startIntent;setPreferredUniform(id);setStartIntent(null);void connect(intent.create,intent.training,id,intent.operation);}}/>}
+      {startIntent&&!snapshot&&(!choosingWeapons?<CharacterPicker map={selectedMap} value={preferredUniform} onClose={()=>{setStartIntent(null);setChoosingWeapons(false);}} onSelect={id=>{setPreferredUniform(id);setError('');setChoosingWeapons(true);}}/>:preferredUniform&&<WeaponPicker uniform={preferredUniform} busy={busy} error={error} onBack={()=>setChoosingWeapons(false)} onClose={()=>{setStartIntent(null);setChoosingWeapons(false);}} onStart={loadout=>void connect(startIntent.create,startIntent.training,preferredUniform,startIntent.operation,loadout)}/>)}
       {snapshot&&(scoreboardOpen||scoreboardHeld)&&<MatchScoreboard snapshot={snapshot} playerId={access?.playerId} onClose={()=>{setScoreboardOpen(false);setScoreboardHeld(false);}}/>}
+      {active&&me&&<ol className="loadout-hud" aria-label="Deine Waffenplätze">{me.loadout.map((id,slot)=><li key={slot} className={me.weapon===id?'equipped':''}><kbd>{keyLabel(('weapon'+(slot+1)) as keyof typeof settings.bindings)}</kbd><span>{weapons[id].name}</span></li>)}</ol>}
       {snapshot&&<nav className="game-toolbar" aria-label="Spielbedienung">
         <button aria-expanded={scoreboardOpen||scoreboardHeld} onClick={()=>setScoreboardOpen(v=>!v)}>Rangliste{!tabAssigned?' · Tab':''}</button>
         <button onClick={()=>{document.exitPointerLock();setSettingsOpen(true);}}>Einstellungen</button>
@@ -330,7 +335,7 @@ export default function App({
             Community-Rangliste & persönliche Statistik
           </button>
           <aside><a href="https://polyhaven.com" target="_blank" rel="noreferrer">Powered by Poly Haven · CC0-Materialien</a> · <a href="/shooter/models/realistic/CREDITS.txt" target="_blank" rel="noreferrer">Modellnachweise</a><br/>
-            {keyLabel("forward")}/{keyLabel("left")}/{keyLabel("back")}/{keyLabel("right")} Bewegung · Maus Zielen · {keyLabel("reload")} Nachladen · {keyLabel("weapon1")}/{keyLabel("weapon2")}/{keyLabel("weapon3")}/{keyLabel("weapon4")} Waffen · {keyLabel("crouch")} Ducken · {keyLabel("sprint")} Sprint · {keyLabel("interact")} Benutzen · Esc Maus freigeben
+            {keyLabel("forward")}/{keyLabel("left")}/{keyLabel("back")}/{keyLabel("right")} Bewegung · Maus Zielen · {keyLabel("reload")} Nachladen · {keyLabel("weapon1")}/{keyLabel("weapon2")}/{keyLabel("weapon3")}/{keyLabel("weapon4")}/{keyLabel("weapon5")} Waffen · {keyLabel("crouch")} Ducken · {keyLabel("sprint")} Sprint · {keyLabel("interact")} Benutzen · Esc Maus freigeben
           </aside>
         </main>
       ) : (

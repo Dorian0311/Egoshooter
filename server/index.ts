@@ -8,7 +8,7 @@ import {Bots} from './bots';
 import {createNavigation} from './navigation';
 import {parseOperation} from '../shared/operationConfig';
 import {validMap,mapIds} from "../shared/world.ts";
-import { Game,neutral } from "../shared/game.ts";
+import { Game,neutral,validLoadout } from "../shared/game.ts";
 import { difference } from "../shared/protocol.ts";
 import { identity } from "./auth.ts";
 import { Store } from "./store.ts";
@@ -134,7 +134,8 @@ export class CityRoom extends Room {
     if(this.training&&this.game.state.phase!=='waiting')throw Error('Dieser Einsatz wurde bereits gestartet');
     return user;
   }
-  onJoin(c: Client,options:{uniform?:unknown}={}) {
+  onJoin(c: Client,options:{uniform?:unknown;loadout?:unknown}={}) {
+    if(options.loadout!==undefined&&!validLoadout(options.loadout,typeof options.uniform==='string'?options.uniform:undefined))throw Error('Bitte genau fünf unterschiedliche Waffen auswählen.');
     const user = c.auth as { id: string; name: string };
     if (!['waiting','playing'].includes(this.game.state.phase))throw Error('Dieser Einsatz nimmt gerade keine Spieler auf.');
     const config=this.game.state.operation.config;
@@ -143,7 +144,12 @@ export class CityRoom extends Room {
     this.ownerId ||= user.id;
     const player=this.game.add(user.id,user.name);
     if(validUniform(options.uniform,player.team,this.game.state.mapId)){
-      player.uniform=options.uniform;player.weapon=options.uniform==='leatherface'?4:0;player.ammo=player.ammoByWeapon[player.weapon];
+      if(this.game.state.phase==='waiting')this.game.selectUniform(player.id,options.uniform);
+      else player.uniform=options.uniform;
+    }
+    if(options.loadout!==undefined){
+      if(this.game.state.phase==='waiting')this.game.selectLoadout(player.id,options.loadout);
+      else if(validLoadout(options.loadout,player.uniform)){player.loadout=[...options.loadout];player.weapon=player.loadout[0];player.ammo=player.ammoByWeapon[player.weapon];}
     }
     if(this.game.state.phase==='playing'){player.ready=true;player.protectedUntil=this.game.state.now+3000;}
     if(this.training&&!this.game.state.players.some(p=>p.kind==='bot'))this.game.operation.configureBots();

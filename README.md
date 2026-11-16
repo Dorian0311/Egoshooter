@@ -110,7 +110,9 @@ mit acht WebSocket-Clients und legt dafür acht `TunnelQA_*`-Profile an; anschli
 werden deren Sitzungen abgemeldet. Die Testprofile bleiben in der lokalen Datenbank.
 
 WASD: Bewegung · Maus: Blickrichtung · rechte Maustaste: Zielen · R: Nachladen ·
-1/2/3/4: Waffen (4 = modernes G36) · Umschalt: Sprint · C: Ducken · Esc: Maus freigeben.
+1/2/3/4/5: die fünf gewählten Waffenplätze · Umschalt: Sprint · C: Ducken · Esc: Maus freigeben.
+
+Vor jedem Einsatz wählst du zuerst deinen Charakter und danach genau fünf unterschiedliche Waffen. Zur deutschen WWII-Auswahl gehören Karabiner 98k, Luger P08, MP 40, StG 44, Gewehr 43, MG 42, MP 34, Walther P38 und FG 42. Auswahlreihenfolge und Tastenplätze stimmen überein; die Ausrüstung bleibt beim Wiedereinstieg erhalten.
 
 Unter **Startfigur / Uniform** stehen zusätzlich Deadpool, Harley Quinn, Rocket
 und Homer zur Auswahl. Diese Bonus-Skins werden bei Bedarf geladen und behalten
@@ -171,7 +173,7 @@ Audio-Herkunft: `public/shooter/audio/CREDITS.json`; Bot-Referenz und Abhängigk
 - Charakter-Slider mit drehbarer 3D-Vorschau, Pfeiltasten und gespeicherter Auswahl.
 - Einstellungen für Maus- und Zielempfindlichkeit, Sichtfeld, Lautstärke und Tastenbelegung; Speicherung im Browser.
 - Waffen besitzen unterschiedliche Grundstreuung, Feuerraten, Rückstoß und Schadensabfall. Die Maschinenpistole ist für kurze, das G36 für größere Entfernungen ausgelegt.
-- Leatherface verwendet ausschließlich seine Kettensäge: 2,2 m Reichweite, 38 Schaden alle 320 ms. Angriff halten aktiviert 2,2 Sekunden Schub mit 9,2 m/s (nur während des Angriffs und ohne Ducken), danach folgen 7 Sekunden Erholung. Normale Nahkampfangriffe bleiben während der Erholung möglich.
+- Leatherface kann seine Kettensäge als einen der fünf Plätze wählen und auch Schusswaffen verwenden. Werte der Kettensäge: 2,2 m Reichweite, 38 Schaden alle 320 ms. Angriff halten aktiviert 2,2 Sekunden Schub mit 9,2 m/s (nur während des Angriffs und ohne Ducken), danach folgen 7 Sekunden Erholung. Normale Nahkampfangriffe bleiben während der Erholung möglich.
 - Killfeed, Beschussrichtung, Todesursache und Powermodus-Anzeige ergänzen das HUD. Namensschilder zeigen andere lebende Spieler bis 45 m Entfernung; Wände verdecken sie.
 - Eigene tödliche Kopftreffer zeigen einen optionalen lokalen Zeitlupeneffekt: Schädelsplitter bewegen sich für 0,85 Sekunden mit 18 % Geschwindigkeit; die Fallanimation dauert 1,3 Sekunden. Die laufende Simulation und Steuerung werden nicht verlangsamt.
 - In der Grafikprüfung lässt sich unter „Kampf · Nahansicht“ mit „Kopftreffer prüfen“ und „Figur wiederherstellen“ der Effekt reproduzieren; die Kettensäge ist dort ebenfalls auswählbar.
@@ -420,3 +422,19 @@ geprüft. Quelle, Lizenz, lokale Dateien und verbleibende Integrationsschritte:
 
 Nachweise: `artifacts/movement-combat-20261116/`, `artifacts/remains-client/` und
 `artifacts/static-skinning-20261116/`. Kein Produktions-Rollout.
+
+## Gemeinsames Update · Stadtbewohner, Waffen und Audio
+
+Der neue Rocketbox-Stadtbewohner, die deutsche Waffenauswahl mit fünf Plätzen und
+die überarbeiteten Gefechtsgeräusche sind gemeinsam integriert. Kroenen und Deadpool
+bleiben erhalten. Das Start-Changelog trägt die Kennung
+`npc-weapons-audio-2026-11-16`: Auch nach Bestätigung der vorherigen Übersicht erscheint
+dieses Update einmal; Bestätigung, Neuladen, Anmeldung und Mobilansicht sind geprüft.
+
+Die gemeinsame Abnahme umfasst 181 erfolgreiche Tests und den Produktionsbuild.
+Zusätzliche Integrationsregressionen sichern das gewählte Loadout nach Zeltbehandlung,
+den Munitionsnachschub für alle Waffen und die P38 bei Armverlust/Leichentragen ab.
+Die Drittpersonen-Waffen liegen nach Bündelung wieder innerhalb des bisherigen
+Zeichenbudgets. Browsernachweise liegen unter `artifacts/coordinated-release/`,
+`artifacts/weapon-loadout-20261116/` und `artifacts/audio-overhaul-20261116/`.
+Den Server-Rollout übernimmt der Betreiber; aus diesem Chat wurde kein Deployment ausgeführt.

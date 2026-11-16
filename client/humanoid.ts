@@ -9,6 +9,7 @@ import type {MapId} from '../shared/world.ts';
 import {createActorEquipment,rigArm} from './actorEquipment';
 import {applyActionPose} from './actionPose';
 import {createCivilianAppearance,tailorCivilian} from './civilianAppearance';
+import {loadCivilianCharacter,createCivilianCharacter,type CivilianCharacterData} from './civilianCharacter';
 type Joint={name:string;parent:number;head:number[];tail:number[]};
 type CoatPiece={name:string;positions:number[];normal:number[];uv:number[];indices:number[]|null;skinIndex:number[];skinWeight:number[];albedo:string;normalMap:string};
 let coatSource:Promise<CoatPiece[]>|null=null;
@@ -19,13 +20,15 @@ function releaseCoatTexture(texture:T.Texture){for(const [file,entry]of coatText
 type HumanData={coat?:CoatPiece[];positions:number[];uv:number[];indices:number[];skinIndex:number[];skinWeight:number[];categories:number[];bones:Joint[];skinImage?:HTMLImageElement;motion?:MotionLibrary};
 let source:Promise<HumanData>|null=null;
 function loadBaseHuman(){return source??=fetch('/shooter/characters/humanoid.json').then(r=>{if(!r.ok)throw Error('Human model unavailable');return r.json() as Promise<HumanData>;}).then(async data=>{const [image,motion]=await Promise.all([new T.ImageLoader().loadAsync('/shooter/characters/skin.png'),loadMotionLibrary()]);data.skinImage=image;data.motion=motion;return data;}).catch(e=>{source=null;throw e;});}
-export async function loadHuman(uniformId?:UniformId){
+export async function loadHuman(uniformId?:UniformId,civilian=false){
+ if(civilian)return loadCivilianCharacter();
  if(uniformId&&isBonusId(uniformId))return loadBonusCharacter(uniformId);
  const data=await loadBaseHuman();if(uniformId!=='de-greatcoat')return data;
  coatSource??=fetch('/shooter/characters/greatcoat/rigged.json').then(r=>{if(!r.ok)throw Error('Mantelmodell konnte nicht geladen werden');return r.json() as Promise<CoatPiece[]>;}).catch(e=>{coatSource=null;throw e;});
  return {...data,coat:await coatSource};
 }
-export function createHuman(data:HumanData|BonusCharacterData,team:'de'|'fr',map:MapId,uniform:T.MeshStandardMaterial,uniformId:UniformId=defaultUniform(team,map),civilian=false){
+export function createHuman(data:HumanData|BonusCharacterData|CivilianCharacterData,team:'de'|'fr',map:MapId,uniform:T.MeshStandardMaterial,uniformId:UniformId=defaultUniform(team,map),civilian=false){
+ if('civilian' in data)return createCivilianCharacter(data);
  if('character' in data)return createBonusCharacter(data);
  const civilianLook=civilian?createCivilianAppearance():undefined;uniform=civilianLook?.cloth??uniform.clone();const outfit=uniforms[uniformId];if(!civilian)uniform.color.set(outfit.color);
  let isDisposed=false;

@@ -14,7 +14,7 @@ export const uniforms = {
   'harley': {name:'Bonus · Harley Quinn', detail:'Optionaler Charakter-Skin. Gleiche Spielwerte und Trefferzonen wie die Uniformen.', color:'#b84e70', headgear:'none'},
   'rocket': {name:'Bonus · Rocket', detail:'Optionaler Charakter-Skin, auf Spielergröße skaliert. Gleiche Spielwerte und Trefferzonen.', color:'#807564', headgear:'none'},
   'commander': {name:'Bonus \u00b7 Commander 1946', detail:'Fiktive Spielfigur aus Wolfenstein: The Old Blood. Feste K\u00f6rperpose; gleiche Spielwerte und Trefferzonen.', color:'#343730', headgear:'none'},
-  'leatherface': {name:'Bonus · Leatherface', detail:'Nur Kettensäge · 2,2 m Reichweite. Angriff halten: 2,2 Sekunden Powermodus mit hohem Tempo, danach 7 Sekunden Erholung.', color:'#88734b', headgear:'none'},
+  'leatherface': {name:'Bonus · Leatherface', detail:'Kettensäge optional · fünf frei wählbare Waffen. Angriff halten: 2,2 Sekunden Powermodus mit hohem Tempo, danach 7 Sekunden Erholung.', color:'#88734b', headgear:'none'},
   'homer': {name:'Bonus · Homer Simpson', detail:'Optionaler Charakter-Skin. Gleiche Spielwerte und Trefferzonen wie die Uniformen.', color:'#e3c650', headgear:'none'},
 } as const;
 export type UniformId=keyof typeof uniforms;

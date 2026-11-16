@@ -5,6 +5,7 @@ import {rockBlocks,rayRock} from './rocks';
 import {freshInjuries,armCount,eyeHeight,eyePosition,isCrawling,hasLost,limbBits,type BodyPart} from './injuries';
 import {parseOperation,type OperationConfig,type Condition} from './operationConfig';
 import {Remains} from './remains';
+import {weapons} from './weapons';
 
 export type Point={x:number;y:number;z:number};
 export type Pickup=Point&{id:string;kind:'gift'|'bandage';taken:boolean};
@@ -104,7 +105,7 @@ export class Operation {
   const g=this.game,s=g.state,o=s.operation;if(!this.pve||s.phase!=='playing')return;
   if(['survival','mission'].includes(this.config.mode)&&!this.humans.some(p=>p.hp>0&&p.connected)&&!this.remains.hasPendingRecovery()){this.finish(false);return;}
   if(this.config.mode==='survival'){
-   if(o.nextWaveAt){if(s.now>=o.nextWaveAt){for(const p of this.humans){p.ammoByWeapon=[5,8,30,30,1];p.ammo=p.ammoByWeapon[p.weapon];}this.startWave();}return;}
+   if(o.nextWaveAt){if(s.now>=o.nextWaveAt){for(const p of this.humans){p.ammoByWeapon=weapons.map(w=>w.mag);p.ammo=p.ammoByWeapon[p.weapon];}this.startWave();}return;}
    o.remaining=[2,4,6,8,10][o.wave-1]*(this.config.kind==='coop'?this.participants:1)-this.waveDefeated;
    if(!o.remaining){o.completedWaves=o.wave;if(o.wave===5)this.finish(true);else o.nextWaveAt=s.now+10000;}else this.fillWave();
   }

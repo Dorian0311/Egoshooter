@@ -10,7 +10,7 @@ export function createWanderers(scene:T.Scene,map:MapId){
  const people:{human:ReturnType<typeof createHuman>;player:ReturnType<typeof makePlayer>}[]=[];
  let disposed=false;
  const colors=[0x51483d,0x38413c,0x63554c,0x474451];
- void loadHuman('de-field').then(data=>{
+ void loadHuman('de-field',true).then(data=>{
   if(disposed)return;
   for(let n=0;n<4;n++){
    const clothing=new T.MeshStandardMaterial({color:colors[n],roughness:1});

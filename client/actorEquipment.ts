@@ -1,8 +1,9 @@
+import {createGermanWeapon,germanWeaponNames} from './germanWeaponModels';
 import * as T from 'three';
 import {armCount,hasLost,isCrawling} from '../shared/injuries';
 import {weapons,type Player} from '../shared/game';
 import {createThrowingStarGeometry} from './operationScene';
-import {batchWeaponMeshes} from './batchWeaponMeshes';
+import {batchWeaponProxy} from './weaponProxy';
 import {loadCombatHands,sampleCombatHands} from './combatHands';
 import {harvestAnimation} from './remainsAnimation';
 import {acquireWorldWeapon,prewarmWorldWeapons,type WorldWeapon} from './worldWeapons';
@@ -31,7 +32,7 @@ export function rigArm(root:T.Group,names:string[]):ArmChain|undefined{const [up
 
 export function createActorEquipment(root:T.Group,chains:Partial<Record<'armL'|'armR',ArmChain>>,civilian=false,embeddedSaw=false){
  void loadCombatHands();
- prewarmWorldWeapons();
+ if(!civilian)prewarmWorldWeapons();
  root.userData.armChains=chains;
  root.updateWorldMatrix(true,true);
  const arms=Object.fromEntries(Object.entries(chains).filter(([,chain])=>!!chain).map(([key,chain])=>{const upper=root.worldToLocal(chain!.upper.getWorldPosition(new T.Vector3())),lower=root.worldToLocal(chain!.lower.getWorldPosition(new T.Vector3())),hand=root.worldToLocal(chain!.hand.getWorldPosition(new T.Vector3()));return [key,{...chain,rest:[chain!.upper.quaternion.clone(),chain!.lower.quaternion.clone(),chain!.hand.quaternion.clone()],reach:(upper.distanceTo(lower)+lower.distanceTo(hand))*.985,shoulder:upper}];})) as Partial<Record<'armL'|'armR',SavedArm>>;
@@ -41,15 +42,19 @@ export function createActorEquipment(root:T.Group,chains:Partial<Record<'armL'|'
  const metal=new T.MeshStandardMaterial({color:'#333c3b',metalness:.7,roughness:.38}),wood=new T.MeshStandardMaterial({color:'#5d4731',roughness:.72}),polymer=new T.MeshStandardMaterial({color:'#242a27',roughness:.75}),starMaterial=new T.MeshStandardMaterial({color:'#b8c0c1',metalness:.9,roughness:.25});
  const geometries:T.BufferGeometry[]=[],models:T.Group[]=[];
  const box=(parent:T.Group,x:number,y:number,z:number,w:number,h:number,d:number,material:T.Material)=>{const geometry=new T.BoxGeometry(w,h,d);geometries.push(geometry);const mesh=new T.Mesh(geometry,material);mesh.position.set(x,y,z);mesh.castShadow=true;parent.add(mesh);};
- for(let index=0;index<4;index++){const model=new T.Group();models.push(model);mount.add(model);
+ for(let index=0;index<weapons.length;index++){const model=new T.Group();models.push(model);mount.add(model);
+  model.visible=false;
+  if(index>=4&&index<=6)continue;
+  if(germanWeaponNames[index]){const gun=createGermanWeapon(index);gun.rotation.y=Math.PI;model.add(gun);continue;}
   if(index===1){box(model,0,.018,-.075,.035,.045,.19,metal);box(model,0,-.04,.015,.035,.105,.045,polymer);}
   else{const length=index===0?.95:index===2?.62:.75;box(model,0,.025,-.21,.045,.065,length,metal);box(model,0,-.01,.10,.055,.075,.24,index===0?wood:polymer);box(model,0,-.065,-.025,.035,.13,.045,polymer);if(index>1)box(model,0,-.10,-.16,.04,.20,.07,metal);if(index===3)box(model,0,.09,-.14,.025,.08,.26,polymer);}
  }
- for(const model of models)batchWeaponMeshes(model);geometries.length=0;mount.traverse(o=>{if(o instanceof T.Mesh)geometries.push(o.geometry);});
+ const authoredMaterials=new Set<T.Material>();for(const model of models.slice(7))model.traverse(o=>{if(o instanceof T.Mesh)for(const m of Array.isArray(o.material)?o.material:[o.material])authoredMaterials.add(m);});
+ for(const model of models)batchWeaponProxy(model);geometries.length=0;mount.traverse(o=>{if(o instanceof T.Mesh){geometries.push(o.geometry);for(const material of Array.isArray(o.material)?o.material:[o.material])authoredMaterials.add(material);}});
  const starGeometry=createThrowingStarGeometry(),star=new T.Mesh(starGeometry,starMaterial);star.name='held-throwing-star';star.userData.nonAnatomic=true;root.add(star);star.visible=false;
  let previousWeapon=-1,changedAt=-Infinity;
  let disposed=false;const worldModels=new Map<number,Awaited<ReturnType<typeof acquireWorldWeapon>> & {name:WorldWeapon}>(),pendingModels=new Map<number,WorldWeapon>(),failedModels=new Set<WorldWeapon>();
- function textured(index:number,team:Player['team']){if(typeof window==='undefined')return;const name:WorldWeapon=index===3?'g36':index===1?'luger':index===0?team==='de'?'kar98k':'m1-garand':team==='de'?'mp40':'thompson';if(worldModels.get(index)?.name===name||pendingModels.get(index)===name||failedModels.has(name))return;pendingModels.set(index,name);void acquireWorldWeapon(name).then(asset=>{if(disposed||pendingModels.get(index)!==name){asset.release();return;}const old=worldModels.get(index);if(old){old.object.removeFromParent();old.release();}for(const child of models[index].children)child.visible=false;models[index].add(asset.object);worldModels.set(index,{...asset,name});pendingModels.delete(index);}).catch(()=>{pendingModels.delete(index);failedModels.add(name);});}
+ function textured(index:number,team:Player['team']){if(typeof window==='undefined'||index>3)return;const name:WorldWeapon=index===3?'g36':index===1?'luger':index===0?'kar98k':'mp40';if(worldModels.get(index)?.name===name||pendingModels.get(index)===name||failedModels.has(name))return;pendingModels.set(index,name);void acquireWorldWeapon(name).then(asset=>{if(disposed||pendingModels.get(index)!==name){asset.release();return;}const old=worldModels.get(index);if(old){old.object.removeFromParent();old.release();}for(const child of models[index].children)child.visible=false;models[index].add(asset.object);worldModels.set(index,{...asset,name});pendingModels.delete(index);}).catch(()=>{pendingModels.delete(index);failedModels.add(name);});}
  const reset=(arm:SavedArm)=>{arm.upper.quaternion.copy(arm.rest[0]);arm.lower.quaternion.copy(arm.rest[1]);arm.hand.quaternion.copy(arm.rest[2]);};
  const target=new T.Vector3(),pole=new T.Vector3(),forward=new T.Vector3(),handDirection=new T.Vector3(),right=new T.Vector3(),left=new T.Vector3(),offset=new T.Vector3(),localGrip=new T.Vector3();
  function grip(arm:SavedArm,localTarget:T.Vector3,side:number,up=false){
@@ -71,7 +76,7 @@ export function createActorEquipment(root:T.Group,chains:Partial<Record<'armL'|'
     for(const finger of fingers){const digit=Number(finger.name[6]),joint=Number(finger.name[8]),sign=finger.name.endsWith('.L')?1:-1;finger.rotation.set(digit===1?.18:joint===1?.14:joint===2?.28:.18,0,digit===1?sign*.12:0);}
    }return;
   }
-  const available=armCount(p),harvesting=p.treatment?.kind==='harvest';mount.visible=p.hp>0&&available>0&&!throwing&&!embeddedSaw&&p.weapon!==4&&!p.heldPart&&!harvesting;star.visible=throwing&&p.throwAt-now>610&&available>0&&(root.userData.partThrowUntil??0)<now;
+  const available=armCount(p),harvesting=p.treatment?.kind==='harvest';mount.visible=p.hp>0&&available>0&&!throwing&&p.weapon!==4&&!p.heldPart&&!harvesting;star.visible=throwing&&p.throwAt-now>610&&available>0&&(root.userData.partThrowUntil??0)<now;
   if(harvesting&&p.hp){mount.visible=star.visible=false;const progress=1-(p.treatment!.until-now)/3000,pose=harvestAnimation(progress),clip=sampleCombatHands('interact',progress);for(const side of ['armL','armR'] as const){if(hasLost(p,side))continue;const arm=arms[side];if(!arm)continue;const hand=(side==='armL'?clip?.left:clip?.right)?.clone()??new T.Vector3(side==='armL'?-.19:.19,1.12,-.45);hand.y-=.32-pose.pull*.16;hand.z-=pose.reach*.08-pose.pull*.22;hand.x+=pose.twist*(side==='armL'?-.025:.025);grip(arm,hand,side==='armL'?-1:1);}return;}
   if(p.heldPart&&p.hp){mount.visible=star.visible=false;const remaining=(root.userData.partSwingUntil??0)-now,progress=remaining>0&&remaining<=800?1-remaining/800:0,clip=sampleCombatHands('swing',progress),swing=Math.sin(progress*Math.PI);for(const side of ['armL','armR'] as const){if(hasLost(p,side))continue;const arm=arms[side];if(!arm)continue;const hand=(side==='armL'?clip?.left:clip?.right)?.clone()??new T.Vector3(side==='armL'?-.04:.19,1.13+swing*.15,-.30-swing*.18);grip(arm,hand,side==='armL'?-1:1);}return;}
   if(p.carriedCorpse&&available<2){mount.visible=star.visible=false;const side=hasLost(p,'armL')?'armR':'armL',arm=arms[side];if(arm)grip(arm,new T.Vector3(side==='armL'?-.12:.12,1.28,-.5),side==='armL'?-1:1);return;}
@@ -85,10 +90,10 @@ export function createActorEquipment(root:T.Group,chains:Partial<Record<'armL'|'
   models.forEach((model,index)=>model.visible=index===p.weapon);
   // updateMatrix is explicit: the IK targets must match this frame's weapon pose.
   for(const arm of Object.values(arms))if(arm)root.worldToLocal(arm.upper.getWorldPosition(arm.shoulder));
-  for(let iteration=0;iteration<4;iteration++)for(const side of ['armR','armL'] as const){const arm=arms[side];if(!arm||hasLost(p,side)||p.carriedCorpse&&side==='armL')continue;mount.updateMatrix();localGrip.set(0,side==='armR'||hasLost(p,'armR')?.025:.015,side==='armR'||hasLost(p,'armR')?.035:p.weapon===1?-.025:-.22).applyMatrix4(mount.matrix);offset.copy(arm.shoulder).sub(localGrip);const distance=offset.length();if(distance>arm.reach)mount.position.addScaledVector(offset,(distance-arm.reach)/distance);}
-  mount.updateMatrix();right.set(0,.025,.035).applyMatrix4(mount.matrix);left.set(0,.015,p.weapon===1?-.025:-.22).applyMatrix4(mount.matrix);
+  for(let iteration=0;iteration<4;iteration++)for(const side of ['armR','armL'] as const){const arm=arms[side];if(!arm||hasLost(p,side)||p.carriedCorpse&&side==='armL')continue;mount.updateMatrix();localGrip.set(0,side==='armR'||hasLost(p,'armR')?.025:.015,side==='armR'||hasLost(p,'armR')?.035:weapons[p.weapon].kind==='pistol'?-.025:-.22).applyMatrix4(mount.matrix);offset.copy(arm.shoulder).sub(localGrip);const distance=offset.length();if(distance>arm.reach)mount.position.addScaledVector(offset,(distance-arm.reach)/distance);}
+  mount.updateMatrix();right.set(0,.025,.035).applyMatrix4(mount.matrix);left.set(0,.015,weapons[p.weapon].kind==='pistol'?-.025:-.22).applyMatrix4(mount.matrix);
   for(const side of ['armR','armL'] as const){if(hasLost(p,side))continue;const arm=arms[side];if(arm){let point=side==='armR'&&!hasLost(p,'armR')?right:hasLost(p,'armR')?right:left;if(p.carriedCorpse&&side==='armL'){const clip=sampleCombatHands('carry',(time/1800)%1);point=clip?.left.clone().lerp(new T.Vector3(-.12,1.28,-.48),.65)??new T.Vector3(-.12,1.28,-.48);}grip(arm,point,side==='armL'?-1:1);}}
   for(const finger of fingers){const digit=Number(finger.name[6]),joint=Number(finger.name[8]),side=finger.name.endsWith('.L')?1:-1;finger.rotation.set(digit===1?.15:digit===2&&joint===1?.15:joint===1?.55:1.15,0,digit===1?side*.5:0);}
   for(const finger of bonusFingers)finger.bone.quaternion.copy(finger.rest).multiply(rotation.setFromAxisAngle(axis.set(0,0,1),finger.angle));
- },dispose(){disposed=true;mount.removeFromParent();star.removeFromParent();for(const entry of worldModels.values())entry.release();worldModels.clear();for(const geometry of geometries)geometry.dispose();starGeometry.dispose();for(const material of [metal,wood,polymer,starMaterial])material.dispose();}};
+ },dispose(){disposed=true;mount.removeFromParent();star.removeFromParent();for(const entry of worldModels.values())entry.release();worldModels.clear();for(const geometry of geometries)geometry.dispose();starGeometry.dispose();for(const material of authoredMaterials)material.dispose();for(const material of [metal,wood,polymer,starMaterial])material.dispose();}};
 }
