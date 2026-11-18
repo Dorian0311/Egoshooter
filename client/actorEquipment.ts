@@ -45,15 +45,18 @@ export function createActorEquipment(root:T.Group,chains:Partial<Record<'armL'|'
  const metal=new T.MeshStandardMaterial({color:'#333c3b',metalness:.7,roughness:.38}),wood=new T.MeshStandardMaterial({color:'#5d4731',roughness:.72}),polymer=new T.MeshStandardMaterial({color:'#242a27',roughness:.75}),starMaterial=new T.MeshStandardMaterial({color:'#b8c0c1',metalness:.9,roughness:.25});
  const geometries:T.BufferGeometry[]=[],models:T.Group[]=[];
  const box=(parent:T.Group,x:number,y:number,z:number,w:number,h:number,d:number,material:T.Material)=>{const geometry=new T.BoxGeometry(w,h,d);geometries.push(geometry);const mesh=new T.Mesh(geometry,material);mesh.position.set(x,y,z);mesh.castShadow=true;parent.add(mesh);};
- for(let index=0;index<weapons.length;index++){const model=new T.Group();models.push(model);mount.add(model);
-  model.visible=false;
+ for(let index=0;index<weapons.length;index++){const model=new T.Group();models.push(model);
   if(index>=4&&index<=6)continue;
   if(germanWeaponNames[index]){const gun=createGermanWeapon(index);gun.rotation.y=Math.PI;model.add(gun);continue;}
   if(index===1){box(model,0,.018,-.075,.035,.045,.19,metal);box(model,0,-.04,.015,.035,.105,.045,polymer);}
   else{const length=index===0?.95:index===2?.62:.75;box(model,0,.025,-.21,.045,.065,length,metal);box(model,0,-.01,.10,.055,.075,.24,index===0?wood:polymer);box(model,0,-.065,-.025,.035,.13,.045,polymer);if(index>1)box(model,0,-.10,-.16,.04,.20,.07,metal);if(index===3)box(model,0,.09,-.14,.025,.08,.26,polymer);}
  }
  const authoredMaterials=new Set<T.Material>();for(const model of models.slice(7))model.traverse(o=>{if(o instanceof T.Mesh)for(const m of Array.isArray(o.material)?o.material:[o.material])authoredMaterials.add(m);});
- for(const model of models)batchWeaponProxy(model);geometries.length=0;mount.traverse(o=>{if(o instanceof T.Mesh){geometries.push(o.geometry);for(const material of Array.isArray(o.material)?o.material:[o.material])authoredMaterials.add(material);}});
+ geometries.length=0;
+ for(const model of models){
+  batchWeaponProxy(model);
+  model.traverse(o=>{if(o instanceof T.Mesh){geometries.push(o.geometry);for(const material of Array.isArray(o.material)?o.material:[o.material])authoredMaterials.add(material);}});
+ }
  const starGeometry=createThrowingStarGeometry(),star=new T.Mesh(starGeometry,starMaterial);star.name='held-throwing-star';star.userData.nonAnatomic=true;root.add(star);star.visible=false;
  let previousWeapon=-1,changedAt=-Infinity;
  let disposed=false;const worldModels=new Map<number,Awaited<ReturnType<typeof acquireWorldWeapon>> & {name:WorldWeapon}>(),pendingModels=new Map<number,WorldWeapon>(),failedModels=new Set<WorldWeapon>();
@@ -86,11 +89,14 @@ export function createActorEquipment(root:T.Group,chains:Partial<Record<'armL'|'
   const throwArm=hasLost(p,'armR')?arms.armL:arms.armR;if(star.visible&&throwArm){throwArm.hand.getWorldPosition(target);root.worldToLocal(target);star.position.copy(target);star.rotation.set(0,Math.PI/2,0);star.scale.setScalar(.65);}
   if(!mount.visible)return;
   textured(p.weapon,p.team);
-  if(previousWeapon!==p.weapon){previousWeapon=p.weapon;changedAt=now;}
+  if(previousWeapon!==p.weapon){
+   models[previousWeapon]?.removeFromParent();
+   mount.add(models[p.weapon]);
+   previousWeapon=p.weapon;changedAt=now;
+  }
   const crawl=isCrawling(p),transition=Math.max(0,1-(now-changedAt)/260),reloading=p.reloadAt>now,recoil=Math.exp(-Math.max(0,now-(p.fireAt-weapons[p.weapon].interval))/75)*Number(p.fireAt>0);
   mount.position.set(hasLost(p,'armR')?-.14:.14,crawl?1.48:p.crouching?.88:p.sprinting?1.03:1.19,(crawl?.06:-.26)+recoil*.035);mount.position.y-=Math.sin(transition*Math.PI)*.12;
   mount.rotation.set((crawl?Math.PI/2:0)+p.pitch-(p.sprinting?.28:0)-(reloading?.25:0)-recoil*.055,0,reloading?.18:0);
-  models.forEach((model,index)=>model.visible=index===p.weapon);
   // updateMatrix is explicit: the IK targets must match this frame's weapon pose.
   for(const arm of Object.values(arms))if(arm)root.worldToLocal(arm.upper.getWorldPosition(arm.shoulder));
   for(let iteration=0;iteration<4;iteration++)for(const side of ['armR','armL'] as const){const arm=arms[side];if(!arm||hasLost(p,side)||p.carriedCorpse&&side==='armL')continue;mount.updateMatrix();localGrip.set(0,side==='armR'||hasLost(p,'armR')?.025:.015,side==='armR'||hasLost(p,'armR')?.035:weapons[p.weapon].kind==='pistol'?-.025:-.22).applyMatrix4(mount.matrix);offset.copy(arm.shoulder).sub(localGrip);const distance=offset.length();if(distance>arm.reach)mount.position.addScaledVector(offset,(distance-arm.reach)/distance);}

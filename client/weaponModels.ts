@@ -99,10 +99,9 @@ export function createWeaponModels(parent:T.Group,warmup?:(model:T.Group)=>Promi
         if(name==='g36'&&/g36[_ ]30rd[_ ]magazine/.test(object.name))parts.push({object,rest:object.position.clone(),kind:'magazine'});
       });
       movingParts.set(model,parts);
-      model.visible=false;
       try{await warmup?.(model);}catch(error){console.warn('Weapon shader warmup unavailable',error);}
       if(disposed){release(model);return;}
-      models.set(name,model);root.add(model);
+      models.set(name,model);
     } catch(error){failed.add(name);console.warn('Weapon model could not load:',name,error);}
     finally{pending.delete(name);}
   }
@@ -115,22 +114,28 @@ export function createWeaponModels(parent:T.Group,warmup?:(model:T.Group)=>Promi
       // French weapon replacements remain separate; do not label a US mesh MAS-38.
       const name=germanWeaponNames[index]??(index===4?null:index===3?'g36':index===1?'luger':index===0?'kar98k':'mp40');
       if(name)void load(name);
-      active=name?models.get(name):undefined;
-      for(const model of models.values())model.visible=model===active;
+      const next=name?models.get(name):undefined;
+      if(next!==active){
+        active?.removeFromParent();
+        active=next;
+        if(active)root.add(active);
+      }
       if(active){muzzle.position.fromArray(active.userData.muzzle);active.localToWorld(muzzle.position);root.worldToLocal(muzzle.position);}
       else muzzle.position.set(.24,-.18,index===1?-.96:index===2?-1:-1.32);
       return !!active;
     },
-    muzzleWorld(){root.updateWorldMatrix(true,true);return muzzle.getWorldPosition(new T.Vector3());},
+    muzzleWorld(){return muzzle.getWorldPosition(new T.Vector3());},
     muzzleLocal(){return muzzle.position.clone();},
     sightY(){return active?active.position.y+active.userData.sightY:muzzle.position.y+.05;},
     /** Pass zero outside reload; normalized server-timed progress during reload. */
     animatePose(progress:number,aimBlend=0){
-      for(const [model,parts] of movingParts){
-        const blend=model===active?reloadEnvelope(progress):0;
-        for(const part of parts){part.object.position.copy(part.rest);part.object.position.y-=blend*(part.kind==='magazine'?.19:.16);}
-        arms.get(model)?.update(model===active?aimBlend:0);
+      if(!active)return;
+      const blend=reloadEnvelope(progress);
+      for(const part of movingParts.get(active)??[]){
+        part.object.position.copy(part.rest);
+        part.object.position.y-=blend*(part.kind==='magazine'?.19:.16);
       }
+      arms.get(active)?.update(aimBlend);
     },
     dispose(){disposed=true;for(const m of models.values())release(m);root.removeFromParent();models.clear();movingParts.clear();arms.clear();}
   };

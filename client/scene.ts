@@ -213,6 +213,19 @@ export function createScene(
   const ammoReadout=document.createElement('div');ammoReadout.className='weapon-ammo';ammoReadout.setAttribute('aria-label','Munition an der Waffe');
   const ammoNumber=document.createElement('strong'),ammoReserve=document.createElement('span'),ammoStatus=document.createElement('small');
   ammoReadout.append(ammoNumber,ammoReserve,ammoStatus);canvas.parentElement?.append(ammoReadout);
+  const viewport={width:canvas.clientWidth,height:canvas.clientHeight};
+  let ammoWidth=ammoReadout.offsetWidth||164;
+  const hudResize=new ResizeObserver(entries=>{
+    for(const entry of entries){
+      if(entry.target===canvas){
+        viewport.width=Math.round(entry.contentRect.width);viewport.height=Math.round(entry.contentRect.height);
+      }else{
+        const width=entry.borderBoxSize?.[0]?.inlineSize??ammoReadout.offsetWidth;
+        if(width>0)ammoWidth=Math.round(width);
+      }
+    }
+  });
+  hudResize.observe(canvas);hudResize.observe(ammoReadout,{box:'border-box'});
   const scope=document.createElement('div');scope.className='sniper-scope';scope.hidden=true;
   scope.setAttribute('aria-hidden','true');canvas.parentElement?.append(scope);
   const ammoAnchor=new T.Vector3(),avatarPosition=new T.Vector3();
@@ -643,7 +656,7 @@ export function createScene(
     for (const g of avatars.values()) {
       const p = g.userData.target as Player;
       if(!p.hp&&!p.downedUntil&&snapshot?.corpses.some(c=>c.sourceId===p.id&&c.sourceLife===p.life&&remainsScene.isReady(c.id)))g.visible=false;
-      if(!g.visible){g.userData.nameplate?.render(camera,canvas.clientWidth,canvas.clientHeight,false,0);continue;}
+      if(!g.visible){g.userData.nameplate?.render(camera,viewport.width,viewport.height,false,0);continue;}
       const remote=(g.userData.motion as RemoteMotion|undefined)?.sample(t)??p;
       g.position.set(remote.x,remote.y,remote.z);
       g.userData.renderYaw=remote.yaw;
@@ -652,7 +665,7 @@ export function createScene(
       actorBounds.center.copy(g.position);actorBounds.center.y+=1;
       const drawActor=actorDistance<28||actorFrustum.intersectsSphere(actorBounds);
       if(g.userData.human)g.userData.human.group.visible=drawActor;
-      if(drawActor)detailDrawsSkipped+=g.userData.details?.update(actorDistance,canvas.clientHeight,camera.fov)??0;
+      if(drawActor)detailDrawsSkipped+=g.userData.details?.update(actorDistance,viewport.height,camera.fov)??0;
       if(drawActor&&p.hp>0&&p.grounded)contactShadows.actor(remote.x,remote.y,remote.z,p.crouching||isCrawling(p));
       if(!p.hp&&!p.downedUntil&&p.diedAt){
         const pose=headshotPose(Math.max(0,((snapshot?.now??0)+t-receivedAt-p.diedAt)/1000),!!g.userData.deathSlowMotion);
@@ -673,7 +686,7 @@ export function createScene(
           g.userData.banterGesture=p.gestureUntil;
           if(enabled&&!menu&&local?.hp&&visible&&distance<16){const line=residentLine(p.gestureUntil,p.id);nameplate.say(line,t+Math.min(7500,Math.max(4500,line.length*65)));if(!readOnly&&audio?.state==='running')residentVoice.say(line,settings.volume*(1-distance/20),t,residentProfile(p.id).archetype);}
         }
-        nameplate.render(camera,canvas.clientWidth,canvas.clientHeight,visible,Math.min(1,Math.max(0,(45-distance)/12)),t);
+        nameplate.render(camera,viewport.width,viewport.height,visible,Math.min(1,Math.max(0,(45-distance)/12)),t);
       }
       const distance=g.position.distanceTo(camera.position),animationInterval=distance>45?1000/15:distance>20?1000/30:0,animationElapsed=t-(g.userData.animatedAt??t-100);
       if(drawActor&&animationElapsed>=animationInterval){g.userData.human?.update({...p,crouching:p.crouching||p.treatment?.kind==='harvest',x:g.position.x,y:g.position.y,z:g.position.z,yaw:remote.yaw,pitch:remote.pitch},t,Math.min(.1,animationElapsed/1000),(snapshot?.now??0)+t-receivedAt);g.userData.animatedAt=t;}
@@ -727,9 +740,8 @@ export function createScene(
     if(local&&!saw&&!car){
       weapon.updateWorldMatrix(true,false);weapon.localToWorld(ammoAnchor.set(.34,-.15,-.52));
       const projected=projectWeaponMuzzle(ammoAnchor,camera,62-12*(pose?.aimBlend??0)).project(camera);
-      const labelWidth=ammoReadout.offsetWidth||164;
-      const anchorX=Math.max(.56,Math.min(.91,(projected.x+1)/2))*canvas.clientWidth;
-      ammoReadout.style.left=`${Math.max(12,Math.min(canvas.clientWidth-labelWidth-16,anchorX+12))}px`;
+      const anchorX=Math.max(.56,Math.min(.91,(projected.x+1)/2))*viewport.width;
+      ammoReadout.style.left=`${Math.max(12,Math.min(viewport.width-ammoWidth-16,anchorX+12))}px`;
       ammoReadout.style.top=`${Math.max(55,Math.min(81,(1-projected.y)*50))}%`;
       const count=String(local.ammo).padStart(2,'0'),reserve=` / ${weapons[local.weapon].mag} · ${local.reserve} Reserve`,status=local.reloadAt?'NACHLADEN …':local.ammo===0?`${settings.bindings.reload.replace('Key','')} NACHLADEN`:weapons[local.weapon].name.toUpperCase();
       if(ammoNumber.textContent!==count)ammoNumber.textContent=count;
@@ -771,7 +783,7 @@ export function createScene(
     if(hemisphere)hemisphere.intensity+=( (condition==='night'?.10:indoors?.19:.45)-hemisphere.intensity)*Math.min(1,dt*4);
     river?.update(t/1000);
     mapDetails.update(t/1000);
-    graphics.render(dt,pose?.aimBlend??0,!menu,cpuTimes.at(-1),frameMs/1000);
+    graphics.render(dt,pose?.aimBlend??0,!menu,cpuTimes.at(-1),frameMs/1000,viewport);
     const cpuMs=performance.now()-cpuStarted;
     cpuTimes.push(cpuMs);if(cpuTimes.length>180)cpuTimes.shift();
     if(frameProfile.length<profileLimit)frameProfile.push({frameMs,cpuMs,...graphics.frameState,steps,calls:renderer.info.render.calls,triangles:renderer.info.render.triangles,programs:renderer.info.programs?.length??0,detailDrawsSkipped});
@@ -800,7 +812,7 @@ export function createScene(
       stopped = true;
       contactShadows.dispose();
       residentVoice.dispose();
-      wanderers.dispose();interiors.dispose();interactionHint.remove();
+      hudResize.disconnect();wanderers.dispose();interiors.dispose();interactionHint.remove();
       ammoReadout.remove();scope.remove();
       mapDetails.dispose();disposeMilitaryRoofs?.();disposeEnvironmentUpgrade();
       hitEffects.dispose();gore.dispose();operationScene.dispose();remainsScene.dispose();muzzleEffects.dispose();

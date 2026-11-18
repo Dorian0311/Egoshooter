@@ -100,9 +100,9 @@ export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
     warmup:(object:T.Object3D,weapon=false)=>{if(weapon)viewmodel.sync();return renderer.compileAsync(object,weapon?weaponCamera:camera,weapon?viewmodel.scene:scene);},
     weaponFov:()=>weaponCamera.fov,
     stats:()=>({quality,antialias:fxaa.enabled?'fxaa':'smaa',aaPasses:Number(fxaa.enabled)+Number(smaa.enabled),scale:ratio/Math.max(.01,renderPixelRatio(quality,window.devicePixelRatio,width,height)),pixelRatio:ratio,gpuMs:gpuTiming.state.ms}),
-    render(dt: number,aimBlend=0,adaptive=true,cpuMs?:number,frameSeconds=dt) {
-      const w = Math.max(1, renderer.domElement.clientWidth);
-      const h = Math.max(1, renderer.domElement.clientHeight);
+    render(dt: number,aimBlend=0,adaptive=true,cpuMs?:number,frameSeconds=dt,viewport?:{width:number;height:number}) {
+      const w = Math.max(1, viewport?.width??renderer.domElement.clientWidth);
+      const h = Math.max(1, viewport?.height??renderer.domElement.clientHeight);
       // A few asynchronous samples/second are enough for the quality governor;
       // avoid querying the driver on every rendered frame.
       const currentTimingFrame=timingFrame++;

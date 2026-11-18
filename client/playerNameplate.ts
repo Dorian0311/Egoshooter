@@ -27,7 +27,8 @@ export function createPlayerNameplate(parent:HTMLElement,name:string,friendly:bo
  const element=document.createElement('div'),label=document.createElement('span'),speech=document.createElement('span');
  element.className='player-label';speech.className='resident-banter';speech.hidden=true;element.append(label,speech);parent.append(element);
  if(residentBiography){element.setAttribute('aria-description',residentBiography);element.title=residentBiography;element.classList.add('is-resident');}
- const projected=new T.Vector3();let previous='',disposed=false,speechUntil=0;
+ const projected=new T.Vector3();let previous='',disposed=false,speechUntil=0,displayed=false,lastTransform='',lastOpacity='';
+ element.style.left='0';element.style.top='0';
  function update(nextName:string,isFriendly:boolean){
   const key=`${isFriendly}:${nextName}`;if(key===previous)return;previous=key;
   label.textContent=nextName;element.classList.toggle('is-enemy',!residentBiography&&!isFriendly);
@@ -36,10 +37,16 @@ export function createPlayerNameplate(parent:HTMLElement,name:string,friendly:bo
  update(name,friendly);
  return {anchor,update,say(text:string,until:number){speech.textContent=text;speechUntil=until;},render(camera:T.Camera,width:number,height:number,visible:boolean,opacity:number,now=performance.now()){
   if(disposed)return;
-  speech.hidden=now>=speechUntil;
-  anchor.getWorldPosition(projected);projected.project(camera);
+  const hidden=now>=speechUntil;
+  if(speech.hidden!==hidden)speech.hidden=hidden;
+  if(visible){anchor.getWorldPosition(projected);projected.project(camera);}
   const show=visible&&projected.z>-1&&projected.z<1&&Math.abs(projected.x)<1.1&&Math.abs(projected.y)<1.1;
-  element.style.display=show?'block':'none';
-  if(show){element.style.left=`${(projected.x+1)*.5*width}px`;element.style.top=`${(1-projected.y)*.5*height}px`;element.style.opacity=String(opacity);}
+  if(show!==displayed){displayed=show;element.style.display=show?'block':'none';}
+  if(show){
+   const transform=`translate(${(projected.x+1)*.5*width}px, ${(1-projected.y)*.5*height}px) translate(-50%, -100%)`;
+   if(transform!==lastTransform){lastTransform=transform;element.style.transform=transform;}
+   const alpha=String(opacity);
+   if(alpha!==lastOpacity){lastOpacity=alpha;element.style.opacity=alpha;}
+  }
  },dispose(){if(disposed)return;disposed=true;element.remove();anchor.removeFromParent();}};
 }

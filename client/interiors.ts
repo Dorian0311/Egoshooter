@@ -72,16 +72,34 @@ export function createInteriors(scene:T.Scene,world:World){
  const dustGeometry=new T.BufferGeometry(),dustPositions=new Float32Array(72*3);dustGeometry.setAttribute('position',new T.BufferAttribute(dustPositions,3));
  const dustMaterial=new T.PointsMaterial({color:0xf1dfb7,size:.018,transparent:true,opacity:.23,depthWrite:false});materials.push(dustMaterial);const dust=new T.Points(dustGeometry,dustMaterial);root.add(dust);
  dustGeometry.boundingSphere=new T.Sphere(new T.Vector3(),8);
- const marks=new T.InstancedMesh(new T.SphereGeometry(.026,5,4),dark,48);marks.count=0;root.add(marks);let markIndex=0;
+ const marks=new T.InstancedMesh(new T.SphereGeometry(.026,5,4),dark,48);marks.count=0;root.add(marks);
+ marks.instanceMatrix.setUsage(T.DynamicDrawUsage);
+ const markMatrix=new T.Matrix4();
+ let markIndex=0,marksChanged=false;
  const shards:{mesh:T.Mesh;velocity:T.Vector3;life:number}[]=[];const shardGeometry=new T.TetrahedronGeometry(.06);const shardMat=material(0xb4d4cc);
- function sync(next:InteriorState|undefined){state=next??state;for(const f of fixtures){if(f.type==='door'){const q=doorBox(f,!!state.doors[f.id]),o=doors.get(f.id)!;o.position.set(q.x,q.y,q.z);o.rotation.y=state.doors[f.id]?Math.PI/2:0;}if(f.type==='glass')panes.get(f.id)!.visible=!state.broken.includes(f.id);}lampMaterials.forEach((m,n)=>m.emissiveIntensity=state.lights[`light-${n}`]===false?0:1.1); }
+ const doorStates=new Map<string,boolean>();
+ function sync(next:InteriorState|undefined){
+  if(next)state=next;
+  for(const fixture of fixtures){
+   if(fixture.type==='door'){
+    const open=!!state.doors[fixture.id];
+    if(doorStates.get(fixture.id)===open)continue;
+    doorStates.set(fixture.id,open);
+    const box=doorBox(fixture,open),mesh=doors.get(fixture.id)!;
+    mesh.position.set(box.x,box.y,box.z);mesh.rotation.y=open?Math.PI/2:0;
+    mesh.updateMatrix();mesh.matrixAutoUpdate=false;
+   }else if(fixture.type==='glass')panes.get(fixture.id)!.visible=!state.broken.includes(fixture.id);
+  }
+  lampMaterials.forEach((material,n)=>material.emissiveIntensity=state.lights[`light-${n}`]===false?0:1.1);
+ }
  sync(state);
  return {sync,
   interaction(p:Player,yaw:number){
    const eye=eyePosition(p);return fixtures.filter(f=>f.type!=='glass').map(f=>{const x=f.type==='door'?f.box.x+1.7:f.box.x,dx=x-eye.x,dz=f.box.z-eye.z;return {f,distance:Math.hypot(dx,dz,f.box.y-eye.y),dot:dx*-Math.sin(yaw)+dz*-Math.cos(yaw)};}).filter(v=>v.distance<2.7&&v.dot>.1).sort((a,b)=>a.distance-b.distance)[0]?.f;
   },label(id:string){return id.startsWith('door')?(state.doors[id]?'Tür schließen':'Tür öffnen'):(state.lights[id]?'Licht ausschalten':'Licht einschalten');},
-  impact(e:GameEvent){if(!e.point)return;if(e.type==='shot'){marks.setMatrixAt(markIndex%48,new T.Matrix4().makeTranslation(...e.point));marks.count=Math.min(48,++markIndex);marks.instanceMatrix.needsUpdate=true;marks.computeBoundingSphere();}if(e.type==='glass'){for(let n=0;n<12&&shards.length<72;n++){const mesh=new T.Mesh(shardGeometry,shardMat);mesh.position.set(...e.point);root.add(mesh);shards.push({mesh,velocity:new T.Vector3(Math.sin(n*7)*2,Math.cos(n)*2,Math.cos(n*7)*2),life:1.4});}}},
+  impact(e:GameEvent){if(!e.point)return;if(e.type==='shot'){marks.setMatrixAt(markIndex%48,markMatrix.makeTranslation(...e.point));marks.count=Math.min(48,++markIndex);marksChanged=true;}if(e.type==='glass'){for(let n=0;n<12&&shards.length<72;n++){const mesh=new T.Mesh(shardGeometry,shardMat);mesh.position.set(...e.point);root.add(mesh);shards.push({mesh,velocity:new T.Vector3(Math.sin(n*7)*2,Math.cos(n)*2,Math.cos(n*7)*2),life:1.4});}}},
   update(p:Player|undefined,time:number,dt:number){
+   if(marksChanged){marks.instanceMatrix.needsUpdate=true;marks.computeBoundingSphere();marksChanged=false;}
    lighting.update(p??origin,time,state);
    const room=p?insideBuilding(world,p.x,p.z):-1;dust.visible=room>=0&&state.lights[`light-${room}`]!==false;
    if(room>=0){const b=world.buildings[room],floor=(p?.y??0)>=3.8?4:0;for(let n=0;n<72;n++){dustPositions[n*3]=b.x+Math.sin(n*12.3+time*.00007)*5;dustPositions[n*3+1]=floor+.3+((n*.173+time*.00004)%3);dustPositions[n*3+2]=b.z+Math.cos(n*8.7+time*.0001)*5;}dustGeometry.attributes.position.needsUpdate=true;dustGeometry.boundingSphere!.center.set(b.x,floor+1.8,b.z);}
