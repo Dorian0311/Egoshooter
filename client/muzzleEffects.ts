@@ -1,4 +1,11 @@
 import * as T from 'three';
+import {createCombatBillboards} from './combatBillboards';
+
+const particleCapacity=96;
+type Particle={
+  position:T.Vector3;velocity:T.Vector3;size:number;life:number;total:number;
+  color:T.Color;flash:boolean;fresh:boolean;
+};
 
 /** Short flashes, expanding smoke and tracers; bounded even with eight automatic weapons. */
 export function createMuzzleEffects(scene:T.Scene){
@@ -7,24 +14,38 @@ export function createMuzzleEffects(scene:T.Scene){
   const gradient=ctx.createRadialGradient(32,32,0,32,32,32);
   gradient.addColorStop(0,'rgba(255,255,255,1)');gradient.addColorStop(.3,'rgba(255,255,255,.65)');gradient.addColorStop(1,'rgba(255,255,255,0)');
   ctx.fillStyle=gradient;ctx.fillRect(0,0,64,64);
-  const texture=new T.CanvasTexture(canvas);
-  const particles:Array<{sprite:T.Sprite;velocity:T.Vector3;life:number;total:number;flash:boolean;fresh:boolean}>=[];
+  const texture=new T.CanvasTexture(canvas),group=new T.Group();
+  group.name='muzzle-effects';scene.add(group);
+  const flashBatch=createCombatBillboards(texture,particleCapacity,T.AdditiveBlending);
+  const smokeBatch=createCombatBillboards(texture,particleCapacity,T.NormalBlending);
+  group.add(flashBatch.mesh,smokeBatch.mesh);
+  const colors=[0xfff1bc,0xff922e,0x969c99,0xfff3bd,0xffb957].map(color=>new T.Color(color));
+  const free:Particle[]=Array.from({length:particleCapacity},()=>({
+    position:new T.Vector3(),velocity:new T.Vector3(),size:0,life:0,total:0,
+    color:colors[0],flash:false,fresh:false,
+  }));
+  const particles:Particle[]=[];
   const beamGeometry=new T.CylinderGeometry(1,1,1,6,1,true);
-  const beams:{mesh:T.Mesh<T.CylinderGeometry,T.MeshBasicMaterial>;life:number}[]=[];
+  const beams=Array.from({length:32},()=>{
+    const material=new T.MeshBasicMaterial({color:'#ffe2a3',transparent:true,depthWrite:false,blending:T.AdditiveBlending,toneMapped:false});
+    const mesh=new T.Mesh(beamGeometry,material);
+    mesh.visible=false;group.add(mesh);
+    return {mesh,life:0};
+  });
   const axis=new T.Vector3(0,1,0),offset=new T.Vector3();
   const beamDuration=.145;
   const light=new T.PointLight(0xffb64c,0,4,2);light.layers.enable(1);scene.add(light);let lightLife=0;
-  function remove(index:number){const p=particles[index];p.sprite.removeFromParent();p.sprite.material.dispose();particles.splice(index,1);}
+  function particle(flash:boolean,size:number,life:number,color:T.Color){
+    const p=free.pop()??particles.shift()!;
+    p.flash=flash;p.fresh=true;p.life=life;p.total=life;p.size=size;p.color=color;
+    particles.push(p);return p;
+  }
   return {
+    group,texture,
     emit(position:T.Vector3,direction:T.Vector3,end?:T.Vector3,solidImpact=false){
       const length=end?offset.subVectors(end,position).length():0;
       if(length>.08&&offset.dot(direction)>0){
-        let beam=beams.find(entry=>entry.life<=0);
-        if(!beam&&beams.length<32){
-          const material=new T.MeshBasicMaterial({color:'#ffe2a3',transparent:true,depthWrite:false,blending:T.AdditiveBlending,toneMapped:false});
-          const mesh=new T.Mesh(beamGeometry,material);
-          scene.add(mesh);beam={mesh,life:0};beams.push(beam);
-        }
+        const beam=beams.find(entry=>entry.life<=0);
         if(beam){
           const {mesh}=beam;
           beam.life=beamDuration;mesh.visible=true;mesh.material.opacity=.95;
@@ -35,21 +56,17 @@ export function createMuzzleEffects(scene:T.Scene){
         }
       }
       for(let i=0;i<5;i++){
-        if(particles.length>=96)remove(0);
         const flash=i<2;
-        const material=new T.SpriteMaterial({map:texture,color:flash?(i===0?0xfff1bc:0xff922e):0x969c99,transparent:true,depthWrite:false,blending:flash?T.AdditiveBlending:T.NormalBlending});
-        const sprite=new T.Sprite(material);sprite.position.copy(position).addScaledVector(direction,i*.045);
-        const total=flash?.085:.35+i*.065;sprite.scale.setScalar(flash?(i===0?.25:.32):.06);scene.add(sprite);
-        particles.push({sprite,flash,fresh:true,life:total,total,velocity:direction.clone().multiplyScalar(flash?0:.5).add(new T.Vector3((Math.random()-.5)*.12,.16,0))});
+        const p=particle(flash,i===0?.25:i===1?.32:.06,flash?.085:.35+i*.065,colors[Math.min(i,2)]);
+        p.position.copy(position).addScaledVector(direction,i*.045);
+        p.velocity.copy(direction).multiplyScalar(flash?0:.5);
+        p.velocity.x+=(Math.random()-.5)*.12;p.velocity.y+=.16;
       }
       if(end&&solidImpact){
         for(let n=0;n<3;n++){
-          if(particles.length>=96)remove(0);
-          const sprite=new T.Sprite(new T.SpriteMaterial({map:texture,color:n===0?0xfff3bd:0xffb957,depthWrite:false,transparent:true,blending:T.AdditiveBlending}));
-          sprite.position.copy(end).addScaledVector(direction,-.07);
-          sprite.scale.setScalar(n===0?.19:.085);scene.add(sprite);
-          const total=n===0?.12:.18;
-          particles.push({sprite,velocity:new T.Vector3((n-1)*.8,n*.45,(1-n)*.6).addScaledVector(direction,-1.1),life:total,total,flash:true,fresh:true});
+          const p=particle(true,n===0?.19:.085,n===0?.12:.18,colors[n===0?3:4]);
+          p.position.copy(end).addScaledVector(direction,-.07);
+          p.velocity.set((n-1)*.8,n*.45,(1-n)*.6).addScaledVector(direction,-1.1);
         }
       }
       light.position.copy(position);light.intensity=2.5;lightLife=.055;
@@ -62,8 +79,26 @@ export function createMuzzleEffects(scene:T.Scene){
         beam.mesh.visible=beam.life>0;
         beam.mesh.material.opacity=.95*(beam.life/beamDuration);
       }
-      for(let i=particles.length-1;i>=0;i--){const p=particles[i];if(p.fresh){p.fresh=false;continue;}p.life-=dt;if(p.life<=0){remove(i);continue;}p.sprite.position.addScaledVector(p.velocity,dt);p.sprite.material.opacity=(p.life/p.total)*(p.flash?1:.24);if(!p.flash)p.sprite.scale.addScalar(dt*.24);}
+      let remaining=0;
+      for(const p of particles){
+        const fresh=p.fresh;p.fresh=false;
+        if(!fresh){
+          p.life-=dt;
+          if(p.life<=0){free.push(p);continue;}
+          p.position.addScaledVector(p.velocity,dt);
+          if(!p.flash)p.size+=dt*.24;
+        }
+        const batch=p.flash?flashBatch:smokeBatch;
+        batch.add(p.position,p.size,fresh?1:p.life/p.total*(p.flash?1:.24),p.color);
+        particles[remaining++]=p;
+      }
+      particles.length=remaining;
+      smokeBatch.flush();flashBatch.flush();
     },
-    dispose(){while(particles.length)remove(0);for(const {mesh} of beams){mesh.removeFromParent();mesh.material.dispose();}beamGeometry.dispose();texture.dispose();light.removeFromParent();}
+    dispose(){
+      smokeBatch.dispose();flashBatch.dispose();group.removeFromParent();
+      for(const {mesh} of beams)mesh.material.dispose();
+      beamGeometry.dispose();texture.dispose();light.removeFromParent();
+    },
   };
 }

@@ -525,16 +525,24 @@ export function createScene(
           victim.userData.deathAxis=new T.Vector3(horizontal.z,0,-horizontal.x);victim.visible=true;
         }}
       }
-      if((e.type==='impact'||e.type==='shot'&&!s.events.some(hit=>hit.type==='hit'&&hit.id===e.id))&&e.point){const box=collisionWorld.boxes.find(b=>Math.abs(b.x-e.point![0])<b.w/2+.2&&Math.abs(b.y-e.point![1])<b.h/2+.2&&Math.abs(b.z-e.point![2])<b.d/2+.2),surface=box?.kind==='door'?'wood':['truck','container','fence'].includes(box?.kind??'')?'metal':'stone';battleAudio.effect(e.weapon===6?'body':surface,new T.Vector3(...e.point),.24*settings.volume,1,eventMuffled);}
+      let solidImpact=false;
+      if(e.point&&(e.type==='impact'||e.type==='shot')){
+        const [x,y,z]=e.point,margin=.20;
+        const candidates=nearbyBoxes(collisionWorld.boxes,x-margin,z-margin,x+margin,z+margin);
+        const box=candidates.find(b=>Math.abs(b.x-x)<b.w/2+margin&&Math.abs(b.y-y)<b.h/2+margin&&Math.abs(b.z-z)<b.d/2+margin);
+        const sparksMargin=.16;
+        solidImpact=candidates.some(b=>Math.abs(b.x-x)<=b.w/2+sparksMargin&&Math.abs(b.y-y)<=b.h/2+sparksMargin&&Math.abs(b.z-z)<=b.d/2+sparksMargin);
+        if(e.type==='impact'||!s.events.some(hit=>hit.type==='hit'&&hit.id===e.id)){
+          const surface=box?.kind==='door'?'wood':['truck','container','fence'].includes(box?.kind??'')?'metal':'stone';
+          battleAudio.effect(e.weapon===6?'body':surface,eventPoint,.24*settings.volume,1,eventMuffled);
+        }
+      }
       if (e.type === "shot") {
         if(e.point){const shooter=eventActor;if(shooter){
           const direction=new T.Vector3(-Math.sin(shooter.yaw)*Math.cos(shooter.pitch),Math.sin(shooter.pitch),-Math.cos(shooter.yaw)*Math.cos(shooter.pitch));
           const eye=actorEyePosition(shooter);
           const start=e.id===id?projectWeaponMuzzle(detailedWeapons.muzzleWorld(),camera,graphics.weaponFov()):new T.Vector3(eye.x,eye.y-.10,eye.z).addScaledVector(direction,.65);
-          const end=new T.Vector3(...e.point),margin=.16;
-          const nearby=nearbyBoxes(collisionWorld.boxes,end.x-margin,end.z-margin,end.x+margin,end.z+margin);
-          const solidImpact=nearby.some(box=>Math.abs(box.x-end.x)<=box.w/2+margin&&Math.abs(box.y-end.y)<=box.h/2+margin&&Math.abs(box.z-end.z)<=box.d/2+margin);
-          muzzleEffects.emit(start,direction,end,solidImpact);
+          muzzleEffects.emit(start,direction,eventPoint,solidImpact);
         }}
         sound(eventActor,e.weapon??eventActor?.weapon);
         if (e.id === id){shakeAt=performance.now();const stability=local?shotStability(local):1;shakeStrength=.7*stability;viewmodel.shot(e.weapon??0,stability);pitch=Math.min(1.45,pitch+weapons[e.weapon??0].recoil*(aim?.7:1)*stability);yaw+=Math.sin(seq*2.3)*weapons[e.weapon??0].recoil*.2*stability;}
@@ -545,6 +553,9 @@ export function createScene(
     }
   }
   const graphics=createGraphics(renderer,scene,camera,sun,graphicsQuality);
+  renderer.initTexture(muzzleEffects.texture);
+  void Promise.all([graphics.warmup(muzzleEffects.group),graphics.warmup(operationScene.blastGroup)])
+    .catch(error=>console.warn('Combat effects shader warmup unavailable',error));
   let captureFrame:(()=>void)|undefined;
   let raf = 0;
   const frameTimes:number[]=[],cpuTimes:number[]=[];
@@ -792,7 +803,7 @@ export function createScene(
       wanderers.dispose();interiors.dispose();interactionHint.remove();
       ammoReadout.remove();scope.remove();
       mapDetails.dispose();disposeMilitaryRoofs?.();disposeEnvironmentUpgrade();
-      hitEffects.dispose();gore.dispose();operationScene.dispose();remainsScene.dispose();
+      hitEffects.dispose();gore.dispose();operationScene.dispose();remainsScene.dispose();muzzleEffects.dispose();
       cancelAnimationFrame(raf);
       listeners.forEach((f) => f());
       if (locked()) document.exitPointerLock();
@@ -810,7 +821,7 @@ export function createScene(
           }
         }
       });
-      viewmodel.dispose();detailedWeapons.dispose();muzzleEffects.dispose();disposeAssets();graphics.dispose();environment.dispose();materialLibrary.dispose();
+      viewmodel.dispose();detailedWeapons.dispose();disposeAssets();graphics.dispose();environment.dispose();materialLibrary.dispose();
       renderer.dispose();
       releaseWorldWeapons();
     },

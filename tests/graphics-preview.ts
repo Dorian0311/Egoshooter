@@ -16,6 +16,7 @@ const weapon=document.querySelector<HTMLSelectElement>('#weapon')!;
 const reloadButton=document.querySelector<HTMLButtonElement>('#reload')!;
 const characters=document.querySelector<HTMLSelectElement>('#characters')!;
 const params=new URLSearchParams(location.search);
+const stress=params.get('stress')==='1';
 const clean=params.get('overview')==='1';
 if(clean){document.querySelector('aside')!.style.display='none';document.documentElement.classList.add('clean-overview');}
 if(['storm','frontline','street','river','alpine','combat','residents','interior','upstairs','station'].includes(params.get('view')??''))view.value=params.get('view')!;
@@ -24,6 +25,7 @@ crowd.checked=params.get('crowd')==='1';
 if(params.get('characters')==='bonus')characters.value='bonus';
 if(['0','1','2','3','4'].includes(params.get('weapon')??''))weapon.value=params.get('weapon')!;
 let currentSnapshot:Snapshot,simulation:ReturnType<typeof setInterval>|undefined;
+let stressTick=0,stressRun=0,stressFrames=0,stressShots=0,stressBlasts=0;
 let scene: ReturnType<typeof createScene> | undefined;
 let samples: number[] = [], warmup = performance.now() + 5000;
 const history:Record<string,unknown>[]=[];
@@ -61,7 +63,8 @@ function show() {
   }
   currentSnapshot=snapshot;
   const overview=mapId==='storm'?{position:[-72,27,87] as [number,number,number],target:[0,1,0] as [number,number,number]}:mapId==='frontline'?{position:[-72,24,77] as [number,number,number],target:[0,1,0] as [number,number,number]}:mapId==='alpine'?{position:[-72,25,38] as [number,number,number],target:[0,2,-20] as [number,number,number]}:{position:[-73,27,62] as [number,number,number],target:[8,2,-10] as [number,number,number]};
-  scene = createScene(canvas, () => {}, mapId, parseGraphicsQuality(quality.value),undefined,undefined,clean?overview:undefined);
+  // Replay the fixed view on each update so test shots cannot accumulate recoil.
+  scene = createScene(canvas, () => {}, mapId, parseGraphicsQuality(quality.value),undefined,undefined,clean?overview:undefined,stress);
   scene.update(snapshot, player.id);
   simulation=setInterval(()=>{
     snapshot.now+=1000/30;
@@ -71,6 +74,28 @@ function show() {
       target.x=-43+(motion==='walk'||motion==='sprint'?Math.sin(snapshot.now*(motion==='sprint'?.003:.0015))*1.3:0);
     }
     if(view.value!=='combat')for(let i=1;i<snapshot.players.length;i++)snapshot.players[i].x=(mapId==='alpine'?-50+(i-1)*2.7:-48+(i-1)*6)+Math.sin(snapshot.now*.001+i)*1.3;
+    if(stress){
+      stressTick++;
+      const events:Snapshot['events']=[];
+      const seconds=stressTick/30;
+      for(const [i,actor] of snapshot.players.entries()){
+        if(i>0){
+          actor.x=player.x+(i-4)*1.25+Math.sin(seconds*2+i)*.45;
+          actor.z=player.z-3.8-(i%3)*1.45;
+          actor.yaw=Math.atan2(actor.x-player.x,actor.z-player.z);
+        }
+        if((stressTick+i)%3!==0)continue;
+        const point:[number,number,number]=i===0?[player.x+.7,player.y+1.3,player.z-10]:[player.x+(i-4)*.74,player.y+1.35,player.z+1.1];
+        events.push({type:'shot',eventId:`fire-${stressRun}-${stressTick}-${i}`,id:actor.id,weapon:2,point});
+        if(stressFrames>0)stressShots++;
+      }
+      if(stressTick%42===0){
+        for(let n=0;n<3;n++)events.push({type:'explosion',eventId:`blast-${stressRun}-${stressTick}-${n}`,id:player.id,weapon:15,point:[player.x+(n-1)*2.3,player.y+.4,player.z-4-n],radius:4.5});
+        if(stressFrames>0)stressBlasts+=3;
+      }
+      if(stressFrames>0)stressFrames--;
+      snapshot.events=events;
+    }
     scene?.update(snapshot,player.id);
   },1000/30);
   resetMeasurement();
@@ -103,6 +128,9 @@ function measure(now: number) {
   }
   raf = requestAnimationFrame(measure);
 }
-Object.assign(window,{graphicsReview:{profile:(limit=1200)=>scene?.profileFrames(limit),samples:()=>scene?.frameProfile()??[],gpuTiming:(enabled:boolean)=>scene?.gpuTiming(enabled)}});
+Object.assign(window,{graphicsReview:{profile:(limit=1200)=>scene?.profileFrames(limit),samples:()=>scene?.frameProfile()??[],gpuTiming:(enabled:boolean)=>scene?.gpuTiming(enabled),
+  stressStart:(ticks=420)=>{stressRun++;stressTick=0;stressFrames=ticks;stressShots=stressBlasts=0;scene?.profileFrames(3600);},
+  stressStats:()=>({remaining:stressFrames,shots:stressShots,blasts:stressBlasts}),
+}});
 show(); raf = requestAnimationFrame(measure);
 window.addEventListener('pagehide', () => { cancelAnimationFrame(raf);if(simulation)clearInterval(simulation); scene?.dispose(); });
