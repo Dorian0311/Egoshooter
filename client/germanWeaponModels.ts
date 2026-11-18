@@ -1,7 +1,7 @@
 import * as T from 'three';
 import {createMP34} from './mp34Model';
 
-export const germanWeaponNames:Record<number,string>={7:'stg44',8:'gewehr43',9:'mg42',10:'mp34',11:'p38',12:'fg42'};
+export const germanWeaponNames:Record<number,string>={7:'stg44',8:'gewehr43',9:'mg42',10:'mp34',11:'p38',12:'fg42',13:'kar98k-zf39'};
 export function germanWeaponId(name:string){return Object.keys(germanWeaponNames).map(Number).find(id=>germanWeaponNames[id]===name);}
 
 /** Original game meshes in metres, grip at the origin and muzzle along +Z. */
@@ -23,6 +23,24 @@ export function createGermanWeapon(id:number):T.Group {
     box(0,.045,.09,.034,.033,.19,steel,'p38-slide');tube(0,.043,.174,.012,.13,dark);box(0,-.035,-.012,.038,.115,.055,grip,'p38-grip').rotation.x=-.18;box(0,.024,.035,.04,.028,.12,steel);sights(.21);trigger();
     for(let n=0;n<6;n++)box(.019,-.065+n*.012,-.012,.002,.003,.042,dark,'grip-ridge');
     root.userData.muzzle=[0,.043,.24];root.userData.sightY=.118;return root;
+  }
+  if(id===13){
+    stock(.32,.14);
+    box(0,.012,.255,.055,.065,.67,wood,'walnut-fore-end');
+    box(0,.052,.29,.045,.025,.45,wood,'upper-handguard');
+    tube(0,.063,.46,.014,.81,steel);
+    tube(0,.064,.095,.026,.26,steel,'bolt-action');
+    const bolt=box(.035,.054,.004,.059,.014,.019,steel,'bolt-handle');bolt.rotation.z=-.48;
+    for(const z of [-.035,.19]){
+      box(0,.104,z,.032,.068,.03,dark,'scope-mount');
+      tube(0,.152,z,.025,.025,steel,'scope-ring');
+    }
+    tube(0,.152,.085,.019,.34,dark,'scope-tube');
+    tube(0,.152,.257,.028,.072,steel,'objective-bell');
+    tube(0,.152,-.103,.025,.067,steel,'eyepiece');
+    tube(0,.152,.294,.022,.004,new T.MeshStandardMaterial({color:0x37635b,metalness:.65,roughness:.2}),'objective-lens');
+    box(0,.178,.093,.027,.031,.028,dark,'scope-turret');
+    sights(.805);trigger();root.userData.muzzle=[0,.063,.865];root.userData.sightY=.152;return root;
   }
   const rifle=id===8,mp=id===10,mg=id===9,fg=id===12;
   const muzzle=rifle?.83:mg?.91:mp?.59:fg?.70:.66;

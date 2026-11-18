@@ -10,7 +10,7 @@ test('all foley variations are finite, bounded, audible and click-free at both s
   assert.equal(data.length,Math.ceil(soundDurations[name]*rate));
   for(const value of data){assert.ok(Number.isFinite(value),name);energy+=value*value;peak=Math.max(peak,Math.abs(value));}
   assert.ok(peak<=.921&&peak>.05,`${name}: ${peak}`);assert.ok(Math.sqrt(energy/data.length)>.005,name);
-  assert.ok(data[0]===0);if(name!=='saw')assert.ok(data.at(-1)===0);
+  assert.ok(data[0]===0);if(name!=='saw'&&name!=='rc-engine')assert.ok(data.at(-1)===0);
   else assert.ok(Math.abs(data.at(-1)!-data[0])<.05,'engine loop seam');
  }
 });

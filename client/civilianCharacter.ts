@@ -80,6 +80,7 @@ export function createCivilianCharacter(data:CivilianCharacterData,residentId='r
   if(id===appearanceId)return;appearanceId=id;skinColor.set(residentSkinTone(id));handColor.copy(skinColor).multiply(baseSkin);
   for(const {mesh,weights,clothes,head}of skinMeshes){const colors=mesh.geometry.getAttribute('color');for(let i=0;i<weights.length;i++){if(head)vertexColor.copy(skinColor);else vertexColor.copy(clothColors[clothes[i]]).lerp(handColor,Math.min(1,weights[i]));colors.setXYZ(i,vertexColor.r,vertexColor.g,vertexColor.b);}colors.needsUpdate=true;}
  }
+ style(residentId);
  let disposed=false,initialized=false,lastX=0,lastZ=0,speed=0,phase=0;
  return {group,
   update(player:Player,time:number,dt:number,now=time){

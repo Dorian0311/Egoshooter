@@ -38,6 +38,7 @@ test('residents have distinct silhouettes and head accessories follow the rig an
 
 test('resident skin and outfit are isolated from the shared source and other instances',async()=>{
  const {data}=await actualAsset(),first=createCivilianCharacter(data,'resident-2'),second=createCivilianCharacter(data);
+ const originalColors=meshes(second.group).map(mesh=>mesh.geometry.getAttribute('color')?.getX(0));
  const player=makePlayer('resident-2','Bewohner','de');player.kind='resident';first.update(player,0,1/60);
  const head=meshes(first.group).find(m=>(m.material as T.Material).name==='m004_head')!;
  const body=meshes(first.group).find(m=>(m.material as T.Material).name==='m004_body')!;
@@ -47,7 +48,7 @@ test('resident skin and outfit are isolated from the shared source and other ins
  assert.ok(palette.size>3,'hands, jacket, trousers and boots must retain separate colors');
  assert.equal((body.material as T.MeshStandardMaterial).map,null,'the old plaid suit must not show through the new outfit');
  for(const mesh of meshes(data.entry.root))assert.equal(mesh.geometry.getAttribute('color'),undefined,'cached source must stay immutable');
- for(const mesh of meshes(second.group)){const colors=mesh.geometry.getAttribute('color');if(colors)assert.equal(colors.getX(0),1);}
+ assert.deepEqual(meshes(second.group).map(mesh=>mesh.geometry.getAttribute('color')?.getX(0)),originalColors);
  const anatomy=createAnatomy(first.group),detached=anatomy.detach('head');assert.ok(detached);
  let preserved=false;detached.traverse(o=>{if(o instanceof T.Mesh&&(o.material as T.Material).name==='m004_head')preserved=o.geometry.getAttribute('color').getX(0)<.5;});
  assert.ok(preserved,'detached geometry must retain the resident skin tint');

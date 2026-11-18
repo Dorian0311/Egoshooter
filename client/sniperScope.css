@@ -1,0 +1,31 @@
+.sniper-scope {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+}
+
+.sniper-scope[hidden] { display: none; }
+
+.sniper-scope::before {
+  content: '';
+  width: min(75dvh, 82vw);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  border: 2px solid #171712;
+  box-shadow: 0 0 0 150vmax #080a09, inset 0 0 20px 6px #0b120fe0;
+  background:
+    linear-gradient(#101410, #101410) center / 100% 1px no-repeat,
+    linear-gradient(#101410, #101410) center bottom / 2px 50% no-repeat;
+}
+
+:has(> .sniper-scope:not([hidden])) .city-crosshair:not(.city-hit) { visibility: hidden; }
+:has(> .sniper-scope:not([hidden])) > .weapon-ammo {
+  left: auto !important;
+  top: auto !important;
+  right: 16px;
+  bottom: 16px;
+}

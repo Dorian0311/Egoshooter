@@ -4,7 +4,7 @@ import {uniforms,type UniformId} from '../shared/uniforms';
 import './weaponPicker.css';
 
 const kindLabels={rifle:'Gewehr',pistol:'Pistole',smg:'Maschinenpistole',assault:'Sturmgewehr',lmg:'Maschinengewehr',melee:'Nahkampf',special:'Spezial'};
-const descriptions:Partial<Record<WeaponId,string>>={0:'Präziser Repetierer für große Entfernungen.',1:'Kompakte Seitenwaffe mit kurzem Nachladen.',2:'Schnelle Feuerstöße auf kurze Distanz.',7:'Vielseitig auf mittlere Entfernung.',8:'Halbautomatisches Gewehr mit kräftigen Einzelschüssen.',9:'Hohe Feuerrate, starkes Streuen und langes Nachladen.',10:'Kontrollierbare Maschinenpistole mit Holzschaft.',11:'Schnelle Seitenwaffe für den Nahbereich.',12:'Kräftiges automatisches Gewehr.'};
+const descriptions:Partial<Record<WeaponId,string>>={0:'Präziser Repetierer für große Entfernungen.',1:'Kompakte Seitenwaffe mit kurzem Nachladen.',2:'Schnelle Feuerstöße auf kurze Distanz.',7:'Vielseitig auf mittlere Entfernung.',8:'Halbautomatisches Gewehr mit kräftigen Einzelschüssen.',9:'Hohe Feuerrate, starkes Streuen und langes Nachladen.',10:'Kontrollierbare Maschinenpistole mit Holzschaft.',11:'Schnelle Seitenwaffe für den Nahbereich.',12:'Kräftiges automatisches Gewehr.',13:'Repetierbüchse mit ZF39-Zielfernrohr für weite Distanzen.'};
 function savedSelection(uniform:UniformId):WeaponId[]{
   try{const value:unknown=JSON.parse(localStorage.getItem('altstadt-loadout')??'null');if(validLoadout(value,uniform)&&value.every(id=>historicalWeaponIds.includes(id)||id===4))return [...value];}catch{/* Choose a new loadout when storage is unavailable. */}
   return [];

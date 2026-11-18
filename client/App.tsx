@@ -284,6 +284,7 @@ export default function App({
       {settingsOpen&&<GameSettingsPanel value={settings} onChange={setSettings} onClose={()=>setSettingsOpen(false)} graphics={{value:graphicsQuality,onChange:setGraphicsQuality}} onLeave={snapshot?()=>void leaveGame():undefined}/>}
       {startIntent&&!snapshot&&(!choosingWeapons?<CharacterPicker map={selectedMap} value={preferredUniform} onClose={()=>{setStartIntent(null);setChoosingWeapons(false);}} onSelect={id=>{setPreferredUniform(id);setError('');setChoosingWeapons(true);}}/>:preferredUniform&&<WeaponPicker uniform={preferredUniform} busy={busy} error={error} onBack={()=>setChoosingWeapons(false)} onClose={()=>{setStartIntent(null);setChoosingWeapons(false);}} onStart={loadout=>void connect(startIntent.create,startIntent.training,preferredUniform,startIntent.operation,loadout)}/>)}
       {snapshot&&(scoreboardOpen||scoreboardHeld)&&<MatchScoreboard snapshot={snapshot} playerId={access?.playerId} onClose={()=>{setScoreboardOpen(false);setScoreboardHeld(false);}}/>}
+      {active&&!!me?.rockets&&<div className="rocket-count">{keyLabel('rocket')} · Stielraketen: {me.rockets}</div>}
       {active&&me&&<ol className="loadout-hud" aria-label="Deine Waffenplätze">{me.loadout.map((id,slot)=><li key={slot} className={me.weapon===id?'equipped':''}><kbd>{keyLabel(('weapon'+(slot+1)) as keyof typeof settings.bindings)}</kbd><span>{weapons[id].name}</span></li>)}</ol>}
       {snapshot&&<nav className="game-toolbar" aria-label="Spielbedienung">
         <button aria-expanded={scoreboardOpen||scoreboardHeld} onClick={()=>setScoreboardOpen(v=>!v)}>Rangliste{!tabAssigned?' · Tab':''}</button>
@@ -346,7 +347,7 @@ export default function App({
             Community-Rangliste & persönliche Statistik
           </button>
           <aside><a href="https://polyhaven.com" target="_blank" rel="noreferrer">Powered by Poly Haven · CC0-Materialien</a> · <a href="/shooter/models/realistic/CREDITS.txt" target="_blank" rel="noreferrer">Modellnachweise</a><br/>
-            {keyLabel("forward")}/{keyLabel("left")}/{keyLabel("back")}/{keyLabel("right")} Bewegung · Maus Zielen · {keyLabel("reload")} Nachladen · {keyLabel("weapon1")}/{keyLabel("weapon2")}/{keyLabel("weapon3")}/{keyLabel("weapon4")}/{keyLabel("weapon5")} Waffen · {keyLabel("crouch")} Ducken · {keyLabel("sprint")} Sprint · {keyLabel("interact")} Benutzen · Esc Maus freigeben
+            {keyLabel("forward")}/{keyLabel("left")}/{keyLabel("back")}/{keyLabel("right")} Bewegung · Maus Zielen · {keyLabel("reload")} Nachladen · {keyLabel("weapon1")}/{keyLabel("weapon2")}/{keyLabel("weapon3")}/{keyLabel("weapon4")}/{keyLabel("weapon5")} Waffen · {keyLabel("crouch")} Ducken · {keyLabel("prone")} Kriechen (halten) · {keyLabel("rocket")} Stielrakete · {keyLabel("sprint")} Sprint · {keyLabel("interact")} Benutzen · Esc Maus freigeben
           </aside>
         </main>
       ) : (

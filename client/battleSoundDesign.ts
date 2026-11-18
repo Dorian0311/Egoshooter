@@ -2,13 +2,14 @@
 export type FootMaterial='stone'|'wood'|'metal'|'earth';
 export type SoundName='rifle'|'pistol'|'smg'|'g36'|'stone'|'wood'|'metal'|'glass'|
  'step-stone'|'step-wood'|'step-metal'|'step-earth'|'flesh'|'sever'|'harvest'|
- 'body'|'swing'|'throw'|'reload-out'|'reload-in'|'bolt'|'equip'|'door'|'confirm'|'hurt'|'pickup'|'bandage'|'saw';
+ 'body'|'swing'|'throw'|'reload-out'|'reload-in'|'bolt'|'equip'|'door'|'confirm'|'hurt'|'pickup'|'bandage'|'saw'|'blast'|'rocket'|'rc-engine'|'rc-warning';
 
 export const soundDurations:Record<SoundName,number>={
  rifle:1.15,pistol:.65,smg:.45,g36:.85,stone:.3,wood:.34,metal:.65,glass:1.05,
  'step-stone':.24,'step-wood':.3,'step-metal':.4,'step-earth':.28,
  flesh:.34,sever:.85,harvest:1.35,body:.48,swing:.3,throw:.3,
  'reload-out':.3,'reload-in':.35,bolt:.32,equip:.28,door:.55,confirm:.09,hurt:.5,pickup:.25,bandage:.65,saw:1,
+ blast:.86,rocket:.58,'rc-engine':1,'rc-warning':.84,
 };
 
 export function designSound(name:SoundName,sampleRate:number,variant=0):Float32Array{
@@ -47,6 +48,20 @@ export function designSound(name:SoundName,sampleRate:number,variant=0):Float32A
   noise(.012,rifle?.42:.24,.55,450,6);
   for(const [delay,level] of [[.055,.22],[.12,.13],[.205,.07]] as const)noise(delay,rifle?.65:.33,level,1900,5);
   clack(rifle?.24:.045,.21);if(rifle){clack(.52,.3);clack(.68,.22);}
+ }else if(name==='rc-engine'){
+  for(let i=0;i<out.length;i++){
+   const angle=2*Math.PI*i/out.length;
+   out[i]=.55*Math.sin(72*angle)+.19*Math.sin(144*angle)+.08*Math.sin(216*angle);
+  }
+ }else if(name==='rc-warning'){
+  tone(0,.15,.8,860,980,1);tone(.28,.15,.83,1020,1160,1);tone(.55,.24,.95,1260,1540,1);
+ }else if(name==='blast'){
+  noise(0,.045,1.2,2400,4,true);
+  tone(.004,.28,1.1,90,32,4);
+  noise(.01,.75,.85,620,3);
+ }else if(name==='rocket'){
+  noise(0,.47,.85,3200,3,false,42);
+  tone(.02,.36,.3,420,140,3,.6);
  }else if(name.startsWith('step-')){
   const kind=name.slice(5);tone(0,.13,.6,kind==='wood'?125:kind==='metal'?180:85,42,6);
   noise(.003,.065,kind==='earth'?.32:.55,kind==='earth'?1600:4200,5);
@@ -81,7 +96,7 @@ export function designSound(name:SoundName,sampleRate:number,variant=0):Float32A
   for(let i=0;i<out.length;i++){const t=i/sampleRate,phase=2*Math.PI*73*t;out[i]=(.4*Math.sin(phase)+.22*Math.sin(phase*2)+.15*Math.sin(phase*3)+.08*Math.sin(phase*7))*(.8+.2*Math.sin(2*Math.PI*29*t));}
  }
  // Preserve transients and headroom; silent tail and DC removal prevent clicks.
- if(name!=='saw'){
+ if(name!=='saw'&&name!=='rc-engine'){
   let mean=0;for(const value of out)mean+=value;mean/=out.length;
   for(let i=0;i<out.length;i++){const fade=Math.min(1,i/(sampleRate*.001),(out.length-1-i)/(sampleRate*.012));out[i]=(out[i]-mean)*fade;}
  }

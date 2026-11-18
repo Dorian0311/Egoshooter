@@ -1,4 +1,4 @@
-import {makePlayer,move,neutral,hitPlayer,rayBox,type Game,type Player,type Team,type GameEvent} from './game';
+import {makePlayer,move,neutral,hitPlayer,rayBox,STEP,type Input,type Game,type Player,type Team,type GameEvent} from './game';
 import {getWorld,ground,withinPlayArea,type World} from './world';
 import {wandererPose} from './wanderers';
 import {residentCast,residentName} from './residentProfiles';
@@ -6,12 +6,13 @@ import {rockBlocks,rayRock} from './rocks';
 import {freshInjuries,armCount,eyeHeight,eyePosition,isCrawling,hasLost,limbBits,type BodyPart} from './injuries';
 import {parseOperation,type OperationConfig,type Condition} from './operationConfig';
 import {Remains} from './remains';
-import {weapons} from './weapons';
+import {weapons,ROCKET_ID,REMOTE_CAR_ID} from './weapons';
+import {CAR_WARNING_MS,createCarCourse,driveCar,parkedCars,type RemoteCar} from './remoteCars';
 
 export type Point={x:number;y:number;z:number};
 type BotNoise={point:Point;team:Team;range:number;decoy:boolean};
-export type Pickup=Point&{id:string;kind:'gift'|'bandage';taken:boolean};
-export type Projectile=Point&{id:string;owner:string;life:number;vx:number;vy:number;vz:number;spawnedAt:number;expires:number};
+export type Pickup=Point&{id:string;kind:'gift'|'bandage'|'rocket';taken:boolean};
+export type Projectile=Point&{id:string;owner:string;life:number;vx:number;vy:number;vz:number;spawnedAt:number;expires:number;kind?:'rocket'};
 export type Treatment={kind:'bandage'|'revive'|'sabotage'|'harvest';target:string;targetLife?:number;started:number;until:number;x:number;z:number};
 export const MEDKIT_HEAL=50,MEDKIT_DURATION=4000;
 export type OperationState={config:OperationConfig;condition:Condition;wave:number;completedWaves:number;remaining:number;nextWaveAt:number;result:'success'|'failure'|null;paused:boolean;objective:{point:Point;extract:Point;stage:'target'|'extract'|'complete';progress:number}};
@@ -72,7 +73,12 @@ export class Operation {
  onStart(){
   const g=this.game,s=g.state,o=s.operation,w=getWorld(s.mapId);this.lastTick=s.now;this.participants=this.humans.length;
   o.wave=o.completedWaves=o.remaining=o.nextWaveAt=0;o.result=null;o.paused=false;o.objective.stage='target';o.objective.progress=0;
-  s.pickups=initialPickups(w);s.projectiles=[];s.npcs=[];this.residentTime.clear();this.nextGesture.clear();this.botNoises=[];
+  s.remoteCars=parkedCars(w);
+  s.carCourse=this.config.mode==='training'?createCarCourse(w,s.remoteCars):undefined;
+  s.pickups=[...initialPickups(w),...s.remoteCars.map((car,index):Pickup=>({
+   id:`pickup-rocket-${index}`,kind:'rocket',taken:false,x:car.x+1.15,y:car.y,z:car.z,
+  }))];
+  s.projectiles=[];s.npcs=[];this.residentTime.clear();this.nextGesture.clear();this.botNoises=[];
   this.remains.reset();
   if(w.id==='cologne'||w.id==='alpine')for(let n=0;n<residentCast.length;n++){const id=`resident-${n}`,p=makePlayer(id,residentName(id),'de',n,w);Object.assign(p,{kind:'resident',protectedUntil:0});s.npcs.push(p);this.residentTime.set(p.id,0);this.nextGesture.set(p.id,s.now+6000+n*3500);}
   if(o.condition==='routes'&&s.interiors){for(const key of Object.keys(s.interiors.doors))s.interiors.doors[key]=!key.endsWith('--1');}
@@ -122,6 +128,29 @@ export class Operation {
   for(const p of s.players.filter(p=>p.kind==='bot'&&p.team==='fr'&&!p.hp))if(this.waveSpawned<total&&(!p.connected||s.now>=p.respawnAt)){this.spawn(p,this.waveSpawned++);}
  }
  beforeTick(now:number){
+  for(const car of this.game.state.remoteCars??[]){
+   if(car.detonateAt!==undefined&&now>=car.detonateAt){
+    const training=car.id===this.game.state.carCourse?.carId;
+    const source=car.armedBy??'';
+    const point:[number,number,number]=[car.x,car.y+.35,car.z];
+    this.releaseCar(car);
+    delete car.detonateAt;delete car.armedBy;
+    if(training){
+     this.game.emit({type:'explosion',id:source,weapon:REMOTE_CAR_ID,point,radius:4.5});
+     this.resetTrainingCar(car);
+    }else{
+     car.spent=true;
+     this.explosion(source,REMOTE_CAR_ID,point,4.5,110);
+    }
+    continue;
+   }
+   if(!car.driver)continue;
+   const driver=this.game.player(car.driver);
+   if(!driver?.hp||!driver.connected||driver.life!==car.driverLife||driver.downedUntil){
+    this.releaseCar(car);
+    if(car.detonateAt===undefined)this.resetTrainingCar(car);
+   }
+  }
   const g=this.game,s=g.state,dt=Math.min(.1,Math.max(0,(now-this.lastTick)/1000));this.lastTick=now;
   for(const p of this.actors()){
    if(p.downedUntil&&now>=p.downedUntil){p.downedUntil=0;this.finalDeath(p,p.injuries.source,p.injuries.weapon,'body',[p.x,p.y+.4,p.z]);}
@@ -189,11 +218,38 @@ export class Operation {
  }
  interact(p:Player,value:string):boolean|undefined{
   const g=this.game,s=g.state;if(!p.hp||!p.connected||s.phase!=='playing')return false;
+  const controlled=s.remoteCars?.find(car=>car.driver===p.id&&car.driverLife===p.life);
+  if(controlled){
+   if(value==='car:exit'){
+    this.releaseCar(controlled);
+    if(controlled.detonateAt===undefined)this.resetTrainingCar(controlled);
+    return true;
+   }
+   if(value==='car:explode'){
+    if(controlled.detonateAt!==undefined)return false;
+    controlled.detonateAt=s.now+CAR_WARNING_MS;controlled.armedBy=p.id;controlled.speed=0;
+    g.emit({type:'car-warning',id:p.id,point:[controlled.x,controlled.y+.25,controlled.z]});
+    return true;
+   }
+   return false;
+  }
+  if(value.startsWith('car:')){
+   const car=s.remoteCars?.find(candidate=>candidate.id===value&&!candidate.spent&&!candidate.driver&&candidate.detonateAt===undefined);
+   if(!car||p.kind!=='human'||p.downedUntil||p.treatment||p.carriedCorpse||!this.inReach(p,car))return false;
+   car.driver=p.id;car.driverLife=p.life;p.sprinting=false;p.protectedUntil=0;
+   const course=s.carCourse;
+   if(course?.carId===car.id){
+    course.next=0;course.startedAt=0;delete course.elapsedMs;
+   }
+   g.inputs.delete(p.id);
+   return true;
+  }
+  if(value==='rocket')return p.kind==='human'&&this.launchRocket(p);
   if(p.kind!=='human')return /^(throw|bandage|pickup-|revive:|heal:|objective|part:|corpse:|tent:)/.test(value)?false:undefined;
   const remains=this.remains.interact(p,value);if(remains!==undefined)return remains;
   if(value==='throw')return p.heldPart?this.remains.throwPart(p):this.throwStar(p);
   if(value==='bandage'||value.startsWith('heal:')){const target=value==='bandage'?p:g.player(value.slice(5));if(p.bandages<1||!target||!target.hp||target.departed||!target.connected||target.team!==p.team||target.kind==='resident'||target.hp>=100&&!target.injuries.bleeding||p.treatment||target!==p&&!this.inReach(p,target))return false;p.treatment={kind:'bandage',target:target.id,targetLife:target.life,started:s.now,until:s.now+MEDKIT_DURATION,x:p.x,z:p.z};return true;}
-  if(value.startsWith('pickup-')){const pickup=s.pickups.find(q=>q.id===value);if(!pickup||pickup.taken||!this.inReach(p,pickup))return false;pickup.taken=true;if(pickup.kind==='gift')p.stars+=3;else p.bandages++;g.emit({type:'pickup',id:p.id,target:pickup.id,point:[pickup.x,pickup.y,pickup.z]});return true;}
+  if(value.startsWith('pickup-')){const pickup=s.pickups.find(q=>q.id===value);if(!pickup||pickup.taken||!this.inReach(p,pickup)||pickup.kind==='rocket'&&(p.rockets??0)>=2)return false;pickup.taken=true;if(pickup.kind==='gift')p.stars+=3;else if(pickup.kind==='rocket')p.rockets=(p.rockets??0)+1;else p.bandages++;g.emit({type:'pickup',id:p.id,target:pickup.id,point:[pickup.x,pickup.y,pickup.z]});return true;}
   if(value.startsWith('revive:')){const target=g.player(value.slice(7));if(this.config.kind!=='coop'||!target?.downedUntil||target.downedUntil<=s.now||target.team!==p.team||!this.inReach(p,target)||p.treatment)return false;p.treatment={kind:'revive',target:target.id,targetLife:target.life,started:s.now,until:s.now+4000,x:p.x,z:p.z};return true;}
   if(value==='objective'&&this.config.mode==='mission'){
    const o=s.operation.objective;if(o.stage!=='target'||!this.inReach(p,o.point))return false;
@@ -204,6 +260,56 @@ export class Operation {
   return undefined;
  }
  inReach(p:Player,q:Point){const eye=eyePosition(p),o=[eye.x,eye.y,eye.z],v=[q.x-o[0],q.y+.5-o[1],q.z-o[2]],length=Math.hypot(...v);return length<2.7&&(length<.01||this.obstacleDistance(o,v.map(n=>n/length))>length-.25);}
+ private releaseCar(car:RemoteCar){
+  if(car.driver)this.game.inputs.delete(car.driver);
+  car.driver=undefined;car.driverLife=undefined;car.speed=0;
+ }
+ private resetTrainingCar(car:RemoteCar){
+  if(car.id!==this.game.state.carCourse?.carId)return;
+  const parked=parkedCars(getWorld(this.game.state.mapId)).find(candidate=>candidate.id===car.id);
+  if(parked)Object.assign(car,parked);
+ }
+ driveRemoteCar(p:Player,input:Input|undefined){
+  const car=this.game.state.remoteCars?.find(candidate=>candidate.driver===p.id&&candidate.driverLife===p.life);
+  if(!car)return false;
+  if(input)p.seq=input.seq;
+  if(p.connected&&p.hp&&car.detonateAt===undefined){
+   driveCar(car,input?.forward??0,input?.side??0,STEP,this.game.world());
+   const s=this.game.state,course=s.carCourse;
+   const gate=course?.carId===car.id?course.gates[course.next]:undefined;
+   if(gate&&course&&Math.hypot(car.x-gate.x,car.z-gate.z)<.66&&Math.abs(car.y-gate.y)<.4){
+    if(course.next===0)course.startedAt=s.now;
+    course.next++;
+    if(course.next===course.gates.length){
+     course.elapsedMs=s.now-course.startedAt;
+     course.bestMs=Math.min(course.bestMs??Infinity,course.elapsedMs);
+    }
+    this.game.emit({type:'car-gate',id:p.id,point:[gate.x,gate.y+.4,gate.z]});
+   }
+  }
+  return true;
+ }
+ private launchRocket(p:Player){
+  const s=this.game.state;
+  if(!(p.rockets??0)||!armCount(p)||p.downedUntil||p.carriedCorpse||p.heldPart||p.treatment||s.now<Math.max(p.throwAt,p.rocketReadyAt??0))return false;
+  p.rockets=(p.rockets??0)-1;p.rocketReadyAt=s.now+1000;p.protectedUntil=0;
+  const eye=eyePosition(p),dx=-Math.sin(p.yaw)*Math.cos(p.pitch),dy=Math.sin(p.pitch),dz=-Math.cos(p.yaw)*Math.cos(p.pitch);
+  s.projectiles.push({id:`rocket-${++this.projectileSequence}`,kind:'rocket',owner:p.id,life:p.life,
+   ...eye,vx:dx*30,vy:dy*30,vz:dz*30,spawnedAt:s.now,expires:s.now+2800});
+  this.game.emit({type:'throw',id:p.id,weapon:ROCKET_ID,point:[eye.x,eye.y,eye.z]});
+  return true;
+ }
+ private explosion(source:string,weapon:number,point:[number,number,number],radius:number,power:number){
+  this.game.emit({type:'explosion',id:source,weapon,point,radius});
+  for(const player of this.actors()){
+   if(!player.hp)continue;
+   const direction=[player.x-point[0],player.y+eyeHeight(player)*.55-point[1],player.z-point[2]];
+   const distance=Math.hypot(...direction);
+   if(distance>=radius||distance>.05&&this.obstacleDistance(point,direction.map(n=>n/distance))<distance-.1)continue;
+   const contact:[number,number,number]=[player.x,player.y+eyeHeight(player)*.55,player.z];
+   this.damage(player,source,weapon,Math.round(power*(1-distance/radius)), 'body',contact,false,{x:point[0],z:point[2]});
+  }
+ }
  private updateTreatment(p:Player){
   const t=p.treatment;if(!t)return;if(t.kind==='harvest'){this.remains.updateHarvest(p);return;}const s=this.game.state,input=s.now-(this.game.received.get(p.id)??0)<300?this.game.inputs.get(p.id):undefined,target=t.kind!=='sabotage'?this.game.player(t.target):undefined;
   if(!p.hp||!p.connected||Math.hypot(p.x-t.x,p.z-t.z)>.15||p.injuries.lastDamageAt>t.started||!!input&&(input.fire||Math.hypot(input.forward,input.side)>.01)||t.kind!=='sabotage'&&(!target||target.life!==t.targetLife||!target.connected||target.departed||target.team!==p.team||target.injuries.lastDamageAt>t.started||target!==p&&!this.inReach(p,target))||t.kind==='bandage'&&(!target?.hp||p.bandages<1)||t.kind==='revive'&&!target?.downedUntil||t.kind==='sabotage'&&!this.inReach(p,s.operation.objective.point)){p.treatment=undefined;return;}
@@ -224,7 +330,7 @@ export class Operation {
  private updateProjectiles(dt:number){
   const s=this.game.state;
   s.projectiles=s.projectiles.filter(p=>{
-   if(s.now>=p.expires)return false;
+   if(s.now>=p.expires){if(p.kind==='rocket')this.explosion(p.owner,ROCKET_ID,[p.x,p.y,p.z],3.2,90);return false;}
    const o=[p.x,p.y,p.z],delta=[p.vx*dt,(p.vy-4.9*dt)*dt,p.vz*dt],length=Math.hypot(...delta);if(length<1e-8)return true;const d=delta.map(v=>v/length);
    let distance=Math.min(length,this.obstacleDistance(o,d,.045)),target:Player|undefined,part:BodyPart='body';
    const world=getWorld(s.mapId),steps=Math.max(1,Math.ceil(length/.12));
@@ -232,6 +338,9 @@ export class Operation {
    for(const actor of this.actors()){if(!actor.hp||actor.id===p.owner)continue;const hit=hitPlayer(o,d,actor);if(hit&&hit.distance<distance){target=actor;part=hit.part;distance=hit.distance;}}
    p.x+=d[0]*distance;p.y+=d[1]*distance;p.z+=d[2]*distance;p.vy-=9.8*dt;
    const hitFloor=p.y<=ground(p.x,p.z,getWorld(s.mapId)),blocked=distance<length-.00001;
+   if(p.kind==='rocket'&&(target||blocked||hitFloor)){
+    this.explosion(p.owner,ROCKET_ID,[p.x-d[0]*.06,p.y-d[1]*.06,p.z-d[2]*.06],3.2,90);return false;
+   }
    if(target){this.damage(target,p.owner,5,part==='head'?100:part.startsWith('leg')?30:40,part,[p.x,p.y,p.z],false,{x:o[0],z:o[2]});return false;}
    if(blocked||hitFloor){this.game.emit({type:'impact',id:p.owner,weapon:5,point:[p.x,p.y,p.z]});return false;}
    return withinPlayArea(p.x,p.z,getWorld(s.mapId));

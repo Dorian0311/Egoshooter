@@ -10,3 +10,5 @@
 .city-crosshair.city-hit-head{color:#e8c46f}
 .city-hit-head:after{content:'KOPFTREFFER';position:absolute;left:50%;top:32px;transform:translateX(-50%);font:10px system-ui;letter-spacing:2px}
 .city-crosshair.city-hit i{transform:rotate(45deg)}
+.city-driving ~ .city-crosshair,
+:has(> .city-driving) .city-crosshair { visibility: hidden; }

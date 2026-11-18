@@ -5,7 +5,7 @@ import {createGermanWeapon} from '../client/germanWeaponModels';
 import {batchWeaponProxy} from '../client/weaponProxy';
 
 test('German actor proxies preserve transformed bounds and material colors in one draw',()=>{
-  for(let id=7;id<=12;id++){
+  for(let id=7;id<=13;id++){
     const root=new T.Group(),gun=createGermanWeapon(id);gun.rotation.y=Math.PI;root.position.set(2,3,4);root.rotation.y=.4;root.add(gun);
     const before=new T.Box3().setFromObject(root,true),colors=new Set<string>(),originalMaterials=new Set<T.Material>();
     gun.traverse(o=>{if(o instanceof T.Mesh&&o.material instanceof T.MeshStandardMaterial){colors.add(o.material.color.toArray().join(','));originalMaterials.add(o.material);}});

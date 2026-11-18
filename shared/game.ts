@@ -5,9 +5,10 @@ import {defaultUniform,validUniform,type UniformId} from './uniforms.ts';
 import { getWorld,validMap,ground,withinPlayArea,type World,type MapId } from "./world.ts";
 import {rockBlocks,rockSurface,rayRock} from './rocks.ts';
 import {nearbyBoxes} from './boxIndex';
+import type {CarCourse,RemoteCar} from './remoteCars';
 import {Operation,createOperation,type OperationState,type Pickup,type Projectile,type Treatment} from './operations';
 import {difficultyRules} from './operationConfig';
-import {freshInjuries,armCount,isCrawling,eyeHeight,eyePosition,hasLost,type Injuries,type BodyPart} from './injuries';
+import {freshInjuries,armCount,isCrawling,isForcedCrawl,shotStability,eyeHeight,eyePosition,hasLost,type Injuries,type BodyPart} from './injuries';
 import type {Corpse,BodyPartItem,AidTent} from './remains';
 export const VERSION = 15,
   STEP = 1 / 30;
@@ -20,6 +21,7 @@ export type Input = {
   pitch: number;
   sprint: boolean;
   crouch: boolean;
+  prone?: boolean;
   jump: boolean;
   fire: boolean;
   reload: boolean;
@@ -71,6 +73,9 @@ export type Player = {
   protectedUntil: number;
   grounded: boolean;
   crouching: boolean;
+  rockets?: number;
+  rocketReadyAt?: number;
+  prone?: boolean;
   stamina: number;
   sprintReadyAt: number;
   sprintExhausted: boolean;
@@ -82,6 +87,8 @@ export type Snapshot = {
   npcs:Player[];
   pickups:Pickup[];
   projectiles:Projectile[];
+  remoteCars?:RemoteCar[];
+  carCourse?:CarCourse;
   corpses:Corpse[];
   bodyParts:BodyPartItem[];
   aidTents:AidTent[];
@@ -103,7 +110,7 @@ export type Snapshot = {
   persistence: "pending" | "saved" | "failed" | "practice";
 };
 export type GameEvent = {
-  type: "shot" | "melee" | "hit" | "kill" | "glass" | 'sever' | 'down' | 'revive' | 'pickup' | 'throw' | 'impact' | 'heal' | 'part-pickup' | 'part-throw' | 'part-melee' | 'corpse-carry' | 'corpse-drop' | 'harvest-start' | 'harvest' | 'shield' | 'medical-start' | 'medical-revive';
+  type: "shot" | "melee" | "hit" | "kill" | "glass" | 'sever' | 'down' | 'revive' | 'pickup' | 'throw' | 'impact' | 'explosion' | 'car-warning' | 'car-gate' | 'heal' | 'part-pickup' | 'part-throw' | 'part-melee' | 'corpse-carry' | 'corpse-drop' | 'harvest-start' | 'harvest' | 'shield' | 'medical-start' | 'medical-revive';
   eventId?:string;
   life?:number;
   bodyPart?:BodyPart;
@@ -115,6 +122,7 @@ export type GameEvent = {
   healthLoss?: number;
   /** Direction toward the source, measured in world radians from -Z. */
   bearing?: number;
+  radius?: number;
   point?:[number,number,number];
 };
 export const SAW_POWER_MS = 2200, SAW_RECOVERY_MS = 7000;
@@ -137,6 +145,7 @@ export function validInput(v: unknown): v is Input {
     Math.abs(i.yaw) <= Math.PI * 2 &&
     Math.abs(i.pitch) <= 1.5 &&
     isWeaponId(i.weapon) &&
+    (i.prone===undefined||typeof i.prone==='boolean') &&
     ["sprint", "crouch", "jump", "fire", "reload", "aim"].every(
       (k) => typeof i[k as keyof Input] === "boolean",
     )
@@ -182,12 +191,22 @@ export function makePlayer(
     protectedUntil: 0,
     grounded: true,
     crouching: false,
+    rockets: 0,
+    rocketReadyAt: 0,
+    prone: false,
     stamina:SPRINT_DURATION_MS,sprintReadyAt:0,sprintExhausted:false,sprinting:false,
   };
 }
 export function move(p: Player, i: Input, dt = STEP,world:World=getWorld(),now=i.time) {
   if(p.downedUntil)return;
   if(p.carriedCorpse)i={...i,sprint:false,jump:false};
+  const wantsProne=i.prone===true&&!p.carriedCorpse&&(p.grounded||p.prone===true);
+  if(p.prone&&!wantsProne&&!isForcedCrawl(p)){
+    const height=i.crouch?1.15:1.75, radius=.34;
+    const obstacles=nearbyBoxes(world.boxes,p.x-radius,p.z-radius,p.x+radius,p.z+radius);
+    p.prone=obstacles.some(b=>b.kind==='rock'?rockBlocks(b,p.x,p.y,p.z,height,radius):
+      p.y+height>b.y-b.h/2+.04&&p.y<b.y+b.h/2-.29&&Math.abs(p.x-b.x)<b.w/2+radius&&Math.abs(p.z-b.z)<b.d/2+radius);
+  }else p.prone=wantsProne;
   if(isCrawling(p))i={...i,sprint:false,jump:false,crouch:false};
   if(p.uniform==='leatherface'&&p.weapon===4&&!p.carriedCorpse&&!p.heldPart&&armCount(p)===2&&p.hp>0&&i.fire&&now>=p.powerReadyAt){
     p.powerUntil=now+SAW_POWER_MS;p.powerReadyAt=p.powerUntil+SAW_RECOVERY_MS;
@@ -542,6 +561,7 @@ export class Game {
         now - (this.received.get(p.id) ?? 0) < 300
           ? this.inputs.get(p.id)
           : undefined;
+      if(this.operation.driveRemoteCar(p,i))continue;
       if (i && p.connected) {
         move(p, i,STEP,this.world(),now);
         if(p.y < -4){this.operation.damage(p,'',0,100,'body',[p.x,p.y,p.z]);continue;}
@@ -579,7 +599,9 @@ export class Game {
   }
   interact(id:string,value:unknown){
     const p=this.player(id),state=this.state.interiors;
-    if(!p?.hp||!p.connected||this.state.phase!=='playing'||!state||typeof value!=='string'||value!=='throw'&&this.state.now-(this.interactions.get(id)??-Infinity)<450)return false;
+    if(!p?.hp||!p.connected||this.state.phase!=='playing'||!state||typeof value!=='string')return false;
+    const immediate=value==='throw'||value==='rocket'||value==='car:exit'||value==='car:explode';
+    if(!immediate&&this.state.now-(this.interactions.get(id)??-Infinity)<450)return false;
     const handled=this.operation.interact(p,value);if(handled!==undefined){if(handled&&value!=='throw')this.interactions.set(id,this.state.now);return handled;}
     const f=interiorFixtures(getWorld(this.state.mapId)).find(f=>f.id===value&&f.type!=='glass');if(!f)return false;
     const x=f.type==='door'?f.box.x+f.box.w/2-.2:f.box.x,y=f.box.y,z=f.box.z;
@@ -607,7 +629,7 @@ export class Game {
     p.ammo--;
     p.ammoByWeapon[p.weapon] = p.ammo;
     p.protectedUntil = 0;
-    const spread=(weapons[p.weapon].spread+(Math.abs(i.forward)+Math.abs(i.side)>0?.012:0))*(i.crouch?.65:1)*(i.aim?.3:1);
+    const spread=(weapons[p.weapon].spread+(Math.abs(i.forward)+Math.abs(i.side)>0?.012:0))*shotStability(p)*(i.aim?.3:1);
     const shotYaw=p.yaw+(this.random()*2-1)*spread,shotPitch=p.pitch+(this.random()*2-1)*spread;
     const eye=eyePosition(p),o=[eye.x,eye.y,eye.z],d=[-Math.sin(shotYaw)*Math.cos(shotPitch),Math.sin(shotPitch),-Math.cos(shotYaw)*Math.cos(shotPitch)];
     let distance=150,target:Player|undefined,zone:HitZone='body',part:BodyPart='body';

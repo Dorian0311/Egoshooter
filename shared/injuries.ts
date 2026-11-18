@@ -5,7 +5,9 @@ export type Injuries={lost:number;bleeding:number;damage:Partial<Record<BodyPart
 export const freshInjuries=():Injuries=>({lost:0,bleeding:0,damage:{},source:'',weapon:0,lastDamageAt:0});
 export const hasLost=(p:Player,part:BodyPart)=>!!(p.injuries.lost&limbBits[part]);
 export const armCount=(p:Player)=>2-Number(hasLost(p,'armL'))-Number(hasLost(p,'armR'));
-export const isCrawling=(p:Player)=>!!(p.injuries.lost&24)||p.downedUntil>0;
+export const isForcedCrawl=(p:Player)=>!!(p.injuries.lost&24)||p.downedUntil>0;
+export const isCrawling=(p:Player)=>p.prone===true||isForcedCrawl(p);
+export const shotStability=(p:Player)=>!p.grounded?1:isCrawling(p)?.38:p.crouching?.50:1;
 export const eyeHeight=(p:Player)=>isCrawling(p)?.42:p.crouching?1:1.6;
 export const eyePosition=(p:Player)=>({x:p.x-(isCrawling(p)?Math.sin(p.yaw)*.55:0),y:p.y+eyeHeight(p),z:p.z-(isCrawling(p)?Math.cos(p.yaw)*.55:0)});
 export const bodyPartLabels:Record<BodyPart,string>={head:'Kopf',body:'Körper',armL:'Linker Arm',armR:'Rechter Arm',legL:'Linkes Bein',legR:'Rechtes Bein'};

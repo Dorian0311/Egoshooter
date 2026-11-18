@@ -2,10 +2,10 @@ import * as T from 'three';
 import {residentProfile,type ResidentLook} from '../shared/residentProfiles';
 
 const looks:Record<ResidentLook,{build:[number,number,number];face:[number,number,number];jacket:string;trousers:string;boots:string}>={
- bruiser:{build:[1.23,1.04,1.17],face:[1.12,.95,1.06],jacket:'#c16824',trousers:'#243544',boots:'#29241e'},
- veteran:{build:[1.02,.94,1.05],face:[.94,1.03,.99],jacket:'#52634a',trousers:'#343b2c',boots:'#332b25'},
- officer:{build:[.89,1.10,.95],face:[.95,1.08,.97],jacket:'#2c4666',trousers:'#202c3b',boots:'#202126'},
- showman:{build:[1.14,.98,1.13],face:[1.05,.96,1.08],jacket:'#713f83',trousers:'#7c2445',boots:'#e2d4b2'},
+ bruiser:{build:[1.23,1.04,1.17],face:[1.12,.95,1.06],jacket:'#bf6929',trousers:'#263643',boots:'#29241e'},
+ veteran:{build:[1.02,.94,1.05],face:[.94,1.03,.99],jacket:'#879254',trousers:'#514433',boots:'#332b25'},
+ officer:{build:[.89,1.10,.95],face:[.95,1.08,.97],jacket:'#33668f',trousers:'#233244',boots:'#202126'},
+ showman:{build:[1.14,.98,1.13],face:[1.05,.96,1.08],jacket:'#a74576',trousers:'#62304c',boots:'#e2d4b2'},
 };
 
 /** Bone-attached caricature details, authored in game metres. No new texture assets. */
@@ -40,14 +40,15 @@ export function createResidentAppearance(root:T.Group,body:T.Object3D,id:string)
   for(const side of [-1,1]){box(hair,side*.091,1.703,-.008,.016,.075,.052,'head');const brow=box(hair,side*.044,1.721,-.119,.055,.012,.012,'head');brow.rotation.z=side*.12;}
   // Oversized work-jacket shoulders and a conspicuously large belt buckle.
   for(const side of [-1,1])ball(cloth,side*.219,1.425,-.005,.096,.072,.13,side<0?'armL':'armR');
+  for(const side of [-1,1])box(dark,side*.102,1.24,-.162,.041,.41,.025).rotation.z=side*.11;
   box(silver,.105,1.325,-.157,.055,.08,.01);box(dark,.105,1.337,-.166,.006,.055,.005);
  }else if(profile.look==='veteran'){
-  const grey=material('#858579'),scarf=material('#aa8b48');
+  const grey=material('#b8b1a1'),scarf=material('#d9b862');
   ball(grey,0,1.59,-.084,.08,.056,.063).name='resident-veteran-beard';
   ball(grey,0,1.75,.025,.096,.039,.085);
   glasses();
   const skirt=mesh(new T.CylinderGeometry(.23,.285,.43,24,1,true),cloth,0,.855,.009,'body');skirt.scale.x=w;skirt.scale.z=.65;
-  box(scarf,0,1.47,-.075,.21,.09,.13);box(scarf,.055,1.285,-.162,.065,.31,.025);
+  box(scarf,0,1.47,-.075,.26,.12,.16);box(scarf,.071,1.24,-.179,.11,.42,.035);
   for(let i=0;i<3;i++){
    box(material(['#99453e','#416077','#a08440'][i]),-.105+i*.054,1.345,-.163,.033,.067,.013);
    const medal=mesh(new T.CylinderGeometry(.027,.027,.01,16),i===1?silver:gold,-.105+i*.054,1.294,-.172,'body');medal.rotation.x=Math.PI/2;
@@ -55,7 +56,7 @@ export function createResidentAppearance(root:T.Group,body:T.Object3D,id:string)
   box(leather,.255,.91,.015,.18,.24,.13).name='resident-veteran-satchel';
   const strap=box(leather,0,1.24,-.172,.024,.56,.014);strap.rotation.z=-.55;
  }else if(profile.look==='officer'){
-  const cap=mesh(new T.CylinderGeometry(.16,.126,.125,32),cloth,0,1.825,.003);cap.name='resident-oversized-cap';cap.rotation.z=.09;
+  const cap=mesh(new T.CylinderGeometry(.185,.133,.14,32),cloth,0,1.825,.003);cap.name='resident-oversized-cap';cap.rotation.z=.09;
   const visor=ball(dark,0,1.777,-.134,.16,.017,.114);visor.rotation.x=-.08;
   box(gold,0,1.806,-.145,.07,.045,.014,'head');
   for(const side of [-1,1]){box(gold,side*.191,1.442,-.017,.103,.019,.10);box(gold,side*.051,1.38,-.126,.045,.026,.014);}
@@ -70,7 +71,7 @@ export function createResidentAppearance(root:T.Group,body:T.Object3D,id:string)
   glasses(true);
   const necklace=ring(gold,0,1.46,-.075,.105,.012,'body');necklace.rotation.x=.52;necklace.scale.y=1.16;
   const medal=mesh(new T.CylinderGeometry(.047,.047,.018,24),gold,0,1.325,-.169,'body');medal.rotation.x=Math.PI/2;medal.name='resident-gold-medallion';
-  for(const side of [-1,1]){const lapel=box(trim,side*.085,1.325,-.155,.04,.27,.014);lapel.rotation.z=side*.23;}
+  for(const side of [-1,1]){const lapel=box(trim,side*.085,1.325,-.155,.055,.34,.019);lapel.rotation.z=side*.23;}
  }
  // Preserve each accessory's world position while parenting it to the native rig.
  const roots={head:'Bip01_Head',body:'Bip01_Spine2',armL:'Bip01_L_UpperArm',armR:'Bip01_R_UpperArm'};

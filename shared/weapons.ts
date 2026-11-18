@@ -1,4 +1,6 @@
-export type WeaponId = 0 | 1 | 2 | 3 | 4 | 7 | 8 | 9 | 10 | 11 | 12;
+export type WeaponId = 0 | 1 | 2 | 3 | 4 | 7 | 8 | 9 | 10 | 11 | 12 | 13;
+export const SNIPER_ID=13;
+export const ROCKET_ID=14, REMOTE_CAR_ID=15;
 export type Loadout = [WeaponId, WeaponId, WeaponId, WeaponId, WeaponId];
 export type WeaponKind = 'rifle' | 'pistol' | 'smg' | 'assault' | 'lmg' | 'melee' | 'special';
 type Weapon = {name:string;kind:WeaponKind;mag:number;damage:number;interval:number;reload:number;spread:number;recoil:number;range:number};
@@ -18,8 +20,11 @@ export const weapons:readonly Weapon[] = [
   {name:'MP 34',kind:'smg',mag:32,damage:25,interval:125,reload:2600,spread:.007,recoil:.014,range:28},
   {name:'Walther P38',kind:'pistol',mag:8,damage:30,interval:285,reload:1700,spread:.004,recoil:.020,range:25},
   {name:'FG 42',kind:'lmg',mag:100,damage:39,interval:100,reload:3000,spread:.005,recoil:.025,range:70},
+  {name:'Karabiner 98k mit ZF39',kind:'rifle',mag:5,damage:72,interval:1350,reload:3100,spread:.0007,recoil:.034,range:125},
+  {name:'Stielrakete',kind:'special',mag:1,damage:90,interval:1000,reload:0,spread:0,recoil:0,range:65},
+  {name:'Spreng-Rennwagen',kind:'special',mag:1,damage:110,interval:0,reload:0,spread:0,recoil:0,range:4.5},
 ];
-export const historicalWeaponIds:readonly WeaponId[] = [0,1,2,7,8,9,10,11,12];
+export const historicalWeaponIds:readonly WeaponId[] = [0,1,2,7,8,9,10,11,12,SNIPER_ID];
 export const selectableWeaponIds:readonly WeaponId[] = [...historicalWeaponIds,3,4];
 export const defaultLoadout:Loadout = [0,1,2,7,8];
 export function isWeaponId(value:unknown):value is WeaponId {

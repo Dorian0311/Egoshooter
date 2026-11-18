@@ -35,7 +35,7 @@ export function createViewmodel(parent:T.Group){
   let initialized=false,lastWeapon=-1,equip=0,disposed=false;
   return {
     /** Call once for each server-confirmed local shot, never from mouse-down. */
-    shot(weaponIndex:number){if(!disposed)velocity+=weaponIndex===0?1.7:weaponIndex===1?1.1:.65;},
+    shot(weaponIndex:number,stability=1){if(!disposed)velocity+=(weaponIndex===0||weaponIndex===13?1.7:weaponIndex===1?1.1:.65)*stability;},
     update(input:ViewmodelInput):Readonly<ViewmodelPose>{
       if(disposed)return pose;
       const dt=clamp(Number.isFinite(input.dt)?input.dt:0,0,.05);
