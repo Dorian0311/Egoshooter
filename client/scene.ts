@@ -155,7 +155,7 @@ export function createScene(
     );
     if(b.kind==='cover')coverVisuals.push({box:b,mesh:visual});
   }
-  const disposeAssets=loadSceneAssets(scene,renderer,coverVisuals);
+  const sceneAssets=loadSceneAssets(scene,renderer,coverVisuals,graphicsQuality);
   for (const b of buildings) {
     if(mapId!=='storm'){
     const shape = new T.Shape();
@@ -793,7 +793,7 @@ export function createScene(
   let receivedAt = performance.now();
   raf = requestAnimationFrame(frame);
   return {
-    setQuality:graphics.setQuality,
+    setQuality(value:GraphicsQuality){sceneAssets.setQuality(value);graphics.setQuality(value);},
     setSettings(value:GameSettings){settings=value;if(!value.volume)residentVoice.stop();if(audioOutput)audioOutput.gain.value=value.volume===0?0:1;release();},
     setEnabled(value:boolean){enabled=value;if(!value){residentVoice.stop();release();dragLook=false;if(document.pointerLockElement===canvas)document.exitPointerLock();}},
     startAudio,
@@ -821,6 +821,7 @@ export function createScene(
       if (locked()) document.exitPointerLock();
       battleAudio.dispose();void audio?.close();
       fallbackHands.dispose();chainsaw.dispose();
+      sceneAssets.dispose();
       for(const avatar of avatars.values()){avatar.userData.nameplate?.dispose();avatar.userData.details?.dispose();avatar.userData.anatomy?.dispose();avatar.userData.human?.dispose();}
       for(const root of [scene,camera])root.traverse((o) => {
         if (o instanceof T.Mesh) {
@@ -833,7 +834,7 @@ export function createScene(
           }
         }
       });
-      viewmodel.dispose();detailedWeapons.dispose();disposeAssets();graphics.dispose();environment.dispose();materialLibrary.dispose();
+      viewmodel.dispose();detailedWeapons.dispose();graphics.dispose();environment.dispose();materialLibrary.dispose();
       renderer.dispose();
       releaseWorldWeapons();
     },

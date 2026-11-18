@@ -2,11 +2,14 @@ import * as T from 'three';
 import {GLTFLoader} from 'three/examples/jsm/loaders/GLTFLoader.js';
 import {RGBELoader} from 'three/examples/jsm/loaders/RGBELoader.js';
 import type {Box} from '../shared/world.ts';
-import {instanceStaticModel} from './scenery.ts';
+import {createCrateShadows} from './crateShadows';
+import type {GraphicsQuality} from './graphicsSettings';
 function disposeObject(root:T.Object3D){root.traverse(o=>{if(o instanceof T.Mesh){o.geometry.dispose();for(const m of Array.isArray(o.material)?o.material:[o.material]){for(const value of Object.values(m))if(value instanceof T.Texture)value.dispose();m.dispose();}}});}
-export function loadSceneAssets(scene:T.Scene,renderer:T.WebGLRenderer,covers:{box:Box;mesh:T.Mesh}[]){
+export function loadSceneAssets(scene:T.Scene,renderer:T.WebGLRenderer,covers:{box:Box;mesh:T.Mesh}[],quality:GraphicsQuality){
  let disposed=false;let sky:T.DataTexture|undefined,environment:T.WebGLRenderTarget|undefined;
  const loader=new GLTFLoader();
+ const compact=(value:GraphicsQuality)=>value==='auto'||value==='performance';
+ const crateShadows=createCrateShadows(renderer,scene,compact(quality));
  const loadedModels:T.Object3D[]=[];
  new RGBELoader().load('/shooter/environment/sky.hdr',texture=>{
   if(disposed){texture.dispose();return;}sky=texture;texture.mapping=T.EquirectangularReflectionMapping;
@@ -26,7 +29,7 @@ export function loadSceneAssets(scene:T.Scene,renderer:T.WebGLRenderer,covers:{b
     placement.updateMatrix();placements.push(placement.matrix.clone());
    }
   }
-  instanceStaticModel(scene,gltf.scene,placements,true,32);
+  crateShadows.load(gltf.scene,placements);
  },undefined,()=>console.warn('Crate asset unavailable'));
  // These are dressing outside walking lanes, so their geometry cannot disagree with movement collision.
  loader.load('/shooter/models/barrel_03/asset.gltf',gltf=>{
@@ -35,5 +38,8 @@ export function loadSceneAssets(scene:T.Scene,renderer:T.WebGLRenderer,covers:{b
   const bounds=new T.Box3().setFromObject(gltf.scene),size=bounds.getSize(new T.Vector3()),scale=1.1/size.y;
   for(const [x,z]of [[-71,-50],[-71,50],[71,-50],[71,50]]){const barrel=gltf.scene.clone(true);barrel.scale.setScalar(scale);barrel.position.set(x-bounds.min.x*scale,-bounds.min.y*scale,z-bounds.min.z*scale);barrel.traverse(o=>{if(o instanceof T.Mesh){o.castShadow=true;o.receiveShadow=true;}});scene.add(barrel);}
  },undefined,()=>console.warn('Barrel asset unavailable'));
- return ()=>{disposed=true;sky?.dispose();environment?.dispose();loadedModels.forEach(disposeObject);};
+ return {
+  setQuality:(value:GraphicsQuality)=>crateShadows.setCompact(compact(value)),
+  dispose(){disposed=true;crateShadows.dispose();sky?.dispose();environment?.dispose();loadedModels.forEach(disposeObject);},
+ };
 }
