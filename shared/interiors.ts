@@ -36,11 +36,17 @@ export function initialInteriors(world:World):InteriorState{
 export function doorBox(f:Fixture,open:boolean):Box{
  return open?{...f.box,x:f.box.x-f.box.w/2,z:f.box.z+(f.id.endsWith('--1')?1:-1)*f.box.w/2,w:f.box.d,d:f.box.w}:f.box;
 }
-const collisionLayouts=new WeakMap<World,WeakMap<InteriorState,{signature:string;world:World}>>();
+type CollisionLayout={signature:string;world:World};
+const collisionLayouts=new WeakMap<World,{source:Box[];states:WeakMap<InteriorState,CollisionLayout>;layouts:Map<string,World>}>();
 export function interiorWorld(world:World,state:InteriorState|undefined):World{
  if(!state)return world;
- let cache=collisionLayouts.get(world);if(!cache){cache=new WeakMap();collisionLayouts.set(world,cache);}let signature=state.broken.join('|');for(const fixture of interiorFixtures(world))if(fixture.type==='door')signature+=state.doors[fixture.id]?'1':'0';const previous=cache.get(state);if(previous?.signature===signature)return previous.world;
+ let cache=collisionLayouts.get(world);if(!cache||cache.source!==world.boxes){cache={source:world.boxes,states:new WeakMap(),layouts:new Map()};collisionLayouts.set(world,cache);}
+ let signature=state.broken.join('|');for(const fixture of interiorFixtures(world))if(fixture.type==='door')signature+=state.doors[fixture.id]?'1':'0';const previous=cache.states.get(state);if(previous?.signature===signature)return previous.world;
+ const matching=cache.layouts.get(signature);if(matching){cache.states.set(state,{signature,world:matching});return matching;}
  const boxes=interiorFixtures(world).flatMap(f=>f.type==='door'?[doorBox(f,!!state.doors[f.id])]:f.type==='glass'&&!state.broken.includes(f.id)?[f.box]:[]);
- const collisionWorld={...world,boxes:[...world.boxes,...boxes]};cache.set(state,{signature,world:collisionWorld});return collisionWorld;
+ const collisionWorld={...world,boxes:[...world.boxes,...boxes]};cache.states.set(state,{signature,world:collisionWorld});
+ // Network snapshots have fresh object identities; active server rooms still
+ // keep their own weak entries when the bounded cross-snapshot cache rotates.
+ if(cache.layouts.size>=16)cache.layouts.clear();cache.layouts.set(signature,collisionWorld);return collisionWorld;
 }
 export function insideBuilding(world:World,x:number,z:number){return world.buildings.findIndex(b=>Math.abs(x-b.x)<b.w/2-.25&&Math.abs(z-b.z)<b.d/2-.25);}

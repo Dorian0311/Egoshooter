@@ -2,6 +2,7 @@ import * as T from 'three';
 import {loadHuman,createHuman} from './humanoid';
 import {makePlayer} from '../shared/game';
 import {wandererPose} from '../shared/wanderers';
+import {residentCast,residentName} from '../shared/residentProfiles';
 import type {MapId} from '../shared/world';
 
 export function createWanderers(scene:T.Scene,map:MapId){
@@ -12,10 +13,10 @@ export function createWanderers(scene:T.Scene,map:MapId){
  const colors=[0x51483d,0x38413c,0x63554c,0x474451];
  void loadHuman('de-field',true).then(data=>{
   if(disposed)return;
-  for(let n=0;n<4;n++){
+  for(let n=0;n<residentCast.length;n++){
    const clothing=new T.MeshStandardMaterial({color:colors[n],roughness:1});
-   const human=createHuman(data,'de',map,clothing,'de-field',true);clothing.dispose();
-   const player=makePlayer(`resident-${n}`,'Stadtbewohner','de');
+   const id=`resident-${n}`,human=createHuman(data,'de',map,clothing,'de-field',true,id);clothing.dispose();
+   const player=makePlayer(id,residentName(id),'de');
    human.group.name=player.id;
    player.kind='resident';
    root.add(human.group);people.push({human,player});

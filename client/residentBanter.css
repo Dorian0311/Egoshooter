@@ -1,0 +1,2 @@
+.player-label>.resident-banter{display:block;max-width:240px;margin-top:6px;padding-top:6px;border-top:1px solid #ffffff30;color:#f3dfad;font:500 13px/1.35 system-ui,sans-serif;white-space:normal;overflow:visible;text-overflow:clip;letter-spacing:0}.player-label>.resident-banter[hidden]{display:none}.player-label:has(>.resident-banter:not([hidden])){max-width:min(260px,70vw)}
+.player-label.is-resident{max-width:min(270px,70vw);white-space:normal}.player-label.is-resident>span:first-child{max-width:240px;white-space:normal}.player-label.is-resident::before{color:#f3dfad}

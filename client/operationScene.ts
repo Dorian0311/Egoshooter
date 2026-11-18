@@ -2,6 +2,7 @@ import * as T from 'three';
 import type {Snapshot,Player} from '../shared/game';
 import {eyePosition} from '../shared/injuries';
 import {throwingStarQuaternion} from './projectileMotion';
+import {createMedicalCrates} from './medicalCrate';
 export function createThrowingStarGeometry(){
  const cells=new Set<string>(['0,0']);for(let r=0;r<4;r++)for(const [x,y]of [[0,1],[0,2],[1,2],[2,2]]){let a=x,b=y;for(let n=0;n<r;n++)[a,b]=[b,-a];cells.add(`${a},${b}`);}
  const edges=new Map<string,[[number,number],[number,number]]>();
@@ -12,8 +13,9 @@ export function createThrowingStarGeometry(){
 }
 export function createOperationScene(scene:T.Scene){
  const root=new T.Group();root.name='operation-items';scene.add(root);
- const giftMaterial=new T.MeshStandardMaterial({color:'#7a1924',roughness:.65}),ribbonMaterial=new T.MeshStandardMaterial({color:'#d5ba6d',metalness:.4,roughness:.4}),medicalMaterial=new T.MeshStandardMaterial({color:'#e0d9b7',roughness:.9}),crossMaterial=new T.MeshStandardMaterial({color:'#338b69'}),metal=new T.MeshStandardMaterial({color:'#acb2b7',metalness:.9,roughness:.25});
+ const giftMaterial=new T.MeshStandardMaterial({color:'#7a1924',roughness:.65}),ribbonMaterial=new T.MeshStandardMaterial({color:'#d5ba6d',metalness:.4,roughness:.4}),metal=new T.MeshStandardMaterial({color:'#acb2b7',metalness:.9,roughness:.25});
  const box=new T.BoxGeometry(.55,.45,.55),ribbonA=new T.BoxGeometry(.57,.47,.07),ribbonB=new T.BoxGeometry(.07,.47,.57),star=createThrowingStarGeometry();
+ const medicalCrates=createMedicalCrates();
  const pickups=new Map<string,T.Group>(),projectiles=new Map<string,T.Mesh>();let snapshot:Snapshot|null=null,received=0;
  const marker=new T.Mesh(new T.TorusGeometry(1.1,.05,6,40),new T.MeshBasicMaterial({color:'#d2df87',transparent:true,opacity:.8}));marker.rotation.x=Math.PI/2;marker.visible=false;root.add(marker);
  const missionProps=new T.Group(),radio=new T.Group(),documents=new T.Group(),flag=new T.Group(),propGeometries:T.BufferGeometry[]=[],propMaterials:T.Material[]=[];root.add(missionProps);missionProps.add(radio,documents,flag);
@@ -22,7 +24,7 @@ export function createOperationScene(scene:T.Scene){
  prop(documents,0,.12,0,.65,.22,.45,'#604b32');prop(documents,0,.25,0,.48,.025,.33,'#e9e1bd');prop(documents,-.18,.27,0,.025,.02,.35,'#909872');
  prop(flag,0,1,0,.025,2,.025,'#b8c0b5');prop(flag,.35,1.7,0,.7,.4,.025,'#a4b568');
  return {
-  sync(s:Snapshot){snapshot=s;received=performance.now();for(const p of s.pickups){let group=pickups.get(p.id);if(!group){group=new T.Group();group.add(new T.Mesh(box,p.kind==='gift'?giftMaterial:medicalMaterial));group.add(new T.Mesh(ribbonA,p.kind==='gift'?ribbonMaterial:crossMaterial),new T.Mesh(ribbonB,p.kind==='gift'?ribbonMaterial:crossMaterial));root.add(group);pickups.set(p.id,group);}group.position.set(p.x,p.y+.25,p.z);group.visible=!p.taken;}
+  sync(s:Snapshot){snapshot=s;received=performance.now();for(const p of s.pickups){let group=pickups.get(p.id);if(!group){group=p.kind==='gift'?new T.Group():medicalCrates.create();if(p.kind==='gift'){group.add(new T.Mesh(box,giftMaterial));group.add(new T.Mesh(ribbonA,ribbonMaterial),new T.Mesh(ribbonB,ribbonMaterial));}root.add(group);pickups.set(p.id,group);}group.position.set(p.x,p.y+.25,p.z);group.visible=!p.taken;}
    for(const [id,group]of pickups)if(!s.pickups.some(p=>p.id===id)){root.remove(group);pickups.delete(id);}
    for(const p of s.projectiles){if(!projectiles.has(p.id)){const mesh=new T.Mesh(star,metal);root.add(mesh);projectiles.set(p.id,mesh);}}
    for(const [id,mesh]of projectiles)if(!s.projectiles.some(p=>p.id===id)){root.remove(mesh);projectiles.delete(id);}
@@ -37,6 +39,6 @@ export function createOperationScene(scene:T.Scene){
    return candidates.map(q=>({q,distance:Math.hypot(q.x-eye.x,q.y+.5-eye.y,q.z-eye.z),dot:(q.x-eye.x)*-Math.sin(yaw)+(q.z-eye.z)*-Math.cos(yaw)})).filter(q=>q.distance<2.7&&q.dot>-.1).sort((a,b)=>a.distance-b.distance)[0]?.q;
   },
   update(time:number){if(!snapshot)return;const dt=Math.max(0,Math.min(.1,(time-received)/1000));for(const p of snapshot.projectiles){const mesh=projectiles.get(p.id)!;mesh.position.set(p.x+p.vx*dt,p.y+p.vy*dt-4.9*dt*dt,p.z+p.vz*dt);throwingStarQuaternion({...p,vy:p.vy-9.8*dt},Math.max(0,(snapshot.now-p.spawnedAt)/1000+dt),mesh.quaternion);}marker.material.opacity=.5+.25*Math.sin(time*.004);},
-  dispose(){root.removeFromParent();box.dispose();ribbonA.dispose();ribbonB.dispose();star.dispose();marker.geometry.dispose();marker.material.dispose();for(const g of propGeometries)g.dispose();for(const m of [...propMaterials,giftMaterial,ribbonMaterial,medicalMaterial,crossMaterial,metal])m.dispose();},
+  dispose(){root.removeFromParent();medicalCrates.dispose();box.dispose();ribbonA.dispose();ribbonB.dispose();star.dispose();marker.geometry.dispose();marker.material.dispose();for(const g of propGeometries)g.dispose();for(const m of [...propMaterials,giftMaterial,ribbonMaterial,metal])m.dispose();},
  };
 }

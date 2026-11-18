@@ -1,6 +1,7 @@
-import {makePlayer,move,neutral,hitPlayer,rayBox,type Game,type Player,type GameEvent} from './game';
+import {makePlayer,move,neutral,hitPlayer,rayBox,type Game,type Player,type Team,type GameEvent} from './game';
 import {getWorld,ground,withinPlayArea,type World} from './world';
 import {wandererPose} from './wanderers';
+import {residentCast,residentName} from './residentProfiles';
 import {rockBlocks,rayRock} from './rocks';
 import {freshInjuries,armCount,eyeHeight,eyePosition,isCrawling,hasLost,limbBits,type BodyPart} from './injuries';
 import {parseOperation,type OperationConfig,type Condition} from './operationConfig';
@@ -8,6 +9,7 @@ import {Remains} from './remains';
 import {weapons} from './weapons';
 
 export type Point={x:number;y:number;z:number};
+type BotNoise={point:Point;team:Team;range:number;decoy:boolean};
 export type Pickup=Point&{id:string;kind:'gift'|'bandage';taken:boolean};
 export type Projectile=Point&{id:string;owner:string;life:number;vx:number;vy:number;vz:number;spawnedAt:number;expires:number};
 export type Treatment={kind:'bandage'|'revive'|'sabotage'|'harvest';target:string;targetLife?:number;started:number;until:number;x:number;z:number};
@@ -42,12 +44,24 @@ export class Operation {
  private lastTick=0;
  private residentTime=new Map<string,number>();
  private nextGesture=new Map<string,number>();
+ private botNoises:BotNoise[]=[];
  constructor(readonly game:Game){this.remains=new Remains(game);}
  get config(){return this.game.state.operation.config;}
  get pve(){return this.config.kind!=='multiplayer';}
  get humans(){return this.game.state.players.filter(p=>p.kind==='human'&&!p.departed);}
  actors(){return [...this.game.state.players,...this.game.state.npcs];}
  actor(id:string){return this.game.player(id)??this.game.state.npcs.find(p=>p.id===id);}
+ recordNoise(event:GameEvent){
+  if(!this.pve||this.game.state.phase!=='playing')return;
+  const decoy=event.type==='impact'&&event.weapon===6;
+  if(!decoy&&event.type!=='shot'&&event.type!=='throw'&&event.type!=='melee')return;
+  const source=this.actor(event.id);
+  if(!source||decoy&&!event.point)return;
+  const [x,y,z]=decoy?event.point!:[source.x,source.y,source.z];
+  this.botNoises.push({point:{x,y,z},team:source.team,range:decoy?32:event.type==='shot'?60:14,decoy});
+  if(this.botNoises.length>64)this.botNoises.shift();
+ }
+ takeBotNoises(){return this.botNoises.splice(0);}
  configureBots(){
   if(!this.pve)return;
   const g=this.game,s=g.state;s.players=s.players.filter(p=>p.kind!=='bot');
@@ -58,16 +72,37 @@ export class Operation {
  onStart(){
   const g=this.game,s=g.state,o=s.operation,w=getWorld(s.mapId);this.lastTick=s.now;this.participants=this.humans.length;
   o.wave=o.completedWaves=o.remaining=o.nextWaveAt=0;o.result=null;o.paused=false;o.objective.stage='target';o.objective.progress=0;
-  s.pickups=initialPickups(w);s.projectiles=[];s.npcs=[];this.residentTime.clear();this.nextGesture.clear();
+  s.pickups=initialPickups(w);s.projectiles=[];s.npcs=[];this.residentTime.clear();this.nextGesture.clear();this.botNoises=[];
   this.remains.reset();
-  if(w.id==='cologne'||w.id==='alpine')for(let n=0;n<4;n++){const p=makePlayer(`resident-${n}`,'Stadtbewohner','de',n,w);Object.assign(p,{kind:'resident',protectedUntil:0});s.npcs.push(p);this.residentTime.set(p.id,0);this.nextGesture.set(p.id,s.now+6000+n*3500);}
+  if(w.id==='cologne'||w.id==='alpine')for(let n=0;n<residentCast.length;n++){const id=`resident-${n}`,p=makePlayer(id,residentName(id),'de',n,w);Object.assign(p,{kind:'resident',protectedUntil:0});s.npcs.push(p);this.residentTime.set(p.id,0);this.nextGesture.set(p.id,s.now+6000+n*3500);}
   if(o.condition==='routes'&&s.interiors){for(const key of Object.keys(s.interiors.doors))s.interiors.doors[key]=!key.endsWith('--1');}
   if(!this.pve)return;
   s.persistence='practice';
   if(this.config.mode==='training'||this.config.mode==='survival')s.endsAt=0;
   if(this.config.mode==='mission')s.endsAt=s.now+480000;
   if(this.config.mode==='training'){const human=this.humans[0],bot=s.players.find(p=>p.kind==='bot');if(human&&bot)Object.assign(bot,safeNear(w,human.x+16,human.z));}
+  if(this.config.mode==='mission'||this.config.mode==='battle'){
+   const enemies=s.players.filter(p=>p.kind==='bot'&&p.team==='fr'),placed:Point[]=[];
+   for(const [index,bot] of enemies.entries()){
+    const point=this.enemyStart(w,index,placed);
+    Object.assign(bot,point);
+    placed.push(point);
+   }
+  }
   if(this.config.mode==='survival')this.startWave();
+ }
+ private enemyStart(world:World,index:number,occupied:Point[]){
+  const humans=this.humans.filter(p=>p.connected&&p.hp>0);
+  const origin=world.spawns.fr[index%world.spawns.fr.length],points=safePoints(world);
+  let best=points[0],bestScore=-Infinity;
+  for(const point of points){
+   const fromHumans=Math.min(...humans.map(p=>Math.hypot(point.x-p.x,point.z-p.z)));
+   const fromBots=Math.min(...occupied.map(p=>Math.hypot(point.x-p.x,point.z-p.z)));
+   const score=-Math.hypot(point.x-origin[0],point.z-origin[1])
+    -Math.max(0,25-fromHumans)*10-Math.max(0,16-fromBots)*10;
+   if(score>bestScore){best=point;bestScore=score;}
+  }
+  return best;
  }
  private startWave(){
   const s=this.game.state,o=s.operation;o.wave++;o.nextWaveAt=0;this.waveDefeated=this.waveSpawned=0;
@@ -76,8 +111,8 @@ export class Operation {
   this.fillWave();
  }
  private spawn(p:Player,index:number){
-  const s=this.game.state,w=getWorld(s.mapId),human=this.humans.find(h=>h.hp>0),candidates=safePoints(w).filter(q=>!human||Math.hypot(q.x-human.x,q.z-human.z)>25);
-  const origin=w.spawns.fr[index%4],point=candidates.length?candidates.reduce((a,b)=>Math.hypot(a.x-origin[0],a.z-origin[1])<Math.hypot(b.x-origin[0],b.z-origin[1])?a:b):safeNear(w,origin[0],origin[1]);
+  const s=this.game.state,w=getWorld(s.mapId),occupied=s.players.filter(q=>q.kind==='bot'&&q.team===p.team&&q.hp>0&&q.connected);
+  const point=this.enemyStart(w,index,occupied);
   const fresh=makePlayer(p.id,p.name,p.team,index,w);
   Object.assign(p,fresh,point,{kind:'bot',life:p.life+1,seq:p.seq,ready:true,connected:true,kills:p.kills,deaths:p.deaths,headshots:p.headshots,protectedUntil:s.now+2000});
   this.game.inputs.delete(p.id);
@@ -119,16 +154,19 @@ export class Operation {
  }
  finish(success:boolean){const s=this.game.state;if(s.phase==='finished')return;s.phase='finished';s.winner=success?'de':'fr';s.operation.result=success?'success':'failure';s.persistence='practice';if(success&&this.config.mode==='mission')s.operation.objective.stage='complete';}
  private woundCount(p:Player){return [2,4,8,16].filter(bit=>p.injuries.bleeding&bit).length;}
- damage(target:Player,source:string,weapon:number,damage:number,part:BodyPart,point:[number,number,number],saw=false){
+ damage(target:Player,source:string,weapon:number,damage:number,part:BodyPart,point:[number,number,number],saw=false,origin?:Pick<Point,'x'|'z'>){
   const g=this.game,s=g.state,attacker=this.actor(source);if(!target.hp||target.protectedUntil>s.now&&source!==''||target.id===source||target.kind!=='resident'&&attacker?.team===target.team)return false;
   const bit=limbBits[part];if(bit&&target.injuries.lost&bit)return false;
   damage=this.remains.absorb(target,source,damage,point);if(damage<=0)return true;
-  target.injuries.lastDamageAt=s.now;target.hp=Math.max(0,target.hp-damage);target.treatment=undefined;
+  const healthLoss=saw&&part==='head'?target.hp:Math.min(target.hp,damage);
+  target.injuries.lastDamageAt=s.now;target.hp-=healthLoss;target.treatment=undefined;
   const zone=part==='head'?'head':part.startsWith('leg')?'legs':'body';
-  g.emit({type:'hit',id:source,target:target.id,weapon,damage,hitZone:zone,bodyPart:part,point});
+  const from=origin??attacker,dx=from?from.x-point[0]:0,dz=from?from.z-point[2]:0;
+  const bearing=Math.hypot(dx,dz)>.0001?Math.atan2(dx,-dz):undefined;
+  g.emit({type:'hit',id:source,target:target.id,weapon,damage,healthLoss,bearing,hitZone:zone,bodyPart:part,point});
   target.injuries.damage[part]=(target.injuries.damage[part]??0)+damage;
   if(part!=='body'&&(saw||part==='head'&&!target.hp||part!=='head'&&target.injuries.damage[part]!>=45)){
-   target.injuries.lost|=bit;if(part==='head')target.hp=0;else target.injuries.bleeding|=bit;
+   target.injuries.lost|=bit;if(part!=='head')target.injuries.bleeding|=bit;
    target.injuries.source=source;target.injuries.weapon=weapon;
    this.remains.sever(target,part,point,source,weapon);
    g.emit({type:'sever',id:source,target:target.id,weapon,bodyPart:part,hitZone:zone,point});
@@ -194,7 +232,7 @@ export class Operation {
    for(const actor of this.actors()){if(!actor.hp||actor.id===p.owner)continue;const hit=hitPlayer(o,d,actor);if(hit&&hit.distance<distance){target=actor;part=hit.part;distance=hit.distance;}}
    p.x+=d[0]*distance;p.y+=d[1]*distance;p.z+=d[2]*distance;p.vy-=9.8*dt;
    const hitFloor=p.y<=ground(p.x,p.z,getWorld(s.mapId)),blocked=distance<length-.00001;
-   if(target){this.damage(target,p.owner,5,part==='head'?100:part.startsWith('leg')?30:40,part,[p.x,p.y,p.z]);return false;}
+   if(target){this.damage(target,p.owner,5,part==='head'?100:part.startsWith('leg')?30:40,part,[p.x,p.y,p.z],false,{x:o[0],z:o[2]});return false;}
    if(blocked||hitFloor){this.game.emit({type:'impact',id:p.owner,weapon:5,point:[p.x,p.y,p.z]});return false;}
    return withinPlayArea(p.x,p.z,getWorld(s.mapId));
   });

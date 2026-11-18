@@ -3,6 +3,7 @@ import {GLTFLoader} from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type {World} from '../shared/world';
 import {terrainHeight} from '../shared/terrain';
 import {instanceStaticModel} from './scenery';
+import {applySurfaceFinish} from './surfaceFinish';
 
 function disposeSource(root:T.Object3D){
  const geometries=new Set<T.BufferGeometry>(),materials=new Set<T.Material>(),textures=new Set<T.Texture>();
@@ -14,10 +15,11 @@ function disposeSource(root:T.Object3D){
 /** Real PBR facade modules are placed only on existing solid front wall spans.
  * Entrances, side firing windows, doors, stairs and their collision stay open. */
 export function loadEnvironmentUpgrade(scene:T.Scene,world:World,renderer:T.WebGLRenderer){
- const loader=new GLTFLoader(),sources:T.Group[]=[],root=new T.Group();root.name='imported-environment';scene.add(root);let disposed=false;
+ const loader=new GLTFLoader(),sources:T.Group[]=[],root=new T.Group();root.name='imported-environment';root.matrixAutoUpdate=false;scene.add(root);let disposed=false;
  const anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());
  const configure=(model:T.Group,foliage=false)=>model.traverse(o=>{if(o instanceof T.Mesh)for(const material of Array.isArray(o.material)?o.material:[o.material]){
   for(const texture of Object.values(material))if(texture instanceof T.Texture)texture.anisotropy=anisotropy;
+  if(!foliage&&material instanceof T.MeshStandardMaterial)applySurfaceFinish(material,true);
   // Cutout leaves sort correctly across instances and cast leaf-shaped shadows.
   if(foliage&&material.transparent){material.transparent=false;material.alphaTest=.4;material.depthWrite=true;material.needsUpdate=true;}
  }});
@@ -35,7 +37,9 @@ export function loadEnvironmentUpgrade(scene:T.Scene,world:World,renderer:T.WebG
      const list=placements.get(variant)??[];list.push(placement.matrix.clone());placements.set(variant,list);
     }
    }
-   for(const [variant,matrices]of placements){const part=model.getObjectByName(variant);if(part)instanceStaticModel(root,part,matrices);}
+   // The solid building already casts its silhouette. Avoid rendering dense
+   // facade dressing a second time into the shadow map; keep received shadows.
+   for(const [variant,matrices]of placements){const part=model.getObjectByName(variant);if(part)instanceStaticModel(root,part,matrices,false,32);}
   }).catch(error=>console.warn('Facade detail unavailable:',pack,error));
  }
  if(world.id==='storm'||world.id==='frontline')for(const name of ['rock_moss_set_01','grass_medium_01','wild_rooibos_bush']){
@@ -60,7 +64,7 @@ export function loadEnvironmentUpgrade(scene:T.Scene,world:World,renderer:T.WebG
     const placement=new T.Object3D(),scale=height/Math.max(.01,size.y);placement.scale.setScalar(scale);placement.rotation.y=n*2.39996;
     placement.position.set(x,terrainHeight(x,z,world),z);placement.updateMatrix();placements.push(placement.matrix.clone());
    }
-   if(placements.length){instanceStaticModel(root,sample,placements);if(name==='grass_medium_01'&&part instanceof T.Mesh)root.traverse(o=>{if(o instanceof T.InstancedMesh&&o.geometry===part.geometry)o.castShadow=false;});}
+   if(placements.length){instanceStaticModel(root,sample,placements,true,32);if(name==='grass_medium_01'&&part instanceof T.Mesh)root.traverse(o=>{if(o instanceof T.InstancedMesh&&o.geometry===part.geometry)o.castShadow=false;});}
   }).catch(error=>console.warn('Natural detail unavailable:',name,error));
  }
  return ()=>{disposed=true;root.traverse(o=>{if(o instanceof T.InstancedMesh)o.dispose();});sources.forEach(disposeSource);root.removeFromParent();};

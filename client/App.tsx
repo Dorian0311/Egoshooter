@@ -2,6 +2,7 @@ import {OperationSetup} from './OperationSetup';
 import {ReleaseNotes} from './ReleaseNotes';
 import {OperationHud} from './OperationHud';
 import {VictimFace,CorpseShield} from './VictimFace';
+import {HitReport,receivedHit,type ReceivedHit} from './HitReport';
 import {type OperationConfig,modeLabels} from '../shared/operationConfig';
 import {HighlightRecorder,type Highlight} from './highlights';
 import {HighlightPlayer} from './HighlightPlayer';
@@ -54,7 +55,7 @@ export default function App({
 }) {
   const [settings,setSettings]=useState(loadSettings),[settingsOpen,setSettingsOpen]=useState(false);
   const [killfeed,setKillfeed]=useState<{key:number;killer:string;victim:string;weapon:string;headshot:boolean;mine:boolean;friendly:boolean;at:number;victimUniform:UniformId;showFace:boolean}[]>([]);
-  const [damage,setDamage]=useState<{angle:number;at:number}|null>(null),[deathReason,setDeathReason]=useState('');
+  const [hits,setHits]=useState<ReceivedHit[]>([]),[deathReason,setDeathReason]=useState('');
   const feedSequence=useRef(0);
   const [headshotAt,setHeadshotAt]=useState(0);
   const keyLabel=(action:keyof typeof settings.bindings)=>settings.bindings[action].replace('Key','').replace('Digit','');
@@ -204,7 +205,7 @@ export default function App({
         r = await client.joinById(info.roomId, { ticket: access.ticket,uniform:chosenUniform,loadout });
       }
       r.reconnection.minUptime = 0;
-      room.current = r;recorder.current=new HighlightRecorder();savedMatch.current='';uiEvents.current.clear();setClips([]);setKillfeed([]);setDamage(null);setDeathReason('');setConnection('');
+      room.current = r;recorder.current=new HighlightRecorder();savedMatch.current='';uiEvents.current.clear();setClips([]);setKillfeed([]);setHits([]);setDeathReason('');setConnection('');
       r.onMessage("snapshot", (packet: SnapshotPacket) => {
         const s = mergeSnapshot(last.current, packet);
         if (!s) return;
@@ -215,11 +216,21 @@ export default function App({
 
         for(const event of freshEvents){if(event.type==='hit'&&event.id===access.playerId){setHitFeedback(event.hitZone??'body');if(feedbackTimer.current)clearTimeout(feedbackTimer.current);feedbackTimer.current=setTimeout(()=>setHitFeedback(null),220);}}
         const own=s.players.find(p=>p.id===access.playerId);
+        const previousOwn=last.current?.players.find(p=>p.id===access.playerId);
+        const newLife=s.matchId!==last.current?.matchId||own?.life!==previousOwn?.life;
+        const damage=freshEvents.filter(e=>e.type==='hit'&&e.target===access.playerId&&(!e.life||e.life===own?.life)).map(e=>{
+          const hit=receivedHit(e,e.eventId??String(++feedSequence.current),s.now);
+          if(e.healthLoss===undefined&&hit.bearing===undefined&&own){
+            const attacker=s.players.find(p=>p.id===e.id);
+            if(attacker&&(attacker.x!==own.x||attacker.z!==own.z))hit.bearing=Math.atan2(attacker.x-own.x,own.z-attacker.z);
+          }
+          return hit;
+        }).reverse();
+        if(newLife||damage.length)setHits(old=>[...damage,...(newLife?[]:old.filter(hit=>s.now-hit.at<4000))].slice(0,3));
         if(own?.hp)setDeathReason('');
         const newKills=freshEvents.filter(e=>e.type==='kill').map(e=>{const victim=[...s.players,...s.npcs].find(p=>p.id===e.target)??s.corpses.find(c=>c.sourceId===e.target&&(!e.life||c.sourceLife===e.life));return {key:++feedSequence.current,killer:s.players.find(p=>p.id===e.id)?.name??(e.id?'Spieler':'Umwelt'),victim:victim?.name??'Spieler',victimUniform:victim?.uniform??'de-field',showFace:!!victim&&victim.kind!=='resident',weapon:weapons[e.weapon??0]?.name??'Nahkampf',headshot:e.hitZone==='head',mine:e.id===access.playerId,friendly:s.players.find(p=>p.id===e.id)?.team===own?.team,at:s.now};});
         setKillfeed(old=>[...old.filter(e=>s.now-e.at<6500),...newKills].slice(-4));
         for(const event of freshEvents){
-          if(event.type==='hit'&&event.target===access.playerId&&own){const attacker=s.players.find(p=>p.id===event.id);if(attacker)setDamage({angle:(Math.atan2(attacker.x-own.x,-(attacker.z-own.z))+own.yaw)*180/Math.PI,at:s.now});}
           if(event.type==='kill'&&event.id===access.playerId&&event.hitZone==='head')setHeadshotAt(s.now);
           if(event.type==='kill'&&event.target===access.playerId)setDeathReason(event.id?`Besiegt von ${s.players.find(p=>p.id===event.id)?.name??'Spieler'} mit ${weapons[event.weapon??0]?.name??'Nahkampf'}`:'Durch Umweltschaden gefallen');
         }
@@ -408,6 +419,7 @@ export default function App({
               )}
               {snapshot.phase === "finished" && (
                 <>
+                  <HitReport hits={hits} now={snapshot.now} yaw={me?.yaw??0} summary/>
                   <p>
                     Ergebnisse:{" "}
                     {snapshot.persistence === "practice"
@@ -444,7 +456,7 @@ export default function App({
               {settings.headshotSlowMotion&&headshotAt>0&&snapshot.now-headshotAt<850&&<div className="headshot-cinematic" key={headshotAt}><div><strong>KOPFTREFFER</strong><small>ZEITLUPE</small></div></div>}
               {defeated&&<VictimFace name={defeated.victim} uniform={defeated.victimUniform} headshot={defeated.headshot}/>}
               <section className="combat-feed live-killfeed" aria-label="Live-Abschüsse"><header><span>ABSCHÜSSE</span><small>● LIVE</small></header><div role="log" aria-live="polite">{killfeed.length===0?<p className="killfeed-empty">Noch keine Abschüsse</p>:killfeed.map(item=><div key={item.key} className={`killfeed-entry ${item.mine?'is-mine':item.friendly?'is-friendly':'is-enemy'}`}><strong>{item.killer}</strong><span className="killfeed-weapon" title={item.weapon}>{item.headshot?'◎':'▸'}</span><b>{item.victim}</b></div>)}</div></section>
-              {damage&&snapshot.now-damage.at<850&&<div className="damage-direction" aria-label="Beschussrichtung" style={{transform:`translate(-50%,-50%) rotate(${damage.angle}deg)`}}><span>▼</span></div>}
+              <HitReport hits={hits} now={snapshot.now} yaw={me?.yaw??0}/>
               {me?.uniform==='leatherface'&&<div className={`saw-power ${snapshot.now<me.powerUntil?'is-active':''}`}>
                 <strong>{snapshot.now<me.powerUntil?'POWERMODUS':snapshot.now<me.powerReadyAt?'ERHOLUNG':'KETTENSÄGE BEREIT'}</strong>
                 <progress max={1} value={snapshot.now<me.powerUntil?(me.powerUntil-snapshot.now)/SAW_POWER_MS:snapshot.now<me.powerReadyAt?1-(me.powerReadyAt-snapshot.now)/SAW_RECOVERY_MS:1}/>

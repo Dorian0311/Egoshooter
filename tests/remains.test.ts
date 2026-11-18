@@ -52,6 +52,10 @@ test('old-life or enemy corpses cannot be used to revive a living or newer-life 
 
 test('thrown parts bounce off thin walls and fall instead of remaining suspended at the impact',()=>{
  const g=setup(),a=g.player('a')!,b=g.player('b')!;g.operation.damage(b,'a',0,45,'armL',[8,1.2,6]);const item=g.state.bodyParts[0];assert.ok(g.interact('a',`part:pickup:${item.id}`));advance(g,500);const base=g.world();g.world=()=>({...base,boxes:[...base.boxes,{x:8,y:1.5,z:7,w:3,h:3,d:.02,kind:'wall'}]});assert.ok(g.interact('a','throw'));advance(g,100);assert.equal(item.state,'flying');advance(g,4000);assert.equal(item.state,'ground');assert.ok(item.y<.2);assert.ok(item.z>7);
+ const impacts=g.state.events.filter(e=>e.type==='impact'&&e.weapon===6);
+ assert.equal(impacts.length,1);
+ assert.equal(impacts[0].id,a.id);
+ assert.ok(Math.abs(impacts[0].point![2]-7)<.1);
 });
 
 test('departing and rejoining preserves unique life identities for every retained corpse and limb',()=>{

@@ -89,8 +89,8 @@ export function withinPlayArea(x:number,z:number,world:World=getWorld()){
  return Math.abs(x)<=half&&Math.abs(z)<=half&&(!area?.radius||x*x+z*z<=area.radius*area.radius);
 }
 export const buildings=cologneBuildings,boxes=bridgeBoxes,spawns=worlds.cologne.spawns;
-export function ground(x:number,z:number,world:World=worlds.cologne):number{
+export function ground(x:number,z:number,world:World=worlds.cologne,nearby:readonly Box[]=world.boxes):number{
  let height=world.id==='cologne'&&Math.abs(x)<30&&Math.abs(z)>10?-7:terrainHeight(x,z,world);
- for(const b of world.boxes)if(b.kind==='stair'&&Math.abs(x-b.x)<b.w/2+.3&&Math.abs(z-b.z)<b.d/2+.3)height=Math.max(height,b.y+b.h/2);
+ for(const b of nearby)if(b.kind==='stair'&&Math.abs(x-b.x)<b.w/2+.3&&Math.abs(z-b.z)<b.d/2+.3)height=Math.max(height,b.y+b.h/2);
  return height;
 }

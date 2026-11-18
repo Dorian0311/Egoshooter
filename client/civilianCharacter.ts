@@ -4,6 +4,8 @@ import {clone} from 'three/examples/jsm/utils/SkeletonUtils.js';
 import type {Player} from '../shared/game';
 import {hasLost,isCrawling} from '../shared/injuries';
 import {createActorEquipment,rigArm} from './actorEquipment';
+import {residentSkinTone} from './residentBanter';
+import {createResidentAppearance} from './residentAppearance';
 
 type Entry={root:T.Group;refs:number};
 export type CivilianCharacterData={civilian:true;entry:Entry};
@@ -14,7 +16,7 @@ export async function loadCivilianCharacter():Promise<CivilianCharacterData>{
 }
 
 /** Native Rocketbox skin: no rigid cuts or replacement mannequin. */
-export function createCivilianCharacter(data:CivilianCharacterData){
+export function createCivilianCharacter(data:CivilianCharacterData,residentId='resident-0'){
  const group=new T.Group(),body=clone(data.entry.root);body.rotation.y+=Math.PI;group.add(body);data.entry.refs++;
  group.name='civilian-rocketbox-male-adult-03';group.userData.civilianSource='Microsoft Rocketbox Male_Adult_03';group.userData.civilianModel='rocketbox-male-adult-03';
  group.userData.limbRoots={head:'Bip01_Head',armL:'Bip01_L_UpperArm',armR:'Bip01_R_UpperArm',legL:'Bip01_L_Thigh',legR:'Bip01_R_Thigh'};
@@ -28,6 +30,7 @@ export function createCivilianCharacter(data:CivilianCharacterData){
   if((Array.isArray(o.material)?o.material:[o.material]).every(m=>m.name==='m004_opacity')){o.userData.nonAnatomic=true;for(const m of Array.isArray(o.material)?o.material:[o.material])m.visible=false;}
   if(o instanceof T.SkinnedMesh){skeletons.add(o.skeleton);o.frustumCulled=false;}
  });
+ const appearance=createResidentAppearance(group,body,residentId);
  group.updateMatrixWorld(true);
  const right=new T.Vector3(1,0,0),q=new T.Quaternion(),rotation=new T.Quaternion(),world=new T.Quaternion(),parent=new T.Quaternion(),from=new T.Vector3(),to=new T.Vector3();
  const animated=['Bip01_L_Thigh','Bip01_R_Thigh','Bip01_L_Calf','Bip01_R_Calf','Bip01_L_Foot','Bip01_R_Foot','Bip01_Head'].map(name=>{
@@ -56,10 +59,31 @@ export function createCivilianCharacter(data:CivilianCharacterData){
   const arm=arms[side];if(!arm)return;const suffix=side==='armL'?'L':'R',middle=group.getObjectByName(`Bip01_${suffix}_Finger2`),next=group.getObjectByName(`Bip01_${suffix}_Finger21`);if(!middle||!next)return;
   from.copy(next.getWorldPosition(new T.Vector3())).sub(middle.getWorldPosition(new T.Vector3()));to.set(0,-1,0).applyQuaternion(group.getWorldQuaternion(q));align(arm.hand,from,to);
  }
+ const skinMeshes:{mesh:T.SkinnedMesh;weights:Float32Array;clothes:Uint8Array;head:boolean}[]=[];
+ body.traverse(o=>{
+  if(!(o instanceof T.SkinnedMesh))return;
+  const meshMaterials=Array.isArray(o.material)?o.material:[o.material];
+  if(!meshMaterials.some(m=>m.name==='m004_head'||m.name==='m004_body'))return;
+  const indices=o.geometry.getAttribute('skinIndex'),influences=o.geometry.getAttribute('skinWeight'),weights=new Float32Array(indices.count),clothes=new Uint8Array(indices.count);
+  const head=meshMaterials.some(m=>m.name==='m004_head');
+  for(let i=0;i<weights.length;i++){
+   if(head){weights[i]=1;continue;}
+   let legs=0,feet=0;
+   for(let k=0;k<4;k++){const name=o.skeleton.bones[indices.getComponent(i,k)]?.name??'',weight=influences.getComponent(i,k);if(/^Bip01_[LR]_(Hand|Finger)/.test(name))weights[i]+=weight;if(/(Thigh|Calf|Foot|Toe)/.test(name))legs+=weight;if(/(Foot|Toe)/.test(name))feet+=weight;}
+   clothes[i]=feet>.5?2:legs>.5?1:0;
+  }
+  for(const material of meshMaterials)if(material instanceof T.MeshStandardMaterial){material.vertexColors=true;if(!head)material.map=null;material.needsUpdate=true;}
+  o.geometry.setAttribute('color',new T.Float32BufferAttribute(new Float32Array(weights.length*3).fill(1),3));skinMeshes.push({mesh:o,weights,clothes,head});
+ });
+ const skinColor=new T.Color(),handColor=new T.Color(),vertexColor=new T.Color(),baseSkin=new T.Color('#e2c2aa'),clothColors=[appearance.jacket,appearance.trousers,appearance.boots];let appearanceId='';
+ function style(id:string){
+  if(id===appearanceId)return;appearanceId=id;skinColor.set(residentSkinTone(id));handColor.copy(skinColor).multiply(baseSkin);
+  for(const {mesh,weights,clothes,head}of skinMeshes){const colors=mesh.geometry.getAttribute('color');for(let i=0;i<weights.length;i++){if(head)vertexColor.copy(skinColor);else vertexColor.copy(clothColors[clothes[i]]).lerp(handColor,Math.min(1,weights[i]));colors.setXYZ(i,vertexColor.r,vertexColor.g,vertexColor.b);}colors.needsUpdate=true;}
+ }
  let disposed=false,initialized=false,lastX=0,lastZ=0,speed=0,phase=0;
  return {group,
   update(player:Player,time:number,dt:number,now=time){
-   if(disposed)return;const step=T.MathUtils.clamp(dt,.001,.1),distance=initialized?Math.hypot(player.x-lastX,player.z-lastZ):0;
+   if(disposed)return;style(player.id);const step=T.MathUtils.clamp(dt,.001,.1),distance=initialized?Math.hypot(player.x-lastX,player.z-lastZ):0;
    initialized=true;lastX=player.x;lastZ=player.z;const movement=player.hp>0?Math.min(1.4,distance/step/.9):0;speed+=(movement-speed)*(1-Math.exp(-step*12));phase+=step*6*speed;
    const walk=Math.sin(phase)*.36*speed;body.position.y=baseY+(player.hp>0?Math.abs(Math.sin(phase))*.012*speed:0);
    for(const part of animated){const angle=part.kind==='head'?-player.pitch*.35:part.kind==='thigh'?walk*part.side:part.kind==='calf'?-Math.max(0,-Math.sin(phase+part.side*Math.PI/2))*.55*speed:Math.sin(phase)*part.side*.07*speed;part.bone.quaternion.copy(part.rest).multiply(rotation.setFromAxisAngle(part.axis,angle));}
@@ -69,7 +93,7 @@ export function createCivilianCharacter(data:CivilianCharacterData){
    held.update(player,time,now);for(const side of ['armL','armR'] as const)if(!hasLost(player,side)&&(!gesturing||side!==gestureSide))relaxedHand(side);if(gesturing&&!hasLost(player,gestureSide))gesture(gestureSide);
   },
   setHeadVisible(visible:boolean){if(head&&headScale)head.scale.copy(headScale).multiplyScalar(visible?1:.001);},
-  dispose(){if(disposed)return;disposed=true;held.dispose();group.clear();geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());skeletons.forEach(s=>s.dispose());data.entry.refs--;},
+  dispose(){if(disposed)return;disposed=true;held.dispose();appearance.dispose();group.clear();geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());skeletons.forEach(s=>s.dispose());data.entry.refs--;},
  };
  // The single immutable source stays cached; all mutable instance geometry,
  // materials and skeletons above are released. Textures are shared by residents.

@@ -30,6 +30,8 @@ Zenodo mirrors, verified source/runtime checksums and modifications are recorded
 in that directory's `provenance.json` and `CREDITS.txt`. Source geometry and
 textures are adapted in scale and orientation; embedded textures are capped at
 2048 pixels and JPEG encoded. Attribution is also linked from the lobby.
+The lobby weapon thumbnails are WebP renders of the same credited game models
+and the project's own MP 34 and chainsaw meshes.
 
 The new 2K roof_slates_02, plastered_wall_02, cobblestone_floor_02,
 aerial_grass_rock and sand_01 material maps are Poly Haven CC0 assets.

@@ -36,3 +36,14 @@ test('yaw wrapping and frame stalls cannot produce large weapon jumps',()=>{
  assert.ok(Math.abs(parent.position.x)<.035);assert.ok(parent.position.toArray().every(Number.isFinite));
  vm.dispose();vm.shot(0);vm.update(input);assert.deepEqual(parent.position.toArray(),[0,0,0]);
 });
+
+test('the same sustained mouse turn has the same sway at every refresh rate',()=>{
+ const positions:number[][]=[];
+ for(const rate of [30,60,120,144]){
+  const parent=new Group(),vm=createViewmodel(parent);
+  vm.update({...input,dt:0});
+  for(let i=1;i<=rate;i++)vm.update({...input,dt:1/rate,yaw:i/rate*.6,pitch:i/rate*.3});
+  positions.push(parent.position.toArray());vm.dispose();
+ }
+ for(const position of positions)for(const axis of [0,1])assert.ok(Math.abs(position[axis]-positions[0][axis])<1e-8);
+});

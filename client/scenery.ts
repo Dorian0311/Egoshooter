@@ -1,34 +1,43 @@
 import * as T from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { Building } from '../shared/world.ts';
+import {freezeStaticTransforms} from './staticTransforms';
 
-export function instanceStaticModel(scene: T.Scene|T.Group, source: T.Object3D, placements: T.Matrix4[]) {
+export function instanceStaticModel(scene: T.Scene|T.Group, source: T.Object3D, placements: T.Matrix4[],castShadow=true,cellSize=Infinity) {
+  const cells=new Map<string,T.Matrix4[]>();
+  for(const placement of placements){
+    const key=Number.isFinite(cellSize)&&cellSize>0?`${Math.floor(placement.elements[12]/cellSize)},${Math.floor(placement.elements[14]/cellSize)}`:'all';
+    const cell=cells.get(key)??[];cell.push(placement);cells.set(key,cell);
+  }
   source.updateMatrixWorld(true);
   source.traverse(part => {
     if (!(part instanceof T.Mesh)) return;
-    const instances = new T.InstancedMesh(part.geometry, part.material, placements.length);
-    const matrix = new T.Matrix4();
-    placements.forEach((placement, index) => {
-      instances.setMatrixAt(index, matrix.multiplyMatrices(placement, part.matrixWorld));
-    });
-    instances.castShadow = true; instances.receiveShadow = true;
-    instances.computeBoundingSphere(); scene.add(instances);
+    for(const cell of cells.values()){
+      const instances = new T.InstancedMesh(part.geometry, part.material, cell.length);
+      const matrix = new T.Matrix4();
+      cell.forEach((placement, index) => {
+        instances.setMatrixAt(index, matrix.multiplyMatrices(placement, part.matrixWorld));
+      });
+      instances.castShadow = castShadow; instances.receiveShadow = true;
+      instances.computeBoundingSphere(); scene.add(instances);freezeStaticTransforms(instances);
+    }
   });
 }
 
-// Static world geometry needs one draw per material, not one draw per shutter/slat.
+// One draw per material/cell, rather than per shutter/slat or a town-wide batch.
 // Keep replaceable cover meshes and instances independent.
-export function batchStaticMeshes(scene: T.Scene | T.Group, excluded: Set<T.Object3D>) {
+export function batchStaticMeshes(scene: T.Scene | T.Group, excluded: Set<T.Object3D>,cellSize=Infinity) {
   const groups = new Map<string, T.Mesh<T.BufferGeometry, T.Material>[]>();
   for (const object of scene.children) {
     if (!(object instanceof T.Mesh) || object instanceof T.InstancedMesh ||
       Array.isArray(object.material) || excluded.has(object) || object.children.length) continue;
-    const key = `${object.material.uuid}:${object.castShadow}:${object.receiveShadow}`;
+    const cell=Number.isFinite(cellSize)&&cellSize>0?`${Math.floor(object.position.x/cellSize)},${Math.floor(object.position.z/cellSize)}`:'all';
+    const key = `${object.material.uuid}:${object.castShadow}:${object.receiveShadow}:${cell}`;
     const group = groups.get(key) ?? [];
     group.push(object); groups.set(key, group);
   }
   for (const meshes of groups.values()) {
-    if (meshes.length < 2) continue;
+    if (meshes.length < 2){freezeStaticTransforms(meshes[0]);continue;}
     const mixedIndices=meshes.some(mesh=>!!mesh.geometry.index)&&meshes.some(mesh=>!mesh.geometry.index);
     const geometries = meshes.map(mesh => {
       mesh.updateMatrix();
@@ -42,7 +51,7 @@ export function batchStaticMeshes(scene: T.Scene | T.Group, excluded: Set<T.Obje
     batch.receiveShadow = meshes[0].receiveShadow;
     geometry.computeBoundingSphere();
     for (const mesh of meshes) { scene.remove(mesh); mesh.geometry.dispose(); }
-    scene.add(batch);
+    scene.add(batch);freezeStaticTransforms(batch);
   }
 }
 

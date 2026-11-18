@@ -14,10 +14,10 @@ export const weapons:readonly Weapon[] = [
   {name:'Körperteil',kind:'special',mag:1,damage:32,interval:800,reload:0,spread:0,recoil:0,range:2.65},
   {name:'StG 44',kind:'assault',mag:30,damage:32,interval:115,reload:2800,spread:.004,recoil:.019,range:60},
   {name:'Gewehr 43',kind:'rifle',mag:10,damage:52,interval:430,reload:2700,spread:.002,recoil:.029,range:85},
-  {name:'MG 42',kind:'lmg',mag:50,damage:30,interval:60,reload:4800,spread:.013,recoil:.027,range:75},
+  {name:'MG 42',kind:'lmg',mag:100,damage:30,interval:60,reload:4800,spread:.013,recoil:.027,range:75},
   {name:'MP 34',kind:'smg',mag:32,damage:25,interval:125,reload:2600,spread:.007,recoil:.014,range:28},
   {name:'Walther P38',kind:'pistol',mag:8,damage:30,interval:285,reload:1700,spread:.004,recoil:.020,range:25},
-  {name:'FG 42',kind:'lmg',mag:20,damage:39,interval:100,reload:3000,spread:.005,recoil:.025,range:70},
+  {name:'FG 42',kind:'lmg',mag:100,damage:39,interval:100,reload:3000,spread:.005,recoil:.025,range:70},
 ];
 export const historicalWeaponIds:readonly WeaponId[] = [0,1,2,7,8,9,10,11,12];
 export const selectableWeaponIds:readonly WeaponId[] = [...historicalWeaponIds,3,4];

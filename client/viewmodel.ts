@@ -53,8 +53,11 @@ export function createViewmodel(parent:T.Group){
       const yawDelta=Math.atan2(Math.sin(input.yaw-lastYaw),Math.cos(input.yaw-lastYaw));
       const pitchDelta=input.pitch-lastPitch;lastYaw=input.yaw;lastPitch=input.pitch;
       const follow=1-Math.exp(-dt*12);
-      swayX+=(clamp(-yawDelta*1.6,-.035,.035)-swayX)*follow;
-      swayY+=(clamp(pitchDelta*1.4,-.025,.025)-swayY)*follow;
+      // Normalize angular velocity to the former 60 Hz tuning. Per-frame deltas
+      // made the same mouse turn sway twice as much at 30 Hz as at 60 Hz.
+      const referenceFrames=dt>0?1/(dt*60):0;
+      swayX+=(clamp(-yawDelta*referenceFrames*1.6,-.035,.035)-swayX)*follow;
+      swayY+=(clamp(pitchDelta*referenceFrames*1.4,-.025,.025)-swayY)*follow;
       movementBlend+=(clamp(input.moving,0,1)*Number(input.grounded)-movementBlend)*(1-Math.exp(-dt*10));
       const movement=movementBlend;
       phase+=dt*(input.sprinting?13:9)*movement;

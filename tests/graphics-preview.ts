@@ -47,6 +47,8 @@ function show() {
     interiors:initialInteriors(getWorld(mapId)),phase: 'playing', now: 0, startsAt: 0, endsAt: 600000, host: player.id,
     scores: { de: 0, fr: 0 }, players: [player], winner: null, events: [], persistence: 'practice',
   };
+  if(params.has('supplies'))snapshot.pickups=[{id:'review-medkit',kind:'bandage',x:player.x-.8,y:player.y,z:player.z-2.6,taken:false}];
+  if(params.get('phase')==='waiting')snapshot.phase='waiting';
   player.weapon=Number(weapon.value) as typeof player.weapon;
   if(player.weapon===4)player.uniform='leatherface';
   if(view.value==='combat'){const target=makePlayer('target','Testfigur','fr');Object.assign(target,{x:-43,z:4.5,y:0,yaw:Math.PI,uniform:characters.value==='bonus'?'leatherface':'task-sand'});snapshot.players.push(target);}
@@ -101,5 +103,6 @@ function measure(now: number) {
   }
   raf = requestAnimationFrame(measure);
 }
+Object.assign(window,{graphicsReview:{profile:(limit=1200)=>scene?.profileFrames(limit),samples:()=>scene?.frameProfile()??[],gpuTiming:(enabled:boolean)=>scene?.gpuTiming(enabled)}});
 show(); raf = requestAnimationFrame(measure);
 window.addEventListener('pagehide', () => { cancelAnimationFrame(raf);if(simulation)clearInterval(simulation); scene?.dispose(); });

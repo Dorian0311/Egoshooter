@@ -20,7 +20,8 @@ export function createCharacterMotion(root:T.Group,bones:Map<string,T.Bone>,data
   if(name==='land'){action.setLoop(T.LoopOnce,1);action.clampWhenFinished=true;}
   actions.set(name,action);
  }
- let current:MotionName='idle',speed=0,lastX=0,lastZ=0,initialized=false,wasGrounded=true,landing=0;
+ const hips=bones.get('root'),authoredHips=hips?.quaternion.clone(),headingRotation=new T.Quaternion(),up=new T.Vector3(0,1,0);
+ let current:MotionName='idle',speed=0,lastX=0,lastZ=0,initialized=false,wasGrounded=true,landing=0,heading=0,reverse=false;
  actions.get(current)?.play();
  return {update(player:Player,position:{x:number;z:number},dt:number){
   const step=Math.max(.001,Math.min(.1,dt)),dx=initialized?position.x-lastX:0,dz=initialized?position.z-lastZ:0;
@@ -31,7 +32,23 @@ export function createCharacterMotion(root:T.Group,bones:Map<string,T.Bone>,data
   const next:MotionName=!player.grounded?'air':landing>0&&!moving?'land':player.crouching?(moving?'crouchWalk':'crouchIdle'):moving?(player.sprinting||speed>5.2?'sprint':speed>2.4?'jog':'walk'):'idle';
   if(next!==current){actions.get(current)?.fadeOut(.16);actions.get(next)!.reset().setEffectiveWeight(1).fadeIn(.16).play();current=next;}
   const action=actions.get(current)!,nominal=current==='walk'?1.65:current==='jog'?3.6:current==='sprint'?6.2:current==='crouchWalk'?1.6:0;
-  const backwards=dx*-Math.sin(player.yaw)+dz*-Math.cos(player.yaw)<-.002;
-  action.setEffectiveTimeScale(nominal?T.MathUtils.clamp(speed/nominal,.65,1.6)*(backwards?-1:1):1);mixer.update(step);
+  const forwardSpeed=(dx*-Math.sin(player.yaw)+dz*-Math.cos(player.yaw))/step;
+  // Hysteresis avoids alternating forward/reverse clips while strafing. Use
+  // velocity rather than a per-frame displacement threshold on fast displays.
+  if(forwardSpeed<-.25)reverse=true;else if(forwardSpeed>.25)reverse=false;
+  const travelling=Math.hypot(dx,dz)/step>.12;
+  let direction=travelling?Math.atan2(-dx,-dz)-player.yaw:0;
+  direction=Math.atan2(Math.sin(direction),Math.cos(direction));
+  if(reverse&&travelling)direction-=Math.sign(direction||1)*Math.PI;
+  const target=travelling?T.MathUtils.clamp(direction,-1.25,1.25):0;
+  heading+=(target-heading)*(1-Math.exp(-step*12));
+  action.setEffectiveTimeScale(nominal?T.MathUtils.clamp(speed/nominal,.65,1.6)*(reverse?-1:1):1);
+  // Mixer bindings can skip unchanged keys: remove our previous additive turn
+  // before sampling, otherwise an idle root rotation accumulates every frame.
+  if(hips&&authoredHips)hips.quaternion.copy(authoredHips);
+  mixer.update(step);
+  // Turn the lower body into its travel direction; humanoid's upper-body
+  // controller preserves the chest, gaze and weapon aim independently.
+  if(hips&&authoredHips){authoredHips.copy(hips.quaternion);hips.quaternion.premultiply(headingRotation.setFromAxisAngle(up,heading));}
  },dispose(){mixer.stopAllAction();mixer.uncacheRoot(root);},state:()=>current};
 }

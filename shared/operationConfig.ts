@@ -7,7 +7,11 @@ export const modeLabels={training:'Training',battle:'Bot-Gefecht',survival:'Übe
 export const difficultyLabels={easy:'Leicht',normal:'Normal',hard:'Schwer'};
 export const missionLabels={sabotage:'Funkstation sabotieren',documents:'Dokumente bergen',hold:'Stellung halten'};
 export const conditionLabels={standard:'Standard',fog:'Nebel',night:'Nacht',routes:'Wechselnde Zugänge',random:'Zufällig'};
-export const difficultyRules={easy:{reaction:750,error:3,vision:35},normal:{reaction:400,error:1.5,vision:55},hard:{reaction:200,error:.7,vision:75}};
+export const difficultyRules={
+ easy:{reaction:750,error:3,vision:35,coopDamage:.55,burstSize:2,burstPause:1100},
+ normal:{reaction:400,error:1.5,vision:55,coopDamage:.70,burstSize:3,burstPause:850},
+ hard:{reaction:200,error:.7,vision:75,coopDamage:.85,burstSize:4,burstPause:600},
+};
 export function parseOperation(value:unknown):OperationConfig{
  if(value===undefined)return {...defaultOperation};
  if(!value||typeof value!=='object'||Array.isArray(value))throw Error('Ungültige Einsatzkonfiguration');

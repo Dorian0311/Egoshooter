@@ -25,9 +25,9 @@ test('five chosen weapons survive round start and respawn; unselected switches a
   const selection:Loadout=[7,8,9,10,11],{game,a}=match(selection);
   selection[0]=0;assert.deepEqual(a.loadout,[7,8,9,10,11]);assert.equal(a.weapon,7);
   game.input(a.id,{...neutral(1),weapon:0});game.tick(4033);assert.equal(a.weapon,7);
-  game.input(a.id,{...neutral(2),weapon:9});game.tick(4066);assert.equal(a.weapon,9);assert.equal(a.ammo,50);
+  game.input(a.id,{...neutral(2),weapon:9});game.tick(4066);assert.equal(a.weapon,9);assert.equal(a.ammo,100);
   assert.equal(game.selectLoadout(a.id,defaultLoadout),false);
-  a.ammo=2;a.hp=0;a.respawnAt=4100;game.tick(4100);assert.equal(a.weapon,7);assert.equal(a.ammo,weapons[7].mag);assert.equal(a.ammoByWeapon[9],50);assert.deepEqual(a.loadout,[7,8,9,10,11]);
+  a.ammo=2;a.hp=0;a.respawnAt=4100;game.tick(4100);assert.equal(a.weapon,7);assert.equal(a.ammo,weapons[7].mag);assert.equal(a.ammoByWeapon[9],100);assert.equal(a.ammoByWeapon[12],100);assert.deepEqual(a.loadout,[7,8,9,10,11]);
 });
 test('new weapon inputs, cadence, magazine accounting and reload use the selected catalog',()=>{
   for(const id of [7,8,9,10,11,12] as WeaponId[]){

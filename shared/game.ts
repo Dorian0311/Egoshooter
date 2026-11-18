@@ -4,7 +4,9 @@ import {initialInteriors,interiorFixtures,interiorWorld,doorBox,type InteriorSta
 import {defaultUniform,validUniform,type UniformId} from './uniforms.ts';
 import { getWorld,validMap,ground,withinPlayArea,type World,type MapId } from "./world.ts";
 import {rockBlocks,rockSurface,rayRock} from './rocks.ts';
+import {nearbyBoxes} from './boxIndex';
 import {Operation,createOperation,type OperationState,type Pickup,type Projectile,type Treatment} from './operations';
+import {difficultyRules} from './operationConfig';
 import {freshInjuries,armCount,isCrawling,eyeHeight,eyePosition,hasLost,type Injuries,type BodyPart} from './injuries';
 import type {Corpse,BodyPartItem,AidTent} from './remains';
 export const VERSION = 15,
@@ -110,6 +112,9 @@ export type GameEvent = {
   weapon?: number;
   hitZone?: HitZone;
   damage?: number;
+  healthLoss?: number;
+  /** Direction toward the source, measured in world radians from -Z. */
+  bearing?: number;
   point?:[number,number,number];
 };
 export const SAW_POWER_MS = 2200, SAW_RECOVERY_MS = 7000;
@@ -184,7 +189,6 @@ export function move(p: Player, i: Input, dt = STEP,world:World=getWorld(),now=i
   if(p.downedUntil)return;
   if(p.carriedCorpse)i={...i,sprint:false,jump:false};
   if(isCrawling(p))i={...i,sprint:false,jump:false,crouch:false};
-  const boxes=world.boxes;
   if(p.uniform==='leatherface'&&p.weapon===4&&!p.carriedCorpse&&!p.heldPart&&armCount(p)===2&&p.hp>0&&i.fire&&now>=p.powerReadyAt){
     p.powerUntil=now+SAW_POWER_MS;p.powerReadyAt=p.powerUntil+SAW_RECOVERY_MS;
   }
@@ -210,6 +214,9 @@ export function move(p: Player, i: Input, dt = STEP,world:World=getWorld(),now=i
     len;
   const h = isCrawling(p) ? .6 : i.crouch ? 1.15 : 1.75,
     r = 0.34;
+  const padding=r+(isCrawling(p)?.8:0);
+  const boxes=nearbyBoxes(world.boxes,Math.min(p.x,p.x+dx)-padding,Math.min(p.z,p.z+dz)-padding,
+    Math.max(p.x,p.x+dx)+padding,Math.max(p.z,p.z+dz)+padding);
   function blocked(x: number, z: number) {
     return (isCrawling(p)?[0,-.55,.8]:[0]).some(offset=>blockedPoint(x+Math.sin(i.yaw)*offset,z+Math.cos(i.yaw)*offset));
   }
@@ -234,7 +241,7 @@ export function move(p: Player, i: Input, dt = STEP,world:World=getWorld(),now=i
   const old = p.y;
   p.vy -= 18 * dt;
   p.y += p.vy * dt;
-  let floor = ground(p.x, p.z,world);
+  let floor = ground(p.x, p.z,world,boxes);
   for (const b of boxes) {
     if (
       Math.abs(p.x - b.x) >= b.w / 2 + r ||
@@ -319,7 +326,13 @@ export const neutral = (seq = 0): Input => ({
 export class Game {
   operation:Operation;
   private eventSequence=0;
-  emit(event:GameEvent){event.eventId=`${this.state.matchId}:${++this.eventSequence}`;event.life=event.target?this.operation.actor(event.target)?.life:undefined;this.state.events.push(event);this.state.events=this.state.events.slice(-128);}
+  emit(event:GameEvent){
+    event.eventId=`${this.state.matchId}:${++this.eventSequence}`;
+    event.life=event.target?this.operation.actor(event.target)?.life:undefined;
+    this.operation.recordNoise(event);
+    this.state.events.push(event);
+    this.state.events=this.state.events.slice(-128);
+  }
   state: Snapshot;
   inputs = new Map<string, Input>();
   received = new Map<string, number>();
@@ -607,8 +620,11 @@ export class Game {
       if(pane){this.state.interiors.broken.push(pane.id);this.emit({type:'glass',id:p.id,point:[pane.box.x,pane.box.y,pane.box.z]});}
     }
     if(target){
-      const multiplier=zone==='head'?(p.weapon===0?2:4):zone==='legs'?.75:1,damage=Math.floor(weaponDamage(p.weapon,distance)*multiplier);
-      this.operation.damage(target,p.id,p.weapon,damage,part,[o[0]+d[0]*distance,o[1]+d[1]*distance,o[2]+d[2]*distance]);
+      const config=this.state.operation.config,coopBot=config.kind==='coop'&&p.kind==='bot'&&target.kind==='human';
+      const headWeight=coopBot?1.5:p.weapon===0?2:4;
+      const multiplier=zone==='head'?headWeight:zone==='legs'?.75:1;
+      const damage=Math.floor(weaponDamage(p.weapon,distance)*multiplier*(coopBot?difficultyRules[config.difficulty].coopDamage:1));
+      this.operation.damage(target,p.id,p.weapon,damage,part,[o[0]+d[0]*distance,o[1]+d[1]*distance,o[2]+d[2]*distance],false,eye);
     }
     this.state.events = this.state.events.slice(-64);
   }

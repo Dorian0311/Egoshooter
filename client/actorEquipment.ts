@@ -15,7 +15,9 @@ const point=new T.Vector3(),a=new T.Vector3(),b=new T.Vector3(),c=new T.Vector3(
 function aimBone(bone:T.Object3D,from:T.Vector3,to:T.Vector3){
  if(from.lengthSq()<1e-10||to.lengthSq()<1e-10)return;
  rotation.setFromUnitVectors(from.normalize(),to.normalize());bone.getWorldQuaternion(parentRotation);rotation.multiply(parentRotation);
- bone.parent?.getWorldQuaternion(parentRotation);bone.quaternion.copy(parentRotation.invert().multiply(rotation));bone.updateWorldMatrix(false,true);
+ // IK queries update their ancestor chains. Descendants are updated by the
+ // final scene traversal; walking every finger here repeats the same work.
+ bone.parent?.getWorldQuaternion(parentRotation);bone.quaternion.copy(parentRotation.invert().multiply(rotation));bone.updateWorldMatrix(false,false);
 }
 /** Two-bone IK in world space also supports rigs with intermediate twist joints. */
 export function solveArm(chain:ArmChain,target:T.Vector3,pole:T.Vector3){
@@ -59,7 +61,7 @@ export function createActorEquipment(root:T.Group,chains:Partial<Record<'armL'|'
  const reset=(arm:SavedArm)=>{arm.upper.quaternion.copy(arm.rest[0]);arm.lower.quaternion.copy(arm.rest[1]);arm.hand.quaternion.copy(arm.rest[2]);};
  const target=new T.Vector3(),pole=new T.Vector3(),forward=new T.Vector3(),handDirection=new T.Vector3(),right=new T.Vector3(),left=new T.Vector3(),offset=new T.Vector3(),localGrip=new T.Vector3();
  function grip(arm:SavedArm,localTarget:T.Vector3,side:number,up=false){
-  reset(arm);arm.upper.updateWorldMatrix(true,true);target.copy(localTarget);root.localToWorld(target);pole.set(side*.55,1.01,.12);root.localToWorld(pole);solveArm(arm,target,pole);
+  reset(arm);arm.upper.updateWorldMatrix(true,false);target.copy(localTarget);root.localToWorld(target);pole.set(side*.55,1.01,.12);root.localToWorld(pole);solveArm(arm,target,pole);
   const finger=arm.hand.children.find(o=>o.name.startsWith('finger3-1'))??arm.finger??arm.hand.children.find(o=>o instanceof T.Bone);
   if(finger){arm.hand.getWorldPosition(target);finger.getWorldPosition(handDirection).sub(target);forward.set(0,up?1:arm.finger&&side<0?.6:-.6,up?0:-.8).applyQuaternion(root.getWorldQuaternion(rotation));aimBone(arm.hand,handDirection,forward);}
  }

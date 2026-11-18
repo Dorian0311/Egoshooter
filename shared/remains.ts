@@ -79,7 +79,9 @@ export class Remains {
     if(item.throwerId)for(const q of g.operation.actors()){if(!q.hp||q.id===item.throwerId)continue;const hit=hitPlayer(origin,direction,q);if(hit&&hit.distance<distance){distance=hit.distance;target=q;part=hit.part;}}
     for(let i=1;i<=Math.ceil(length/.12);i++){const d=Math.min(distance,i*.12);if(item.y+direction[1]*d<=ground(item.x+direction[0]*d,item.z+direction[2]*d,w)+.1){distance=d;terrainHit=true;break;}if(d>=distance)break;}
     item.x+=direction[0]*distance;item.y+=direction[1]*distance;item.z+=direction[2]*distance;item.vy-=9.8*h;item.pitch+=item.spinX*h;item.yaw+=item.spinY*h;item.roll+=item.spinZ*h;
-    if(target){g.operation.damage(target,item.throwerId!,6,item.part.startsWith('leg')?40:item.part==='head'?35:30,part,[item.x,item.y,item.z]);item.throwerId=null;item.vx*=-.15;item.vz*=-.15;item.vy=1;}
+    const thrower=item.throwerId;
+    if(thrower&&(target||terrainHit||distance<length-.00001))g.emit({type:'impact',id:thrower,weapon:6,point:[item.x,item.y,item.z]});
+    if(target){g.operation.damage(target,thrower!,6,item.part.startsWith('leg')?40:item.part==='head'?35:30,part,[item.x,item.y,item.z],false,{x:origin[0],z:origin[2]});item.throwerId=null;item.vx*=-.15;item.vz*=-.15;item.vy=1;}
     const blocked=distance<length-.00001&&!target,top=blocked&&!terrainHit&&item.vy<0?g.world().boxes.find(b=>Math.abs(item.x-b.x)<b.w/2+.075&&Math.abs(item.z-b.z)<b.d/2+.075&&Math.abs(item.y-(b.y+b.h/2+.075))<.11):undefined;
     if(terrainHit&&!target||top||item.y<=ground(item.x,item.z,w)+.10||!withinPlayArea(item.x,item.z,w)||s.now-item.spawnedAt>10000){item.y=top?top.y+top.h/2+.10:ground(item.x,item.z,w)+.10;item.state='ground';item.vx=item.vy=item.vz=0;item.throwerId=null;item.pitch=Math.PI/2;item.roll=0;}
     else if(blocked){item.x-=direction[0]*.01;item.y-=direction[1]*.01;item.z-=direction[2]*.01;item.vx*= -.22;item.vz*= -.22;item.vy*=.35;item.throwerId=null;}

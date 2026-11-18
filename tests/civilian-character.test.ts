@@ -19,6 +19,42 @@ async function actualAsset(){
 }
 const meshes=(root:T.Group)=>{const result:T.SkinnedMesh[]=[];root.traverse(o=>{if(o instanceof T.SkinnedMesh)result.push(o);});return result;};
 
+test('residents have distinct silhouettes and head accessories follow the rig and injury visibility',async()=>{
+ const {data}=await actualAsset(),heights:number[]=[],widths:number[]=[],accessories=['resident-pompadour','resident-veteran-beard','resident-oversized-cap','resident-showman-hair'];
+ for(let n=0;n<4;n++){
+  const id=`resident-${n}`,human=createCivilianCharacter(data,id),player=makePlayer(id,'Bewohner','de');player.kind='resident';human.update(player,0,1/60,0);
+  human.group.updateMatrixWorld(true);const bounds=new T.Box3().setFromObject(human.group);heights.push(bounds.max.y-bounds.min.y);widths.push(bounds.max.x-bounds.min.x);
+  assert.ok(human.group.userData.nameplateHeight>bounds.max.y,'labels must clear headgear');
+  const accessory=human.group.getObjectByName(accessories[n]) as T.Mesh,head=human.group.getObjectByName('Bip01_Head')!;
+  assert.ok(accessory);assert.equal(accessory.parent,head);
+  const before=accessory.position.clone();player.pitch=.7;human.update(player,1000,1/60,1000);assert.ok(accessory.position.distanceTo(before)<1e-8,'head attachment must remain stable while looking around');
+  const anatomy=createAnatomy(human.group);anatomy.setLost(1);assert.equal(accessory.geometry.drawRange.count,0,'headgear must disappear together with the head');
+  anatomy.dispose();human.dispose();
+ }
+ assert.ok(Math.max(...heights)-Math.min(...heights)>.25,'the cast must have visibly different heights');
+ assert.ok(Math.max(...widths)-Math.min(...widths)>.1,'the cast must have visibly different builds');
+ assert.equal(data.entry.refs,0);
+});
+
+test('resident skin and outfit are isolated from the shared source and other instances',async()=>{
+ const {data}=await actualAsset(),first=createCivilianCharacter(data,'resident-2'),second=createCivilianCharacter(data);
+ const player=makePlayer('resident-2','Bewohner','de');player.kind='resident';first.update(player,0,1/60);
+ const head=meshes(first.group).find(m=>(m.material as T.Material).name==='m004_head')!;
+ const body=meshes(first.group).find(m=>(m.material as T.Material).name==='m004_body')!;
+ assert.ok(head.geometry.getAttribute('color').getX(0)<.5,'darker face must receive its own skin tint');
+ const colors=body.geometry.getAttribute('color'),palette=new Set<string>();
+ for(let i=0;i<colors.count;i++)palette.add([colors.getX(i),colors.getY(i),colors.getZ(i)].map(v=>v.toFixed(3)).join(','));
+ assert.ok(palette.size>3,'hands, jacket, trousers and boots must retain separate colors');
+ assert.equal((body.material as T.MeshStandardMaterial).map,null,'the old plaid suit must not show through the new outfit');
+ for(const mesh of meshes(data.entry.root))assert.equal(mesh.geometry.getAttribute('color'),undefined,'cached source must stay immutable');
+ for(const mesh of meshes(second.group)){const colors=mesh.geometry.getAttribute('color');if(colors)assert.equal(colors.getX(0),1);}
+ const anatomy=createAnatomy(first.group),detached=anatomy.detach('head');assert.ok(detached);
+ let preserved=false;detached.traverse(o=>{if(o instanceof T.Mesh&&(o.material as T.Material).name==='m004_head')preserved=o.geometry.getAttribute('color').getX(0)<.5;});
+ assert.ok(preserved,'detached geometry must retain the resident skin tint');
+ detached.traverse(o=>{if(o instanceof T.Mesh){o.geometry.dispose();for(const material of Array.isArray(o.material)?o.material:[o.material])material.dispose();}});
+ anatomy.dispose();first.dispose();second.dispose();
+});
+
 test('shipped civilian keeps the verified Rocketbox skin, textures and all triangles in three material groups',async()=>{
  const {bytes,document,original,data}=await actualAsset(),manifest=JSON.parse(await readFile('public/shooter/characters/civilian/manifest.json','utf8'));
  assert.equal(manifest.license,'MIT');assert.equal(createHash('sha256').update(bytes).digest('hex'),manifest.runtimeAsset.sha256);

@@ -9,7 +9,7 @@ import {createViewmodelArms} from './viewmodelArms';
 import {prepareRealisticWeapon,realisticWeapons,realisticWeaponUrl,type RealisticWeapon} from './realisticWeapons';
 
 /** Authored at real scale. The exported muzzle socket stays with the moving weapon. */
-export function createWeaponModels(parent:T.Group) {
+export function createWeaponModels(parent:T.Group,warmup?:(model:T.Group)=>Promise<unknown>) {
   const models=new Map<string,T.Group>();
   const pending=new Set<string>();
   const failed=new Set<string>();
@@ -99,11 +99,18 @@ export function createWeaponModels(parent:T.Group) {
         if(name==='g36'&&/g36[_ ]30rd[_ ]magazine/.test(object.name))parts.push({object,rest:object.position.clone(),kind:'magazine'});
       });
       movingParts.set(model,parts);
-      model.visible=false;models.set(name,model);root.add(model);
+      model.visible=false;
+      try{await warmup?.(model);}catch(error){console.warn('Weapon shader warmup unavailable',error);}
+      if(disposed){release(model);return;}
+      models.set(name,model);root.add(model);
     } catch(error){failed.add(name);console.warn('Weapon model could not load:',name,error);}
     finally{pending.delete(name);}
   }
   return {
+    preload(indices:readonly number[]){for(const index of new Set(indices)){
+      const name=germanWeaponNames[index]??(index===4?null:index===3?'g36':index===1?'luger':index===0?'kar98k':'mp40');
+      if(name)void load(name);
+    }},
     update(team:'de'|'fr',map:string,index:number){
       // French weapon replacements remain separate; do not label a US mesh MAS-38.
       const name=germanWeaponNames[index]??(index===4?null:index===3?'g36':index===1?'luger':index===0?'kar98k':'mp40');

@@ -1,7 +1,9 @@
 import * as T from 'three';
+import {refineViewmodelGeometry} from './viewmodelGeometry';
 
 /** Bend the forearms below the eye while preserving the authored finger/grip pose. */
 export function createViewmodelArms(root:T.Group){
+ refineViewmodelGeometry(root);
  const meshes:{mesh:T.Mesh;index:number}[]=[];
  root.updateWorldMatrix(true,true);
  const inverse=root.matrixWorld.clone().invert();

@@ -27,8 +27,8 @@ export async function loadHuman(uniformId?:UniformId,civilian=false){
  coatSource??=fetch('/shooter/characters/greatcoat/rigged.json').then(r=>{if(!r.ok)throw Error('Mantelmodell konnte nicht geladen werden');return r.json() as Promise<CoatPiece[]>;}).catch(e=>{coatSource=null;throw e;});
  return {...data,coat:await coatSource};
 }
-export function createHuman(data:HumanData|BonusCharacterData|CivilianCharacterData,team:'de'|'fr',map:MapId,uniform:T.MeshStandardMaterial,uniformId:UniformId=defaultUniform(team,map),civilian=false){
- if('civilian' in data)return createCivilianCharacter(data);
+export function createHuman(data:HumanData|BonusCharacterData|CivilianCharacterData,team:'de'|'fr',map:MapId,uniform:T.MeshStandardMaterial,uniformId:UniformId=defaultUniform(team,map),civilian=false,residentId?:string){
+ if('civilian' in data)return createCivilianCharacter(data,residentId);
  if('character' in data)return createBonusCharacter(data);
  const civilianLook=civilian?createCivilianAppearance():undefined;uniform=civilianLook?.cloth??uniform.clone();const outfit=uniforms[uniformId];if(!civilian)uniform.color.set(outfit.color);
  let isDisposed=false;
@@ -156,7 +156,7 @@ export function createHuman(data:HumanData|BonusCharacterData|CivilianCharacterD
    // Locomotion drives hips/legs. Keep the armed chest and gaze aligned with aim.
    const chest=named.get('spine01')!;group.getWorldQuaternion(upperPose);
    upperPose.multiply(leanPose.setFromAxisAngle(poseAxis,player.crouching?-.12:player.sprinting?-.09:-.02));
-   chest.parent!.getWorldQuaternion(upperParent).invert();chest.quaternion.copy(upperParent.multiply(upperPose));chest.updateWorldMatrix(false,true);
+   chest.parent!.getWorldQuaternion(upperParent).invert();chest.quaternion.copy(upperParent.multiply(upperPose));chest.updateWorldMatrix(false,false);
    group.getWorldQuaternion(upperPose);upperPose.multiply(leanPose.setFromAxisAngle(poseAxis,-player.pitch*.35));
    headBone.parent!.getWorldQuaternion(upperParent).invert();headBone.quaternion.copy(upperParent.multiply(upperPose));
   }

@@ -26,7 +26,7 @@ export function loadSceneAssets(scene:T.Scene,renderer:T.WebGLRenderer,covers:{b
     placement.updateMatrix();placements.push(placement.matrix.clone());
    }
   }
-  instanceStaticModel(scene,gltf.scene,placements);
+  instanceStaticModel(scene,gltf.scene,placements,true,32);
  },undefined,()=>console.warn('Crate asset unavailable'));
  // These are dressing outside walking lanes, so their geometry cannot disagree with movement collision.
  loader.load('/shooter/models/barrel_03/asset.gltf',gltf=>{

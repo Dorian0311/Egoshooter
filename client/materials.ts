@@ -1,4 +1,5 @@
 import * as T from 'three';
+import {applySurfaceFinish} from './surfaceFinish';
 type Surface='paving'|'plaster'|'facade'|'stone'|'wood'|'metal'|'snow'|'rock'|'cloth'|'roof'|'grass'|'sand';
 const names:Record<Exclude<Surface,'cloth'>,string>={paving:'cobblestone_floor_02',plaster:'damaged_plaster',facade:'plastered_wall_02',stone:'sandstone_blocks_04',wood:'wood_planks_dirt',metal:'rusty_metal_02',snow:'snow_02',rock:'rock_01',roof:'roof_slates_02',grass:'aerial_grass_rock',sand:'sand_01'};
 const surfaces:Record<string,Surface>={
@@ -47,6 +48,7 @@ export function createMaterials(renderer:T.WebGLRenderer){
    if(surface==='grass'){result.color.set('#b6ca8e');result.normalScale.set(.7,.7);}
    if(surface==='sand')result.color.set('#f0ddb7');
    if(color==='#8b8a7d')result.color.set('#9a9689');
+   if(surface&&['facade','plaster','stone','paving','grass','sand'].includes(surface))applySurfaceFinish(result,['facade','plaster','stone'].includes(surface));
    cache.set(color,result);return result;
   },
   dispose(){disposed=true;cache.forEach(m=>m.dispose());textures.forEach(t=>t.dispose());}

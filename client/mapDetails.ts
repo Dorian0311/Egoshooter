@@ -9,7 +9,7 @@ export const detailedPropKinds=new Set(['sandbags','container','truck','ruin','t
 /** All substantial playable props follow shared collision boxes. Small dressing
  * stays below step height, on existing walls, or beyond the walking boundary. */
 export function createMapDetails(scene:T.Scene,world:World,get:(color:string)=>T.MeshStandardMaterial,camera:T.Camera){
-  const root=new T.Group();root.name='map-dressing-'+world.id;scene.add(root);
+  const root=new T.Group();root.name='map-dressing-'+world.id;root.matrixAutoUpdate=false;scene.add(root);
   const island=world.id==='storm',war=world.id==='frontline';
   const colors=new Map<string,T.MeshStandardMaterial>();
   function material(color:string,metalness=0,roughness=.85){

@@ -48,6 +48,14 @@ test('resolution stays within the GPU pixel budget on high-DPI and 4K screens', 
   }
 });
 
+test('automatic graphics makes room for 60 FPS when sustained performance is just below the target',()=>{
+ const busy=new ResolutionGovernor(),stable=new ResolutionGovernor();
+ for(let i=0;i<57*6;i++)busy.update(1/57);
+ assert.ok(busy.scale<1&&busy.scale>=.8);
+ for(let i=0;i<60*8;i++)stable.update(1/60);
+ assert.equal(stable.scale,1);
+});
+
 test('facade instancing fits allocated buffers on both maps', () => {
   for (const id of ['cologne', 'alpine'] as const) {
     const scene = new T.Scene();

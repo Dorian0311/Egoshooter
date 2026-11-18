@@ -7,7 +7,7 @@ type Surface='footstep'|'metal'|'wood'|'stone'|'glass';
 type Position={x:number;y:number;z:number};
 type Voice={source:AudioBufferSourceNode;stop:()=>void};
 type Engine={source:AudioBufferSourceNode;gain:GainNode;filter:BiquadFilterNode;pan:PannerNode};
-export type StepState=Position&{distance:number;grounded:boolean};
+export type StepState=Position&{distance:number;grounded:boolean;life?:number};
 
 export function footstepMaterial(world:World,p:Position):FootMaterial{
  const support=world.boxes.find(b=>Math.abs(p.x-b.x)<=b.w/2&&Math.abs(p.z-b.z)<=b.d/2&&Math.abs(p.y-(b.y+b.h/2))<.32);
@@ -18,13 +18,13 @@ export function footstepMaterial(world:World,p:Position):FootMaterial{
 }
 
 /** Distance-based cadence ignores walls, jumps, teleports and respawns. */
-export function advanceFootstep(previous:StepState|undefined,p:Position&{grounded:boolean;hp:number;crouching:boolean;sprinting:boolean},eligible=true){
+export function advanceFootstep(previous:StepState|undefined,p:Position&{grounded:boolean;hp:number;crouching:boolean;sprinting:boolean;life?:number},eligible=true){
  const travel=previous?Math.hypot(p.x-previous.x,p.z-previous.z):0;
- const reset=!previous||!eligible||!p.hp||!p.grounded||!previous.grounded||travel>3||Math.abs(p.y-previous.y)>1;
+ const reset=!previous||!eligible||!p.hp||p.life!==previous.life||!p.grounded||!previous.grounded||travel>3||Math.abs(p.y-previous.y)>1;
  let distance=reset?0:previous.distance+travel;
  const stride=p.crouching?.95:p.sprinting?1.85:1.45,step=distance>=stride;
  if(step)distance%=stride;
- return {state:{x:p.x,y:p.y,z:p.z,distance,grounded:p.grounded},step};
+ return {state:{x:p.x,y:p.y,z:p.z,distance,grounded:p.grounded,life:p.life},step};
 }
 
 export function weaponSound(weapon:number,name=''):SoundName{

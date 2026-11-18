@@ -16,6 +16,37 @@ test('operation configuration rejects invalid or incompatible options',()=>{
  assert.equal(parseOperation(undefined).kind,'multiplayer');assert.equal(parseOperation({kind:'solo',mode:'battle',battleStyle:'team',enemies:2}).enemies,4);
  for(const c of [{kind:'coop',mode:'training'},{enemies:Infinity},{mode:'__proto__'},{difficulty:'impossible'},null])assert.throws(()=>parseOperation(c));
 });
+test('enemy starts are separated from one another and from the players on every map',()=>{
+ for(const map of mapIds)for(const mode of ['survival','mission','battle']){
+  const game=new Game('SPAWNQA',600000,map,()=>.5,{kind:mode==='battle'?'solo':'coop',mode});
+  game.add('a','Anna');if(mode!=='battle')game.add('b','Bruno');
+  game.operation.configureBots();
+  for(const p of game.state.players)game.ready(p.id,true,1000);
+  game.tick(4000);
+  const bots=game.state.players.filter(p=>p.kind==='bot'&&p.team==='fr'&&p.hp>0);
+  assert.equal(bots.length,4);
+  for(const [i,bot] of bots.entries()){
+   assert.ok(walkable(getWorld(map),bot.x,bot.y,bot.z),map);
+   for(const p of game.operation.humans)assert.ok(Math.hypot(p.x-bot.x,p.z-bot.z)>=25,map);
+   for(const p of bots.slice(i+1))assert.ok(Math.hypot(p.x-bot.x,p.z-bot.z)>=16,map);
+  }
+ }
+});
+test('Coop bot headshots deal difficulty-scaled damage and leave full-health players alive',()=>{
+ for(const [difficulty,hp] of [['easy',47],['normal',32],['hard',18]] as const){
+  const game=start('survival','coop');
+  game.state.operation.config.difficulty=difficulty;
+  const shooter=game.player('bot-0')!,target=game.player('a')!;
+  const world=game.world();game.world=()=>({...world,boxes:[]});
+  for(const p of game.operation.actors())p.x+=200;
+  Object.assign(shooter,{x:0,y:0,z:10,yaw:0,pitch:0});
+  Object.assign(target,{x:0,y:0,z:0,yaw:0});
+  game.shoot(shooter,neutral(),4100);
+  assert.equal(game.state.events.find(e=>e.type==='hit')?.bodyPart,'head');
+  assert.equal(target.hp,hp);
+  assert.equal(target.downedUntil,0);
+ }
+});
 test('every map has standable pickup points and exactly eight gifts plus four bandages',()=>{
  for(const map of mapIds){const g=new Game('MAPQA',600000,map);g.add('a','A');g.add('b','B');g.ready('a',true,0);g.ready('b',true,0);g.tick(3000);assert.equal(g.state.pickups.filter(p=>p.kind==='gift').length,8);assert.equal(g.state.pickups.filter(p=>p.kind==='bandage').length,4);for(const p of g.state.pickups)assert.ok(walkable(getWorld(map),p.x,p.y,p.z));assert.ok(safePoints(getWorld(map)).length>12);}
 });
