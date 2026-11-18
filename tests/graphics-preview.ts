@@ -78,19 +78,24 @@ function show() {
       stressTick++;
       const events:Snapshot['events']=[];
       const seconds=stressTick/30;
+      const rightX=Math.cos(player.yaw),rightZ=-Math.sin(player.yaw);
+      const forwardX=-Math.sin(player.yaw),forwardZ=-Math.cos(player.yaw);
+      const at=(side:number,forward:number,y:number):[number,number,number]=>[
+        player.x+rightX*side+forwardX*forward,player.y+y,player.z+rightZ*side+forwardZ*forward,
+      ];
       for(const [i,actor] of snapshot.players.entries()){
         if(i>0){
-          actor.x=player.x+(i-4)*1.25+Math.sin(seconds*2+i)*.45;
-          actor.z=player.z-3.8-(i%3)*1.45;
+          const [x,,z]=at((i-4)*1.25+Math.sin(seconds*2+i)*.45,3.8+(i%3)*1.45,0);
+          actor.x=x;actor.z=z;
           actor.yaw=Math.atan2(actor.x-player.x,actor.z-player.z);
         }
         if((stressTick+i)%3!==0)continue;
-        const point:[number,number,number]=i===0?[player.x+.7,player.y+1.3,player.z-10]:[player.x+(i-4)*.74,player.y+1.35,player.z+1.1];
+        const point=i===0?at(.7,10,1.3):at((i-4)*.74,-1.1,1.35);
         events.push({type:'shot',eventId:`fire-${stressRun}-${stressTick}-${i}`,id:actor.id,weapon:2,point});
         if(stressFrames>0)stressShots++;
       }
       if(stressTick%42===0){
-        for(let n=0;n<3;n++)events.push({type:'explosion',eventId:`blast-${stressRun}-${stressTick}-${n}`,id:player.id,weapon:15,point:[player.x+(n-1)*2.3,player.y+.4,player.z-4-n],radius:4.5});
+        for(let n=0;n<3;n++)events.push({type:'explosion',eventId:`blast-${stressRun}-${stressTick}-${n}`,id:player.id,weapon:15,point:at((n-1)*2.3,4+n,.4),radius:4.5});
         if(stressFrames>0)stressBlasts+=3;
       }
       if(stressFrames>0)stressFrames--;
