@@ -78,6 +78,56 @@ function fitFieldUniform(data:HumanData){
  }
  fieldFit.set(data.positions,fitted);return fitted;
 }
+// Normal and greatcoat cuts use different triangles and therefore different surface normals.
+const fieldBodies=new WeakMap<number[],T.BufferGeometry>();
+const coatBodies=new WeakMap<number[],T.BufferGeometry>();
+
+function actorBodyGeometry(template:T.BufferGeometry){
+ const geometry=new T.BufferGeometry();
+ // The skinning shader reads these immutable CPU arrays. Each geometry retains its
+ // own WebGL attribute lifetime, indices, material groups and injury draw range.
+ for(const [name,attribute] of Object.entries(template.attributes)){
+  geometry.setAttribute(name,new T.BufferAttribute(attribute.array,attribute.itemSize,attribute.normalized));
+ }
+ geometry.setIndex(template.index!.clone());
+ for(const group of template.groups)geometry.addGroup(group.start,group.count,group.materialIndex);
+ return geometry;
+}
+
+function createBodyMesh(data:HumanData,civilian:boolean,materials:T.Material[]){
+ const cache=data.coat?coatBodies:fieldBodies;
+ const cached=civilian?undefined:cache.get(data.indices);
+ if(cached)return new T.SkinnedMesh(actorBodyGeometry(cached),materials);
+ const geometry=new T.BufferGeometry(),positions=civilian?data.positions.slice():fitFieldUniform(data);
+ if(civilian)tailorCivilian(positions,data.categories,data.bones);
+ geometry.setAttribute('position',new T.Float32BufferAttribute(positions,3));
+ geometry.setAttribute('uv',new T.Float32BufferAttribute(data.uv,2));
+ geometry.setAttribute('skinIndex',new T.Uint16BufferAttribute(data.skinIndex,4));
+ geometry.setAttribute('skinWeight',new T.Float32BufferAttribute(data.skinWeight,4));
+ const ordered:number[][]=civilian?[[],[],[],[]]:[[],[],[]];
+ function collarVertex(v:number){
+  const y=data.positions[v*3+1];
+  return y>1.40&&(y>1.62||Math.abs(data.positions[v*3])<.085);
+ }
+ for(let i=0;i<data.indices.length;i+=3){
+  const a=data.indices[i],b=data.indices[i+1],c=data.indices[i+2];
+  if(data.coat&&!(collarVertex(a)&&collarVertex(b)&&collarVertex(c)))continue;
+  const ca=data.categories[a],cb=data.categories[b],cc=data.categories[c];
+  const majority=ca===cb||ca===cc?ca:cb===cc?cb:0;
+  let category=data.coat?1:majority===1||majority===2?majority:0;
+  if(category===2&&(!civilian||Math.max(data.positions[a*3+1],data.positions[b*3+1],data.positions[c*3+1])<.09))continue;
+  if(civilian&&category===0&&(data.positions[a*3+1]+data.positions[b*3+1]+data.positions[c*3+1])/3<.965)category=3;
+  ordered[category].push(a,b,c);
+ }
+ geometry.setIndex(ordered.flat());
+ let start=0;
+ for(const [i,triangles] of ordered.entries()){geometry.addGroup(start,triangles.length,i);start+=triangles.length;}
+ geometry.computeVertexNormals();
+ const mesh=new T.SkinnedMesh(geometry,materials);mesh.normalizeSkinWeights();
+ if(!civilian){cache.set(data.indices,geometry);mesh.geometry=actorBodyGeometry(geometry);}
+ return mesh;
+}
+
 let source:Promise<HumanData>|null=null;
 function loadBaseHuman(){return source??=fetch('/shooter/characters/humanoid.json').then(r=>{if(!r.ok)throw Error('Human model unavailable');return r.json() as Promise<HumanData>;}).then(async data=>{data.motion=await loadMotionLibrary();return data;}).catch(e=>{source=null;throw e;});}
 export async function loadHuman(uniformId?:UniformId,civilian=false){
@@ -99,22 +149,18 @@ export function createHuman(data:HumanData|BonusCharacterData|CivilianCharacterD
  if('character' in data)return createBonusCharacter(data,purpose);
  const civilianLook=civilian?createCivilianAppearance():undefined;uniform=civilianLook?.cloth??uniform.clone();const outfit=uniforms[uniformId];if(!civilian)uniform.color.set(outfit.color);
  let isDisposed=false;
- const group=new T.Group(),geometry=new T.BufferGeometry();
- const tailored=civilian?data.positions.slice():fitFieldUniform(data);
- if(civilian)tailorCivilian(tailored,data.categories,data.bones);
- geometry.setAttribute('position',new T.Float32BufferAttribute(tailored,3));geometry.setAttribute('uv',new T.Float32BufferAttribute(data.uv,2));
- geometry.setAttribute('skinIndex',new T.Uint16BufferAttribute(data.skinIndex,4));geometry.setAttribute('skinWeight',new T.Float32BufferAttribute(data.skinWeight,4));
+ const group=new T.Group();
  const {skinImage,clothImage:garmentImage}=data;
  const skin=acquireSurface(skinImage);
  const cloth=!civilian?acquireSurface(garmentImage):undefined;
  if(cloth){uniform.map=cloth;uniform.roughness=.94;}
  const materials=[uniform,new T.MeshStandardMaterial({color:'#ffffff',map:skin??null,roughness:.82,envMapIntensity:.35}),civilianLook?.boots??new T.MeshStandardMaterial({color:'#272723',roughness:.85}),...(civilianLook?[civilianLook.cloth]:[])];
- const ordered:number[][]=civilian?[[],[],[],[]]:[[],[],[]];for(let i=0;i<data.indices.length;i+=3){if(data.coat&&!data.indices.slice(i,i+3).every(v=>data.positions[v*3+1]>1.40&&(data.positions[v*3+1]>1.62||Math.abs(data.positions[v*3])<.085)))continue;const tri=data.indices.slice(i,i+3),labels=tri.map(v=>data.categories[v]);let category=data.coat?1:labels.filter(v=>v===1).length>=2?1:labels.filter(v=>v===2).length>=2?2:0;if(civilian&&category===2&&tri.every(v=>data.positions[v*3+1]<.09))continue;if(civilian&&category===0&&tri.reduce((sum,v)=>sum+data.positions[v*3+1],0)/3<.965)category=3;ordered[category].push(...tri);}
- if(!civilian)ordered[2]=[];geometry.setIndex(ordered.flat());let start=0;ordered.forEach((indices,index)=>{geometry.addGroup(start,indices.length,index);start+=indices.length;});geometry.computeVertexNormals();civilianLook?.tintGeometry(geometry);
+ const mesh=createBodyMesh(data,civilian,materials);
+ civilianLook?.tintGeometry(mesh.geometry);
  const bones=data.bones.map(j=>{const b=new T.Bone();b.name=j.name;return b;});
  for(let i=0;i<bones.length;i++){const j=data.bones[i],parent=j.parent>=0?data.bones[j.parent].head:[0,0,0];bones[i].position.set(j.head[0]-parent[0],j.head[1]-parent[1],j.head[2]-parent[2]);if(j.parent>=0)bones[j.parent].add(bones[i]);else group.add(bones[i]);}
- const mesh=new T.SkinnedMesh(geometry,materials);mesh.castShadow=true;mesh.receiveShadow=true;mesh.frustumCulled=false;group.add(mesh);group.updateMatrixWorld(true);
- const skeleton=new T.Skeleton(bones);mesh.bind(skeleton);mesh.normalizeSkinWeights();
+ mesh.castShadow=true;mesh.receiveShadow=true;mesh.frustumCulled=false;group.add(mesh);group.updateMatrixWorld(true);
+ const skeleton=new T.Skeleton(bones);mesh.bind(skeleton);
  const coatMeshes:T.SkinnedMesh[]=[],coatTextures:T.Texture[]=[];
  if(data.coat)for(const piece of data.coat){
    const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(piece.positions,3));g.setAttribute('normal',new T.Float32BufferAttribute(piece.normal,3));g.setAttribute('uv',new T.Float32BufferAttribute(piece.uv,2));if(piece.indices)g.setIndex(piece.indices);g.setAttribute('skinIndex',new T.Uint16BufferAttribute(piece.skinIndex,4));g.setAttribute('skinWeight',new T.Float32BufferAttribute(piece.skinWeight,4));

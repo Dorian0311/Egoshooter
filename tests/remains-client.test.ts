@@ -44,3 +44,25 @@ test('head removal has a visible reach, braced pull, twist and final release wit
 test('corpse freezing retains texture/material identity and bakes actual posed vertices without live bones',async()=>{
  const root=new T.Group(),bone=new T.Bone();root.add(bone);const geometry=new T.BoxGeometry(.3,.4,.2),count=geometry.getAttribute('position').count;geometry.setAttribute('skinIndex',new T.Uint16BufferAttribute(new Uint16Array(count*4),4));geometry.setAttribute('skinWeight',new T.Float32BufferAttribute(Array.from({length:count*4},(_,i)=>i%4===0?1:0),4));const material=new T.MeshStandardMaterial({color:'#614d43'}),mesh=new T.SkinnedMesh(geometry,material);root.add(mesh);root.updateWorldMatrix(true,true);mesh.bind(new T.Skeleton([bone]));bone.position.x=.2;root.updateWorldMatrix(true,true);mesh.skeleton.update();const source=geometry.getAttribute('position').getX(0),frozen=await freezeRemains(root);assert.equal(frozen.children.length,1);const baked=frozen.children[0] as T.Mesh;assert.ok(!(baked instanceof T.SkinnedMesh));assert.equal(baked.material,material);assert.ok(Math.abs(baked.geometry.getAttribute('position').getX(0)-source-.2)<1e-6);assert.equal(geometry.getAttribute('position').getX(0),source);baked.geometry.dispose();geometry.dispose();material.dispose();mesh.skeleton.dispose();
 });
+
+test('frozen weighted, morphed skin matches native Three positions and normals exactly',async()=>{
+ const root=new T.Group(),a=new T.Bone(),b=new T.Bone();a.add(b);root.add(a);b.position.y=.7;
+ const geometry=new T.BoxGeometry(.7,1,.3),position=geometry.getAttribute('position'),normals=geometry.getAttribute('normal');
+ const morph=position.clone();for(let i=0;i<morph.count;i++)morph.setX(i,morph.getX(i)+i*.003);
+ geometry.morphAttributes.position=[morph];
+ const idx=new Uint16Array(position.count*4),weights=new Float32Array(idx.length);
+ for(let i=0;i<position.count;i++){idx[i*4+1]=1;weights[i*4]=.3;weights[i*4+1]=.7;}
+ geometry.setAttribute('skinIndex',new T.Uint16BufferAttribute(idx,4));geometry.setAttribute('skinWeight',new T.Float32BufferAttribute(weights,4));
+ const material=new T.MeshBasicMaterial(),mesh=new T.SkinnedMesh(geometry,material);root.add(mesh);
+ mesh.position.set(.3,-.2,.1);root.updateMatrixWorld(true);mesh.bind(new T.Skeleton([a,b]));
+ mesh.morphTargetInfluences![0]=.2;a.rotation.x=.27;b.rotation.y=-.42;root.updateMatrixWorld(true);
+ const frozen=await freezeRemains(root),baked=(frozen.children[0] as T.Mesh).geometry;
+ const p=new T.Vector3(),n=new T.Vector3(),base=new T.Vector3(),normalMatrix=new T.Matrix3().getNormalMatrix(mesh.matrixWorld);
+ for(let i=0;i<position.count;i++){
+  mesh.getVertexPosition(i,p);n.fromBufferAttribute(normals,i).multiplyScalar(.001).add(base.fromBufferAttribute(position,i));
+  mesh.applyBoneTransform(i,n).sub(p).applyNormalMatrix(normalMatrix).normalize();p.applyMatrix4(mesh.matrixWorld);
+  assert.deepEqual(new T.Vector3().fromBufferAttribute(baked.getAttribute('position'),i).toArray(),p.toArray().map(Math.fround));
+  assert.deepEqual(new T.Vector3().fromBufferAttribute(baked.getAttribute('normal'),i).toArray(),n.toArray().map(Math.fround));
+ }
+ geometry.dispose();baked.dispose();material.dispose();mesh.skeleton.dispose();
+});

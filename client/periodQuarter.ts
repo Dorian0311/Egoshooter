@@ -1,5 +1,6 @@
 import * as T from 'three';
 import type {MapId} from '../shared/world';
+import {addRhineQuays} from './rhineQuays';
 
 type Point=[number,number,number];
 
@@ -34,6 +35,7 @@ export function createPeriodQuarter(id:Extract<MapId,'cologne'|'frontline'>,load
       }
     }
     groundRect(-30,30,210,reach,-4.09,13);groundRect(-30,30,-reach,-210,-4.09,13);
+    addRhineQuays(face);
   }else{
     const edge=119;
     groundRect(-reach,-edge,-reach,reach,-1.0);groundRect(edge,reach,-reach,reach,-1.0);

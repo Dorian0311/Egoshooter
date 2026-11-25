@@ -69,7 +69,7 @@ export function batchStaticMeshes(scene: T.Scene | T.Group, excluded: Set<T.Obje
   }
 }
 
-export function createRiver(scene: T.Scene,width=60,depth=420,height=-4,color='#254a50',segments:readonly [number,number]=[96,256],receiveShadow=true) {
+export function createRiver(scene: T.Scene,width=60,depth=420,height=-4,color='#254a50',segments:readonly [number,number]=[40,128],receiveShadow=true) {
   const time = { value: 0 };
   const material = new T.MeshPhysicalMaterial({
     color, roughness: .22, metalness: .12,
@@ -77,24 +77,46 @@ export function createRiver(scene: T.Scene,width=60,depth=420,height=-4,color='#
   });
   const waves = `
     uniform float riverTime;
+    varying vec2 vRiverPosition;
     float wave(vec2 p) {
-      return sin(p.x * .8 + p.y * .42 + riverTime * .8) * .065
-        + sin(p.y * 1.5 - p.x * .3 + riverTime * 1.1) * .025;
+      return sin(dot(p, vec2(.31, .20)) - riverTime * .82) * .066
+        + sin(dot(p, vec2(-.24, .36)) - riverTime * 1.03) * .037;
     }
   `;
   material.onBeforeCompile = shader => {
     shader.uniforms.riverTime = time;
     shader.vertexShader = waves + shader.vertexShader;
     shader.vertexShader = shader.vertexShader.replace('#include <beginnormal_vertex>', `
-      float slopeX = (wave(position.xz + vec2(.08, 0.)) - wave(position.xz - vec2(.08, 0.))) / .16;
-      float slopeZ = (wave(position.xz + vec2(0., .08)) - wave(position.xz - vec2(0., .08))) / .16;
-      vec3 objectNormal = normalize(vec3(-slopeX, 1., -slopeZ));
+      vec2 slope = vec2(.31, .20) * .066 * cos(dot(position.xz, vec2(.31, .20)) - riverTime * .82)
+        + vec2(-.24, .36) * .037 * cos(dot(position.xz, vec2(-.24, .36)) - riverTime * 1.03);
+      vec3 objectNormal = normalize(vec3(-slope.x, 1., -slope.y));
     `).replace('#include <begin_vertex>', `
       vec3 transformed = position;
       transformed.y += wave(position.xz);
+      vRiverPosition = position.xz;
+    `);
+    shader.uniforms.riverHalfWidth={value:width/2};
+    shader.fragmentShader=shader.fragmentShader.replace('#include <common>',`#include <common>
+      uniform float riverTime;
+      uniform float riverHalfWidth;
+      varying vec2 vRiverPosition;
+    `).replace('#include <color_fragment>',`#include <color_fragment>
+      float bank = smoothstep(riverHalfWidth - 5.0, riverHalfWidth, abs(vRiverPosition.x));
+      diffuseColor.rgb *= mix(vec3(.90, 1.03, 1.06), vec3(1.32, 1.15, .84), bank);
+    `).replace('#include <normal_fragment_maps>',`#include <normal_fragment_maps>
+      // The fine current lives in the normal, so distant ripples do not need vertices.
+      float rippleFade = 1.0 - smoothstep(30.0, 120.0, length(vViewPosition));
+      float bend = sin(dot(vRiverPosition, vec2(.063, -.14)) + riverTime * .24);
+      vec2 current = vec2(.054, .026) * sin(dot(vRiverPosition, vec2(1.12, 1.54)) - riverTime * 2.2 + bend * 1.7)
+        + vec2(-.032, .047) * sin(dot(vRiverPosition, vec2(-1.28, 2.01)) - riverTime * 2.73 - bend * 1.1);
+      normal = normalize(normal + mat3(viewMatrix) * vec3(current.x, 0.0, current.y) * rippleFade);
+    `).replace('#include <clearcoat_normal_fragment_maps>',`#include <clearcoat_normal_fragment_maps>
+      #ifdef USE_CLEARCOAT
+        clearcoatNormal = normal;
+      #endif
     `);
   };
-  material.customProgramCacheKey = () => 'river-waves-v1';
+  material.customProgramCacheKey = () => 'river-waves-v2';
   const geometry = new T.PlaneGeometry(width, depth, ...segments);
   geometry.rotateX(-Math.PI / 2);
   const river = new T.Mesh(geometry, material);

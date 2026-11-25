@@ -60,3 +60,21 @@ test('Island boots keep a complete shadow-casting silhouette when small details 
  }
  details.dispose();human.dispose();
 });
+
+test('standard actors reuse immutable body streams while keeping independently disposable GPU attributes and injury indices',()=>{
+ const data=JSON.parse(readFileSync(new URL('../public/shooter/characters/humanoid.json',import.meta.url),'utf8'));
+ const first=createHuman({...data},'de','storm',new T.MeshStandardMaterial(),'task-olive');
+ const second=createHuman({...data},'fr','storm',new T.MeshStandardMaterial(),'task-sand');
+ const body=(actor:typeof first)=>(actor.group.children.find(o=>o instanceof T.SkinnedMesh) as T.SkinnedMesh).geometry;
+ const a=body(first),b=body(second);
+ for(const name of ['position','normal','uv','skinIndex','skinWeight']){
+  assert.notEqual(a.attributes[name],b.attributes[name]);
+  assert.equal(a.attributes[name].array,b.attributes[name].array);
+ }
+ assert.notEqual(a.index!.array,b.index!.array);
+ assert.notEqual(a.groups,b.groups);
+ assert.deepEqual(a.groups,b.groups);
+ first.dispose();
+ assert.ok(b.getAttribute('position').count>10000);
+ second.dispose();
+});
