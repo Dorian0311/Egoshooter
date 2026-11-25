@@ -12,6 +12,7 @@ import {texturedHeadland,islandHeadlands} from './coastalHeadland';
 import {addIslandStreet} from './islandStreet';
 import {inIslandStreet} from '../shared/islandStreet';
 import {createBattleTerrain} from './battleTerrain';
+import {freightStreet} from './freightStreet';
 
 export const detailedPropKinds=new Set(['sandbags','container','truck','ruin','tree','platform','coastal-portal','shop','street-pole']);
 
@@ -323,6 +324,7 @@ export function createMapDetails(scene:T.Scene,world:World,get:(color:string)=>T
 
   }
   if(war){
+    root.add(freightStreet(world,get('#818783').map));
     // Workers' terraces and pitched roofs extend the freight yard
     // beyond the walking boundary. The foreground tracks lead into the town.
     const masonry=material('#876f60'),slate=material('#4e5759'),window=material('#434846');

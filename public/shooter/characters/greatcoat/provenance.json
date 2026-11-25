@@ -7,5 +7,18 @@
   "license": "CC-BY-4.0 as declared on the Fab listing",
   "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
   "archiveSha256": "f52f1529285507de0ba047d3b1bd588835b7f210280ccdeb5c5241de3008321c",
-  "modifications": "FBX meshes transformed to metres and attached to MakeHuman skeleton using transferred skin weights; cloth material roughness corrected. Head and headgear supplied separately. Original three meshes and embedded textures retained."
+  "modifications": "FBX meshes transformed to metres and attached to MakeHuman skeleton using transferred skin weights; cloth material roughness corrected. Head and headgear supplied separately. Original three meshes and embedded textures retained.",
+  "textureEncoding": {
+    "format": "Lossless WebP",
+    "encoder": "Pillow with libwebp 1.6.0, lossless=True, method=6",
+    "validation": "Original dimensions and decoded RGB bytes preserved for all six albedo and tangent normal maps. Digests are SHA-256 of the uncompressed RGB pixels in row-major order.",
+    "rgbSha256": {
+      "image-0.webp": "0b583571e41f4cbc523387adc1f117686e6343f633a1265d4cb22bf2aa9cb154",
+      "image-1.webp": "33edc17b5694aff303f557f572d162bd54b445b2af15f9e1d498f4498fb1bcb1",
+      "image-2.webp": "c287307ecda47181ef08341650bed4153cfc4b7cea0a5157ab89d55c79fc678f",
+      "image-3.webp": "f6baef85ef42d1a5a390146f00ea339191d6cab5ce2e3c40c5aa1601cdbd0760",
+      "image-4.webp": "7eeafcca30f9aa3ba464fd9bfbb3d48a4182a3c4cf3fb79f56f09365a6cf660b",
+      "image-5.webp": "695ad915c5c2df7a2be1cd465cd828baff16c89bd6557d54856ae149ecf411db"
+    }
+  }
 }

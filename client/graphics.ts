@@ -139,6 +139,7 @@ export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
       const sources=[
         ['cover-crate-shadow-hulls','isInstancedMesh'],
         ['civilian-rocketbox-male-adult-03','isSkinnedMesh'],
+        ['world-kar98k','isMesh'],
       ] as const;
       const prepared:string[]=[];
       const restoreDepth:(()=>void)[]=[];

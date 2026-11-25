@@ -41,6 +41,7 @@ import {createGraphics} from './graphics.ts';
 import type {GraphicsQuality} from './graphicsSettings.ts';
 import {createRiver,addFacadeDetails,addAlpineBackdrop,batchStaticMeshes} from './scenery.ts';
 import {createCologneCathedral} from './cologneCathedral';
+import {createCologneBridgeSteel} from './cologneBridge';
 import {createMaterials,projectBoxUVs} from './materials.ts';
 import {addArchitecture,facadeColor} from './architecture.ts';
 import {createRockGeometry} from './rockGeometry.ts';
@@ -139,7 +140,7 @@ export function createScene(
   const river=mapId==='cologne'?createRiver(scene):undefined;
   if(mapId==='cologne'){
     cube(-53,-.2,0,46,.4,150,'#77766b');cube(53,-.2,0,46,.4,150,'#77766b');
-    for(const z of [-8.8,8.8])for(const start of [-30,-10,10]){const points=Array.from({length:25},(_,i)=>new T.Vector3(start+i*20/24,1+9*Math.sin(Math.PI*i/24),z));const arch=new T.Mesh(new T.TubeGeometry(new T.CatmullRomCurve3(points),32,.16,6,false),mat('#394c43'));arch.castShadow=true;scene.add(arch);for(let i=1;i<4;i++)cube(start+i*5,(1+9*Math.sin(Math.PI*i/4))/2,z,.16,1+9*Math.sin(Math.PI*i/4),.16,'#4b5b4f');}
+    scene.add(createCologneBridgeSteel());
     for(const z of [-5.5,-3,3,5.5])cube(0,.06,z,61,.12,.1,'#4b4d43');
     for(let x=-30;x<=30;x+=1)for(const z of [-4.25,4.25])cube(x,.025,z,.2,.05,3.3,'#594b37');
     scene.add(createCologneCathedral(mat('#827866').map!));

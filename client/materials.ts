@@ -40,7 +40,12 @@ export function createMaterials(renderer:T.WebGLRenderer){
  cache.set('roof',roof);
  return {
   roof,
-  get(color:string){if(cache.has(color))return cache.get(color)!;const surface=surfaces[color];const result=new T.MeshStandardMaterial({color,roughness:.83,metalness:0});
+  get(color:string){
+   const surface=surfaces[color];
+   // These three surfaces replace their input tint entirely. Their aliases can share one draw batch.
+   const key=surface==='stone'||surface==='metal'||surface==='wood'?surface:color;
+   const cached=cache.get(key);if(cached)return cached;
+   const result=new T.MeshStandardMaterial({color,roughness:.83,metalness:0});
    if(surface==='cloth'){result.map=cloth;result.bumpMap=cloth;result.bumpScale=.0012;result.roughness=.96;}
    else if(surface){result.map=texture(surface,'albedo');result.normalMap=texture(surface,'normal');result.roughnessMap=texture(surface,'roughness');result.normalScale.set(.55,.55);result.color.set(surface==='facade'?color:surface==='metal'?'#8b938b':surface==='wood'?'#b8a58c':'#e0ddd4');result.roughness=surface==='paving'?.75:.95;result.metalness=surface==='metal'?.65:0;if(surface==='rock'||surface==='coastalRock'){result.vertexColors=true;result.normalScale.setScalar(surface==='coastalRock'?1.05:.85);if(surface==='coastalRock')result.color.set('#f4f1e9');}}
    if(color==='#7b8a82'){result.color.set('#2e444a');result.metalness=.75;result.roughness=.18;result.envMapIntensity=1.4;}
@@ -49,7 +54,7 @@ export function createMaterials(renderer:T.WebGLRenderer){
    if(surface==='sand')result.color.set('#f0ddb7');
    if(color==='#8b8a7d')result.color.set('#9a9689');
    if(surface&&['facade','plaster','stone','paving','grass','sand'].includes(surface))applySurfaceFinish(result,['facade','plaster','stone'].includes(surface));
-   cache.set(color,result);return result;
+   cache.set(key,result);return result;
   },
   dispose(){disposed=true;cache.forEach(m=>m.dispose());textures.forEach(t=>t.dispose());}
  };

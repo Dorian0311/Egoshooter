@@ -14,6 +14,7 @@ for p in pieces:
   top=sorted(weights.items(),key=lambda x:-x[1])[:4]
   while len(top)<4:top.append((0,0))
   total=sum(v for _,v in top);outI.extend(k for k,_ in top);outW.extend(round(v/total,6) for _,v in top)
+ for key in ['albedo','normalMap']:p[key]=str(Path(p[key]).with_suffix('.webp'))
  p['skinIndex']=outI;p['skinWeight']=outW
  for key in ['positions','normal','uv']:p[key]=[round(v,6) for v in p[key]]
 (root/'rigged.json').write_text(json.dumps(pieces,separators=(',',':')))
