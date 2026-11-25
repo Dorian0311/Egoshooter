@@ -1,5 +1,5 @@
 import * as T from 'three';
-import {islandShops,streetPoles} from '../shared/islandStreet';
+import {islandShops,shopParts,streetPoles} from '../shared/islandStreet';
 import {batchStaticMeshes} from './scenery';
 
 export function addIslandStreet(scene:T.Group){
@@ -40,18 +40,93 @@ export function addIslandStreet(scene:T.Group){
   for(let x=33;x<94;x+=6)cuboid(x,.064,-23,2.9,.012,.12,trim);
   const atlas=loader.load(base+'shops.webp');atlas.colorSpace=T.SRGBColorSpace;atlas.anisotropy=4;
   const facade=new T.MeshStandardMaterial({map:atlas,roughness:.93});
+  const prints=loader.load(base+'interior-prints.webp');
+  prints.colorSpace=T.SRGBColorSpace;prints.anisotropy=4;
+  const printMaterial=new T.MeshStandardMaterial({map:prints,roughness:.9});
   const awnings=['#a64c38','#397071','#ae7e39'];
   islandShops.forEach((s,index)=>{
-    const body=cuboid(s.x,s.h/2,s.z,s.w,s.h,s.d,facade),uv=body.geometry.getAttribute('uv');
-    for(let face=0;face<6;face++){
-      const row=face===(s.front===1?4:5)?index:3;
-      for(let corner=0;corner<4;corner++){
-        const i=face*4+corner;
-        uv.setXY(i,.001+uv.getX(i)*.998,(3-row+.002+uv.getY(i)*.996)/4);
+    const edge=s.z+s.front*s.d/2;
+    const tile=paint(['#e1d5ad','#b6a589','#9b7656'][index]);
+    const accent=paint(awnings[index]),wood=paint('#865b42'),cream=paint('#e8ddbc');
+    const detail=(x:number,y:number,z:number,w:number,h:number,d:number,m:T.Material)=>
+      cuboid(s.x+x,y,s.z+z*s.front,w,h,d,m);
+    detail(0,.024,0,s.w-.4,.048,s.d-.4,tile);
+    // Tile, plank and checker patterns stay in the same static colour batch.
+    if(index===0){
+      for(let x=-6;x<6;x++)for(let z=-3;z<3;z++)if((x+z)%2===0)
+        detail(x+.5,.051,z+.5,1,.004,1,paint('#657168'));
+    }else{
+      for(let x=-s.w/2+.7;x<s.w/2-.25;x+=.65)detail(x,.051,0,.012,.004,s.d-.5,wood);
+    }
+    for(const part of shopParts(s)){
+      const {role,x,y,z,w,h,d}=part;
+      if(role==='side'||role==='back'||role==='sign'||role==='sill'){
+        const wall=cuboid(x,y,z,w,h,d,facade),uv=wall.geometry.getAttribute('uv');
+        for(let face=0;face<6;face++)for(let n=0;n<4;n++){
+          const i=face*4+n,lettering=role==='sign'&&face===(s.front===1?4:5);
+          uv.setXY(i,.001+.998*uv.getX(i),lettering?(3-index+.70+.298*uv.getY(i))/4:(.003+.99*uv.getY(i))/4);
+        }
+      }else if(role==='rack'){
+        for(const end of [-1,1])cuboid(x,y,z+end*(d/2-.05),w,h,.10,iron);
+        for(let shelf=0;shelf<4;shelf++){
+          const level=.21+shelf*.57;
+          cuboid(x,level,z,w,.09,d,wood);
+          for(let n=0;n<6;n++){
+            const height=.19+((n+shelf)%3)*.075;
+            cuboid(x,level+.045+height/2,z+(n-2.5)*.51,w*.68,height,.35,[accent,cream,wood][(shelf+n)%3]);
+          }
+        }
+      }else if(role==='bin'){
+        cuboid(x,y,z,w,h,d,wood);
+        for(let n=0;n<15;n++){
+          const sleeve=cuboid(x,h+.17,z+(n-7)*.23,.68,.45,.035,[accent,iron,cream,wood][n%4]);
+          sleeve.rotation.x=-.17;
+        }
+      }else if(role==='bench'){
+        cuboid(x,.23,z,w*.83,.46,d*.92,iron);
+        cuboid(x,.55,z,w,.18,d,accent);
+        cuboid(x+(x<s.x-3.6?-.24:.24),.81,z,.16,.48,d,accent);
+      }else if(role==='table'){
+        cuboid(x,.50,z,.18,.96,.25,iron);cuboid(x,1.02,z,w,.12,d,cream);
+        for(const end of [-1,1])cuboid(x,1.16,z+end*.51,.12,.16,.12,accent);
+      }else{
+        cuboid(x,y,z,w,h,d,role==='counter'?wood:iron);
+        if(role==='counter'){
+          cuboid(x,h+.035,z,w+.06,.07,d+.05,cream);
+          cuboid(x+.65,h+.18,z,.38,.26,.31,iron);
+        }
       }
     }
-    const edge=s.z+s.front*s.d/2;
-    cuboid(s.x,s.h+.04,s.z,s.w+.25,.13,s.d+.24,iron);
+    const poster=document.createElement('canvas');poster.width=640;poster.height=320;
+    const ctx=poster.getContext('2d')!;
+    ctx.fillStyle=['#304b42','#21485a','#583735'][index];ctx.fillRect(0,0,640,320);
+    ctx.strokeStyle='#cfaf72';ctx.lineWidth=6;ctx.strokeRect(12,12,616,296);
+    ctx.textAlign='center';ctx.fillStyle='#f4e6bc';ctx.font='bold 45px Georgia';
+    ctx.fillText(['TODAY AT THE DINER','HARBOUR SUPPLY','COAST RECORDS'][index],320,73);
+    ctx.font='30px Georgia';
+    const lines=[['House breakfast ........ 4.95','Grilled cheese ........ 3.25','Fresh coffee ........ 1.00'],['MARINE HARDWARE','Rope  /  paint  /  tackle','Orders collected at the counter'],['NEW ARRIVALS','Jazz   /   Soul   /   Rock','Listening desk open daily']][index];
+    lines.forEach((line,n)=>ctx.fillText(line,320,140+n*55));
+    const texture=new T.CanvasTexture(poster);texture.colorSpace=T.SRGBColorSpace;
+    const board=new T.Mesh(new T.PlaneGeometry(3.35,1.68),new T.MeshBasicMaterial({map:texture}));
+    board.rotation.y=s.front===1?0:Math.PI;board.position.set(s.x,2.29,s.z-s.front*(s.d/2-.255));street.add(board);
+    const back=-s.d/2+.27;
+    detail(0,.59,back,s.w-.48,1.18,.055,wood);
+    for(const side of [-1,1]){
+      detail(side*(s.w/2-.27),.59,0,.055,1.18,s.d-.52,wood);
+      detail(side*3.85,2.3,back+.05,1.46,1.46,.08,iron);
+      const artwork=new T.PlaneGeometry(1.32,1.32),uv=artwork.getAttribute('uv');
+      const cell=index*2+(side===1?1:0);
+      for(let i=0;i<uv.count;i++)uv.setXY(i,(cell%3+.005+.99*uv.getX(i))/3,(1-Math.floor(cell/3)+.005+.99*uv.getY(i))/2);
+      const print=new T.Mesh(artwork,printMaterial);
+      print.rotation.y=board.rotation.y;print.position.set(s.x+side*3.85,2.3,s.z+s.front*(back+.10));street.add(print);
+    }
+    // Pendant shades and luminous diffusers use baked colours rather than per-shop shadow lights.
+    for(const side of [-1,1]){
+      detail(side*3,s.h-.36,0,.035,.68,.035,iron);
+      detail(side*3,s.h-.73,0,1.15,.12,.5,accent);
+      detail(side*3,s.h-.81,0,.96,.055,.38,paint('#fff1cd'));
+      detail(side*(s.w/2-.15),1.10,0,.07,.14,s.d-.35,accent);
+    }
     cuboid(s.x,s.h-.08,edge,s.w+.22,.15,.34,trim);
     const canvas=paint(awnings[index]),y=s.h*.70;
     cuboid(s.x,y,edge+s.front*.54,s.w-.32,.10,1.27,canvas).rotation.x=s.front*.13;

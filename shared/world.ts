@@ -1,5 +1,5 @@
 import {islandUnderpass} from './islandRoute';
-import {islandShops,streetPoles} from './islandStreet';
+import {islandShops,shopParts,streetPoles} from './islandStreet';
 import {furnitureFor,furnitureColliders} from './interiors';
 import {terrainHeight} from './terrain';
 export type Box = {x:number;y:number;z:number;w:number;h:number;d:number;kind?:string};
@@ -66,7 +66,7 @@ const alpineBoxes=build(alpineBuildings);
 for(const [x,z,w,d]of [[-23,-6,12,9],[23,6,12,9],[0,20,11,7],[0,-20,11,7],[-64,50,14,10],[64,-50,14,10]])alpineBoxes.push({x,y:2,z,w,h:4,d,kind:'rock'});
 for(const [x,z]of [[-14,5],[14,-5],[-31,22],[31,-22]])alpineBoxes.push({x,y:.8,z,w:3,h:1.6,d:2,kind:'cover'});
 const stormBoxes=build(stormBuildings);
-for(const shop of islandShops)stormBoxes.push({...shop,y:shop.h/2,kind:'shop'});
+for(const shop of islandShops)for(const part of shopParts(shop))stormBoxes.push({...part,kind:'shop'});
 for(const x of streetPoles)stormBoxes.push({x,y:3.7,z:-29.2,w:.28,h:7.4,d:.28,kind:'street-pole'});
 const passage=islandUnderpass;
 for(const side of [-1,1])

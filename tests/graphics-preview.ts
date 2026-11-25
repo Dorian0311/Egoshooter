@@ -1,3 +1,4 @@
+import {islandShops} from '../shared/islandStreet';
 import {islandRoute,islandCourseRadius} from '../shared/islandRoute';
 import {createCarCourse,driveCar,parkedCars,parkTrainingCar} from '../shared/remoteCars';
 import {createOperation} from '../shared/operations';
@@ -33,17 +34,17 @@ let stressTick=0,stressRun=0,stressFrames=0,stressShots=0,stressBlasts=0;
 let scene: ReturnType<typeof createScene> | undefined;
 let samples: number[] = [], warmup = performance.now() + 5000;
 const history:Record<string,unknown>[]=[];
-function resetMeasurement() { samples = [];history.length=0;output.dataset.benchmark='[]';warmup = performance.now() + 5000; output.textContent = 'Messung läuft …'; }
+function resetMeasurement() { samples = [];history.length=0;output.dataset.benchmark='[]';warmup = performance.now() + 5000; output.textContent = 'Messung lÃ¤uft â€¦'; }
 function show() {
   routeRunning=false;
   scene?.dispose();
   if(simulation)clearInterval(simulation);
   const mapId = view.value === 'storm'||view.value==='combat' ? 'storm' : view.value === 'frontline' ? 'frontline' : view.value === 'alpine' ? 'alpine' : 'cologne';
-  const player = makePlayer('review', 'Grafikprüfung', 'de', 0, getWorld(mapId));
+  const player = makePlayer('review', 'GrafikprÃ¼fung', 'de', 0, getWorld(mapId));
   if(view.value==='storm')Object.assign(player,{x:-25,y:0,z:9,yaw:-1.18,pitch:-.04});
   if(view.value==='frontline')Object.assign(player,{x:-28,y:0,z:0,yaw:-.9,pitch:-.01});
   if(view.value==='frontline'&&params.get('focus')==='station'){
-    const station=getWorld(mapId).buildings.find(building=>building.name==='GÜTERBAHNHOF')!;
+    const station=getWorld(mapId).buildings.find(building=>building.name==='GÃœTERBAHNHOF')!;
     Object.assign(player,{x:station.x-10,y:0,z:station.z+21,yaw:-.47,pitch:.035});
   }
   if(view.value==='interior')Object.assign(player,{x:-48,y:0,z:5,yaw:0,pitch:-.08});
@@ -64,8 +65,13 @@ function show() {
   const [routeX,routeZ]=islandRoute[routeIndex-1];
   const routeYaw=(x:number,z:number)=>Math.atan2(x-islandRoute[routeIndex][0],z-islandRoute[routeIndex][1]);
   if(routeReview)Object.assign(player,{x:routeX,y:ground(routeX,routeZ,routeWorld),z:routeZ,yaw:routeYaw(routeX,routeZ)});
-  const streetTurn=routeReview&&routeMode==='turn'&&params.get('focus')==='island-street';
+  const shopFocus=['diner','harbour-supply','coast-records'].indexOf(params.get('focus')??'');
+  const streetTurn=routeReview&&routeMode==='turn'&&(params.get('focus')==='island-street'||shopFocus>=0);
   if(streetTurn)Object.assign(player,{x:63,y:ground(63,-23,routeWorld),z:-23,yaw:0,pitch:.02});
+  if(mapId==='storm'&&shopFocus>=0){
+    const shop=islandShops[shopFocus];
+    Object.assign(player,{x:shop.x-.6,y:0,z:shop.z+shop.front*1.8,yaw:shop.front===1?.23:Math.PI-.2,pitch:-.04});
+  }
   if(mapId==='storm'&&!routeReview&&params.get('focus')==='island-street'){
     Object.assign(player,{x:40,y:ground(40,-21,routeWorld),z:-21,yaw:-1.34,pitch:.015});
   }
@@ -113,7 +119,7 @@ function show() {
       const [x,z]=islandRoute[routeIndex];
       const active=car??player;
       if(routeRunning&&routeMode==='turn'){
-        player.yaw=streetTurn?Math.sin(performance.now()*Math.PI/4000)*1.95:Math.sin(snapshot.now*.0034)*1.95;
+        player.yaw=streetTurn?(shopFocus>0?Math.PI:0)+Math.sin(performance.now()*Math.PI/4000)*1.95:Math.sin(snapshot.now*.0034)*1.95;
       }else if(routeRunning&&car&&course){
         const angle=car.yaw-routeYaw(car.x,car.z);
         driveCar(car,1,Math.max(-1,Math.min(1,Math.atan2(Math.sin(angle),Math.cos(angle))*3)),STEP,routeWorld);
@@ -179,7 +185,7 @@ function measure(now: number) {
     const sorted = [...samples].sort((a, b) => a - b);
     const mean = samples.reduce((sum, value) => sum + value, 0) / samples.length;
     const stats=scene?.getRenderStats();
-    output.textContent = `${Math.round(1000 / mean)} FPS · P95 ${Math.round(sorted[Math.floor(sorted.length * .95)])} ms · ${stats?.calls} Draws · ${Math.round((stats?.scale??1)*100)} %`;
+    output.textContent = `${Math.round(1000 / mean)} FPS Â· P95 ${Math.round(sorted[Math.floor(sorted.length * .95)])} ms Â· ${stats?.calls} Draws Â· ${Math.round((stats?.scale??1)*100)} %`;
     history.push({view:view.value,crowd:crowd.checked,characters:characters.value,weapon:weapon.value,quality:quality.value,
       fps:Math.round(1000/mean),p95:Math.round(sorted[Math.floor(sorted.length*.95)]),samples:samples.length,
       css:[canvas.clientWidth,canvas.clientHeight],render:[canvas.width,canvas.height],...stats});
