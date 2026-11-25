@@ -159,7 +159,7 @@ export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
       }
       // Snap in LIGHT space, not world space, so shadows remain stable while moving.
       if(cpuMs!==undefined&&Number.isFinite(cpuMs))frameCpuAverage+=(Math.min(50,cpuMs)-frameCpuAverage)*.1;
-      const updateShadow=shadowCadence.update(dt,quality,quality==='auto'&&(scale<=.9||frameCpuAverage>13));
+      const updateShadow=shadowCadence.update(dt,quality,quality==='performance'||quality==='auto'&&(scale<=.9||frameCpuAverage>13));
       frameState.shadowUpdated=updateShadow;
       if(updateShadow){
         const texel = shadowExtent * 2 / sun.shadow.mapSize.x;

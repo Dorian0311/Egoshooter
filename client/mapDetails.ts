@@ -7,9 +7,11 @@ import {islandCourseRadius,islandRoute,islandUnderpass,nearIslandRoute} from '..
 import {applySurfaceFinish} from './surfaceFinish';
 import {terrainHeight} from '../shared/terrain';
 import {coastalHeadland} from './coastalHeadland';
+import {addIslandStreet} from './islandStreet';
+import {inIslandStreet} from '../shared/islandStreet';
 import {createBattleTerrain} from './battleTerrain';
 
-export const detailedPropKinds=new Set(['sandbags','container','truck','ruin','tree','platform','coastal-portal']);
+export const detailedPropKinds=new Set(['sandbags','container','truck','ruin','tree','platform','coastal-portal','shop','street-pole']);
 
 /** All substantial playable props follow shared collision boxes. Small dressing
  * stays below step height, on existing walls, or beyond the walking boundary. */
@@ -183,6 +185,7 @@ export function createMapDetails(scene:T.Scene,world:World,get:(color:string)=>T
   let ocean:ReturnType<typeof createRiver>|undefined;
   const terrain=island||war?createBattleTerrain(world,get(island?'#718a48':'#77766b'),get('#d0b37c')):undefined;
   if(terrain)root.add(terrain.mesh);
+  const disposeStreet=island?addIslandStreet(root):undefined;
   if(island){
     ocean=createRiver(scene,1000,1000,-3.4,'#238f9d',[40,48],false);
     const route=new T.CatmullRomCurve3(islandRoute.map(([x,z])=>new T.Vector3(x,0,z)));
@@ -296,7 +299,7 @@ export function createMapDetails(scene:T.Scene,world:World,get:(color:string)=>T
     for(let n=0;n<1600;n++){
       const x=(fraction(Math.sin(n*17.13+1)*43758.5)-.5)*206,z=(fraction(Math.sin(n*79.2+3)*31843.7)-.5)*206;
       const road=Math.min(Math.abs(x),Math.abs(z),Math.abs(Math.abs(x)-43));
-      if(road<4.4||nearIslandRoute(x,z,3)||Math.hypot(x,z)>100||world.buildings.some(b=>Math.abs(b.x-x)<b.w/2+.5&&Math.abs(b.z-z)<b.d/2+.5))continue;
+      if(road<4.4||inIslandStreet(x,z)||nearIslandRoute(x,z,3)||Math.hypot(x,z)>100||world.buildings.some(b=>Math.abs(b.x-x)<b.w/2+.5&&Math.abs(b.z-z)<b.d/2+.5))continue;
       pose.position.set(x,terrainHeight(x,z,world)-.018,z);pose.rotation.y=n*2.4;
       pose.scale.setScalar(.65+fraction(n*.618)*.7);pose.updateMatrix();
       grass.setMatrixAt(count,pose.matrix);grass.setColorAt(count++,tint.set(n%3?'#719448':'#a3ae59'));
@@ -304,7 +307,7 @@ export function createMapDetails(scene:T.Scene,world:World,get:(color:string)=>T
     grass.count=count;grass.receiveShadow=true;root.add(grass);
     for(let i=0;i<80;i++){
       const x=Math.sin(i*29.13)*69,z=Math.cos(i*17.71)*69;
-      if(Math.abs(x)<9||Math.abs(z)<7||world.boxes.some(b=>Math.abs(x-b.x)<b.w/2+2&&Math.abs(z-b.z)<b.d/2+2))continue;
+      if(inIslandStreet(x,z)||Math.abs(x)<9||Math.abs(z)<7||world.boxes.some(b=>Math.abs(x-b.x)<b.w/2+2&&Math.abs(z-b.z)<b.d/2+2))continue;
       const bush=new T.Mesh(new T.IcosahedronGeometry(.45+(i%3)*.17,1),material(i%2?'#497c39':'#718d3c'));bush.position.set(x,.3,z);bush.scale.set(1,.7,1.2);bush.castShadow=true;root.add(bush);
     }
   }
@@ -404,5 +407,5 @@ export function createMapDetails(scene:T.Scene,world:World,get:(color:string)=>T
   // Low kerbs establish street edges without introducing invisible collisions.
   if(!island)for(const b of world.buildings)for(const side of [-1,1])box(b.x,.055,b.z+side*(b.d/2+1.6),b.w+1,.11,.35,get('#9d8b75'));
   batchStaticMeshes(root,new Set(),64,island?new Set(colors.values()):undefined);
-  return {update(seconds:number){ocean?.update(seconds);if(radarRotor)radarRotor.rotation.y=seconds*.25;},dispose(){terrain?.dispose();colors.forEach(m=>m.dispose());}};
+  return {update(seconds:number){ocean?.update(seconds);if(radarRotor)radarRotor.rotation.y=seconds*.25;},dispose(){disposeStreet?.();terrain?.dispose();colors.forEach(m=>m.dispose());}};
 }

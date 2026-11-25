@@ -1,4 +1,5 @@
 import {weaponSlot,fallbackSidearm,SNIPER_ID,G43_SCOPE_ID,ROCKET_ID} from '../shared/weapons';
+import {createCatSilencer} from './catSilencer';
 import {nearbyBoxes} from '../shared/boxIndex';
 import {createBattleAudio,advanceFootstep,footstepMaterial,type StepState} from './battleAudio';
 import {createAnatomy} from './anatomy';
@@ -364,6 +365,8 @@ export function createScene(
   const rifleParts=weapon.children.filter(c=>c!==pistol&&c!==flash);
   const fallbackHands=createFallbackHands(weapon);
   const detailedWeapons=createWeaponModels(weapon,model=>graphics.warmup(model,true));
+  const catSilencer=island?createCatSilencer():undefined;
+  if(catSilencer)weapon.add(catSilencer);
   const chainsaw=createChainsaw();weapon.add(chainsaw.group);
   const muzzleEffects=createMuzzleEffects(scene);
   const avatars = new Map<string, T.Group>();
@@ -392,6 +395,7 @@ export function createScene(
     last = performance.now(),
     acc = 0,
     fire = false,
+    firePressed = false,
     aim = false,
     weaponIndex: Input["weapon"] = 0,
     reload = false,
@@ -428,6 +432,7 @@ export function createScene(
     sprintToggled=false;
     keys.clear();
     fire = false;
+    firePressed = false;
     aim = false;
     reload = false;
     jump = false;
@@ -474,7 +479,7 @@ export function createScene(
   listen(window, "mousedown", ((e: MouseEvent) => {
     if (!locked()||(dragLook&&e.target!==canvas)) return;
     if(controlledCar()){if(e.button===0)onInteract('car:explode');return;}
-    if (e.button === 0) fire = true;
+    if (e.button === 0){fire=true;firePressed=true;}
     if (e.button === 2 && local?.weapon!==4) aim = true;
   }) as EventListener);
   listen(window, "mouseup", ((e: MouseEvent) => {
@@ -485,7 +490,7 @@ export function createScene(
   listen(canvas, "click", () => {
     if (enabled && snapshot?.phase === "playing") {
       canvas.focus();
-      if(!dragLook)try{Promise.resolve(canvas.requestPointerLock()).catch(()=>{dragLook=true;});}catch{dragLook=true;}
+      if(!locked())try{Promise.resolve(canvas.requestPointerLock()).catch(()=>{dragLook=true;});}catch{dragLook=true;}
       void startAudio();
     }
   });
@@ -494,7 +499,7 @@ export function createScene(
   function roomSound(point:T.Vector3){battleAudio.effect('door',point,.22*settings.volume,1,audioMuffled(point));}
   function sound(p:Player|undefined,weapon:number|undefined=p?.weapon){
     if(!p||weapon===undefined)return;
-    battleAudio.shot(weapon,audioPoint(p),settings.volume,audioMuffled(p),weapons[weapon]?.name,insideBuilding(world,p.x,p.z)>=0);
+    battleAudio.shot(weapon,audioPoint(p),settings.volume,audioMuffled(p)||(island&&weapon===2),weapons[weapon]?.name,insideBuilding(world,p.x,p.z)>=0);
   }
   function update(s: Snapshot, id: string) {
     const oldPhase = snapshot?.phase;
@@ -524,7 +529,7 @@ export function createScene(
       const nextCar=s.remoteCars?.find(car=>car.driver===id&&car.driverLife===own.life&&!car.spent)?.id;
       const carChanged=previousCar!==nextCar;
       const reset = !local || oldPhase !== s.phase || (!local.hp && own.hp > 0)||carChanged;
-      if(carChanged){fire=false;aim=false;jump=false;reload=false;}
+      if(carChanged){firePressed=false;fire=false;aim=false;jump=false;reload=false;}
       if(before?.reloadAt&&(!own.hp||before.weapon!==own.weapon||!own.reloadAt&&s.now<before.reloadAt-100))battleAudio.cancelReload();
       if(own.reloadAt&&own.reloadAt!==before?.reloadAt)battleAudio.reload(own.weapon,Math.max(.1,(own.reloadAt-s.now)/1000),settings.volume);
       if(before&&own.hp&&before.weapon!==own.weapon)battleAudio.effect('equip',undefined,.19*settings.volume);
@@ -647,14 +652,14 @@ export function createScene(
   }
   const graphics=createGraphics(renderer,scene,camera,sun,graphicsQuality);
   renderer.initTexture(muzzleEffects.texture);
-  const worldPrepared=island?Promise.all([environmentUpgrade.ready,sceneAssets.ready]).then(async()=>{
+  const worldPrepared=Promise.all([environmentUpgrade.ready,sceneAssets.ready]).then(async()=>{
     if(stopped)return;
     await graphics.warmup(scene);
     if(stopped)return;
     environmentUpgrade.update(camera.position,'high');
     try{graphics.warmupWorldDraw();}
     finally{environmentUpgrade.update(camera.position,quality);}
-  }).catch(error=>console.warn('Island shader warmup unavailable',error)):Promise.resolve();
+  }).catch(error=>console.warn('World shader warmup unavailable',error));
   void Promise.all([graphics.warmup(muzzleEffects.group),graphics.warmup(operationScene.blastGroup)])
     .catch(error=>console.warn('Combat effects shader warmup unavailable',error));
   let captureFrame:(()=>void)|undefined;
@@ -693,12 +698,13 @@ export function createScene(
           crouch: pressed("crouch"),
           prone: pressed('prone'),
           jump,
-          fire: !controlledCar()&&fire,
+          fire: !controlledCar()&&(fire||firePressed),
           reload: !controlledCar()&&reload,
           aim: !controlledCar()&&aim,
           weapon: armCount(local)===1?fallbackSidearm(local.loadout,local.weapon):weaponSlot(local.loadout,weaponIndex),
           time: snapshot.now + (performance.now() - receivedAt),
         };
+        firePressed=false;
         jump = false;
         reload = false;
         if (local.hp&&!controlledCar()) {
@@ -812,6 +818,10 @@ export function createScene(
     const saw=local?.weapon===4&&!special&&!local?.carriedCorpse;
     if(saw)aim=false;
     const hasDetailedWeapon=local?detailedWeapons.update(local.team,mapId,saw||special?4:local.weapon):false;
+    if(catSilencer){
+      catSilencer.visible=!special&&local?.weapon===2;
+      if(catSilencer.visible)catSilencer.position.copy(detailedWeapons.muzzleLocal());
+    }
     chainsaw.group.visible=saw;chainsaw.update(t,!!(saw&&fire&&locked()));
     const pose=local?viewmodel.update({dt,now:t,weaponIndex:local.weapon,aim,yaw,pitch,
       moving:locked()?Math.min(1,Math.hypot(Number(pressed('forward'))-Number(pressed('back')),Number(pressed('right'))-Number(pressed('left')))):0,

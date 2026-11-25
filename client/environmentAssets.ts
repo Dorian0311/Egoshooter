@@ -2,6 +2,7 @@ import * as T from 'three';
 import {GLTFLoader} from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type {World} from '../shared/world';
 import {nearIslandRoute} from '../shared/islandRoute';
+import {inIslandStreet} from '../shared/islandStreet';
 import {terrainHeight} from '../shared/terrain';
 import {instanceStaticModel} from './scenery';
 import type {GraphicsQuality} from './graphicsSettings';
@@ -71,7 +72,7 @@ export function loadEnvironmentUpgrade(scene:T.Scene,world:World,renderer:T.WebG
    for(let n=0;n<count;n++){
     let x=Math.sin(n*27.31+4)*103,z=Math.cos(n*19.17+1)*103;
     if(name==='rock_moss_set_01'){const angle=n/count*Math.PI*2;x=Math.cos(angle)*125;z=Math.sin(angle)*125;}
-    else if(world.id==='storm'&&nearIslandRoute(x,z,3)||Math.hypot(x,z)>108||Math.abs(x)<8||Math.abs(z)<7||Math.abs(Math.abs(x)-43)<5||world.boxes.some(b=>Math.abs(x-b.x)<b.w/2+2&&Math.abs(z-b.z)<b.d/2+2))continue;
+    else if(world.id==='storm'&&(nearIslandRoute(x,z,3)||inIslandStreet(x,z))||Math.hypot(x,z)>108||Math.abs(x)<8||Math.abs(z)<7||Math.abs(Math.abs(x)-43)<5||world.boxes.some(b=>Math.abs(x-b.x)<b.w/2+2&&Math.abs(z-b.z)<b.d/2+2))continue;
     const height=name==='grass_medium_01'?.24+(n%3)*.10:name==='wild_rooibos_bush'?.85+(n%3)*.15:2.5+(n%3);
     if(world.id==='frontline'&&name==='rock_moss_set_01')continue;
     const placement=new T.Object3D(),scale=height/Math.max(.01,size.y);placement.scale.setScalar(scale);placement.rotation.y=n*2.39996;

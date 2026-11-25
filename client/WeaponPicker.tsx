@@ -9,7 +9,7 @@ function savedSelection(uniform:UniformId):WeaponId[]{
   try{const value:unknown=JSON.parse(localStorage.getItem('altstadt-loadout')??'null');if(validLoadout(value,uniform)&&value.every(id=>historicalWeaponIds.includes(id)||id===4))return [...value];}catch{/* Choose a new loadout when storage is unavailable. */}
   return [];
 }
-export function WeaponPicker({uniform,busy,error,onBack,onClose,onStart}:{uniform:UniformId;busy:boolean;error:string;onBack:()=>void;onClose:()=>void;onStart:(loadout:Loadout)=>void}){
+export function WeaponPicker({island,uniform,busy,error,onBack,onClose,onStart}:{island:boolean;uniform:UniformId;busy:boolean;error:string;onBack:()=>void;onClose:()=>void;onStart:(loadout:Loadout)=>void}){
   const dialog=useRef<HTMLDialogElement>(null),[selected,setSelected]=useState<WeaponId[]>(()=>savedSelection(uniform));
   useEffect(()=>{dialog.current?.showModal();return()=>dialog.current?.close();},[]);
   const ids:readonly WeaponId[]=uniform==='leatherface'?[...historicalWeaponIds,4]:historicalWeaponIds;
@@ -24,7 +24,7 @@ export function WeaponPicker({uniform,busy,error,onBack,onClose,onStart}:{unifor
       <div className="weapon-catalog">{ids.map(id=>{const w=weapons[id],slot=selected.indexOf(id),chosen=slot>=0;return <button key={id} className={chosen?'chosen':''} title={descriptions[id]??'Leatherfaces charakteristische Kettensäge.'} aria-pressed={chosen} disabled={busy||!chosen&&selected.length===5} onClick={()=>toggle(id)}>
         <div className="weapon-card-heading"><small>{kindLabels[w.kind]}</small><b>{chosen?'✓ '+(slot+1):'+'}</b></div>
         <img className="weapon-card-image" src={`/shooter/lobby/weapons/${id===16?8:id}.webp`} alt="" width={384} height={144}/>
-        <strong>{w.name}{id===16&&' · 4× Zoom'}</strong>
+        <strong>{w.name}{island&&id===2&&' · Katzenaufsatz'}{id===16&&' · 4× Zoom'}</strong>
         <span>{w.kind!=='melee'&&`${w.mag} Schuss · `}{w.damage} Schaden · {w.range}{'\u00a0'}m</span>
       </button>;})}</div>
       {uniform==='leatherface'&&<p className="weapon-note">Die Kettensäge ist optional. Auch Leatherface kann zwischen seinen fünf gewählten Waffen wechseln.</p>}

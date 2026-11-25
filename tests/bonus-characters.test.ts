@@ -11,7 +11,7 @@ test('bonus choices are valid for both factions and maps and synchronize',()=>{
   const game=new Game('ABC234');game.add('a','A');game.add('b','B');game.selectMap('a',map);
   for(const team of ['de','fr'] as const){
    assert.ok(!ids.includes(defaultUniform(team,map) as typeof ids[number]));
-   for(const id of ids)assert.equal(uniformOptions(team,map).includes(id),map==='storm');
+   for(const id of ids)assert.equal(uniformOptions(team,map).includes(id),map==='storm'||id==='kroenen');
   }
   if(map!=='storm'){assert.equal(game.selectUniform('a','rocket'),false);continue;}
   for(const player of ['a','b'])for(const id of ids){

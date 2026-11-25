@@ -2,6 +2,15 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {Game,move,neutral,makePlayer,STEP} from '../shared/game.ts';
 import {getWorld,mapIds,ground,withinPlayArea} from '../shared/world.ts';
+test('Harbour Road stays open between solid Island storefronts',()=>{
+ const world=getWorld('storm'),p=makePlayer('street','Street','de',0,world);
+ Object.assign(p,{x:33,y:0,z:-23});
+ for(let n=0;n<460;n++)move(p,{...neutral(n),forward:1,yaw:-Math.PI/2},STEP,world);
+ assert.ok(p.x>93);
+ Object.assign(p,{x:63,y:0,z:-23});
+ for(let n=0;n<120;n++)move(p,{...neutral(n),forward:1,yaw:0},STEP,world);
+ assert.ok(p.z<-30&&p.z>-30.8);
+});
 test('only host changes a waiting room map, clearing readiness',()=>{
  const g=new Game('ABC234');g.add('a','Anna');g.add('b','Bruno');g.ready('b',true,1000);
  assert.equal(g.selectMap('b','alpine'),false);assert.equal(g.selectMap('a','invalid'),false);

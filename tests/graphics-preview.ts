@@ -64,6 +64,11 @@ function show() {
   const [routeX,routeZ]=islandRoute[routeIndex-1];
   const routeYaw=(x:number,z:number)=>Math.atan2(x-islandRoute[routeIndex][0],z-islandRoute[routeIndex][1]);
   if(routeReview)Object.assign(player,{x:routeX,y:ground(routeX,routeZ,routeWorld),z:routeZ,yaw:routeYaw(routeX,routeZ)});
+  const streetTurn=routeReview&&routeMode==='turn'&&params.get('focus')==='island-street';
+  if(streetTurn)Object.assign(player,{x:63,y:ground(63,-23,routeWorld),z:-23,yaw:0,pitch:.02});
+  if(mapId==='storm'&&!routeReview&&params.get('focus')==='island-street'){
+    Object.assign(player,{x:40,y:ground(40,-21,routeWorld),z:-21,yaw:-1.34,pitch:.015});
+  }
   if(mapId==='storm'&&params.get('focus')==='passage')Object.assign(player,{x:-21,y:0,z:72,yaw:.08,pitch:.03});
   if(mapId==='storm'&&params.get('focus')==='coast')Object.assign(player,{x:-20,y:ground(-20,107,routeWorld),z:107,yaw:.55,pitch:-.03});
   if(params.has('supplies'))snapshot.pickups=[{id:'review-medkit',kind:'bandage',x:player.x-.8,y:player.y,z:player.z-2.6,taken:false}];
@@ -108,7 +113,7 @@ function show() {
       const [x,z]=islandRoute[routeIndex];
       const active=car??player;
       if(routeRunning&&routeMode==='turn'){
-        player.yaw=Math.sin(snapshot.now*.0034)*1.95;
+        player.yaw=streetTurn?Math.sin(performance.now()*Math.PI/4000)*1.95:Math.sin(snapshot.now*.0034)*1.95;
       }else if(routeRunning&&car&&course){
         const angle=car.yaw-routeYaw(car.x,car.z);
         driveCar(car,1,Math.max(-1,Math.min(1,Math.atan2(Math.sin(angle),Math.cos(angle))*3)),STEP,routeWorld);

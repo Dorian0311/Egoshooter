@@ -283,7 +283,7 @@ export default function App({
       {snapshot && <canvas ref={canvas} className="city-canvas" />}
       {showCommander&&(!snapshot||snapshot.phase==='waiting'||snapshot.phase==='finished')&&<Suspense fallback={null}><CommanderEasterEgg onClose={()=>setShowCommander(false)}/></Suspense>}
       {settingsOpen&&<GameSettingsPanel value={settings} onChange={setSettings} onClose={()=>setSettingsOpen(false)} graphics={{value:graphicsQuality,onChange:setGraphicsQuality}} onLeave={snapshot?()=>void leaveGame():undefined}/>}
-      {startIntent&&!snapshot&&(!choosingWeapons?<CharacterPicker map={selectedMap} value={preferredUniform} onClose={()=>{setStartIntent(null);setChoosingWeapons(false);}} onSelect={id=>{setPreferredUniform(id);setError('');setChoosingWeapons(true);}}/>:preferredUniform&&<WeaponPicker uniform={preferredUniform} busy={busy} error={error} onBack={()=>setChoosingWeapons(false)} onClose={()=>{setStartIntent(null);setChoosingWeapons(false);}} onStart={loadout=>void connect(startIntent.create,startIntent.training,preferredUniform,startIntent.operation,loadout)}/>)}
+      {startIntent&&!snapshot&&(!choosingWeapons?<CharacterPicker map={selectedMap} value={preferredUniform} onClose={()=>{setStartIntent(null);setChoosingWeapons(false);}} onSelect={id=>{setPreferredUniform(id);setError('');setChoosingWeapons(true);}}/>:preferredUniform&&<WeaponPicker island={selectedMap==='storm'} uniform={preferredUniform} busy={busy} error={error} onBack={()=>setChoosingWeapons(false)} onClose={()=>{setStartIntent(null);setChoosingWeapons(false);}} onStart={loadout=>void connect(startIntent.create,startIntent.training,preferredUniform,startIntent.operation,loadout)}/>)}
       {snapshot&&(scoreboardOpen||scoreboardHeld)&&<MatchScoreboard snapshot={snapshot} playerId={access?.playerId} onClose={()=>{setScoreboardOpen(false);setScoreboardHeld(false);}}/>}
       {active&&!!me?.rockets&&<div className="rocket-count">{keyLabel('rocket')} · Stielraketen: {me.rockets}</div>}
       {active&&me&&<ol className="loadout-hud" aria-label="Deine Waffenplätze">{me.loadout.map((id,slot)=><li key={slot} className={me.weapon===id?'equipped':''}><kbd>{keyLabel(('weapon'+(slot+1)) as keyof typeof settings.bindings)}</kbd><span>{weapons[id].name}</span></li>)}</ol>}
@@ -295,7 +295,8 @@ export default function App({
       {hudNotice&&<div className="hud-notice" role="status" onClick={()=>setHudNotice('')}>{hudNotice}</div>}
       {!snapshot&&account&&<div className="lobby-profile"><strong>{account.username}</strong><button onClick={onLogout}>Abmelden</button></div>}
       {!snapshot ? (
-        <main className="city-entry">
+        <main className="city-entry lobby-layout">
+          <section className="lobby-maps" aria-label="Spielwelt und Karte">
           <div className="lobby-wordmark"><strong>EISERNE FRONT</strong><span>OPERATION 1945</span><small>EINZELSPIELER · KOOP · TEAM-DEATHMATCH</small></div>
           <div className="city-kicker">
             VIER SCHAUPLÄTZE. DEINE TAKTIK.
@@ -315,6 +316,8 @@ export default function App({
             <button aria-pressed={selectedMap!=='storm'} onClick={()=>{if(selectedMap==='storm')setSelectedMap('frontline');}}>Zeitreise</button>
           </div>
           <div className="city-map-picker">{mapIds.filter(id=>(id==='storm')===(selectedMap==='storm')).map(id=><button key={id} aria-pressed={selectedMap===id} className={`city-map-${id} ${selectedMap===id?"selected":""}`} onClick={()=>setSelectedMap(id)}><span className={`map-preview map-preview-${id}`} aria-hidden="true"/><span className="map-card-copy"><strong>{getWorld(id).name}</strong><small>{getWorld(id).subtitle}</small></span></button>)}</div>
+          </section>
+          <section className="lobby-play" aria-label="Einsatz und Spieloptionen">
           <OperationSetup island={selectedMap==='storm'} busy={!access||busy} onStart={operation=>setStartIntent({create:true,training:operation.kind==='solo',operation})}/>
 
           <div className="city-actions">
@@ -354,6 +357,7 @@ export default function App({
           <aside><a href="https://polyhaven.com" target="_blank" rel="noreferrer">Powered by Poly Haven · CC0-Materialien</a> · <a href="/shooter/models/realistic/CREDITS.txt" target="_blank" rel="noreferrer">Modellnachweise</a><br/>
             {keyLabel("forward")}/{keyLabel("left")}/{keyLabel("back")}/{keyLabel("right")} Bewegung · Maus Zielen · {keyLabel("reload")} Nachladen · {keyLabel("weapon1")}/{keyLabel("weapon2")}/{keyLabel("weapon3")}/{keyLabel("weapon4")}/{keyLabel("weapon5")} Waffen · {keyLabel("crouch")} Ducken · {keyLabel("prone")} Kriechen (halten) · {keyLabel("rocket")} Stielrakete · {keyLabel("sprint")} Sprint · {keyLabel("interact")} Benutzen · Esc Maus freigeben
           </aside>
+          </section>
         </main>
       ) : (
         <>

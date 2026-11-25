@@ -1,0 +1,9 @@
+Harbour Road
+
+Asphalt021 by ambientCG, CC0. Original colour and OpenGL normal maps resized
+and encoded as WebP for this street.
+https://ambientcg.com/view?id=Asphalt021
+https://github.com/petroulacl/fps-buildings-env-kit/tree/1dd8e932402deb82422920df2e7fd079391e55d3/environment/ground-textures/ambientcg/Asphalt021_2K-JPG
+
+Original storefront artwork incorporating the project's CC0 damaged plaster
+texture from Poly Haven: https://polyhaven.com/a/damaged_plaster

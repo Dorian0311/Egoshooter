@@ -353,7 +353,7 @@ export class Game {
     this.state.events=this.state.events.slice(-128);
   }
   state: Snapshot;
-  inputs = new Map<string, Input>();
+  inputs = new Map<string, Input & {pendingFire?:boolean}>();
   received = new Map<string, number>();
   history: { at: number; players: Player[] }[] = [];
   round = 0;
@@ -409,6 +409,8 @@ export class Game {
   selectMap(id:string,mapId:unknown){
     if(id!==this.state.host||this.state.phase!=='waiting'||!validMap(mapId))return false;
     this.state.mapId=mapId;
+    this.state.remoteCars=[];
+    this.state.carCourse=undefined;
     const world=getWorld(mapId);
     this.state.interiors=initialInteriors(world);
     this.history=[];this.inputs.clear();
@@ -483,9 +485,10 @@ export class Game {
     )
       return;
     this.received.set(id, this.state.now);
-    this.received.set(id, this.state.now);
+    const previous=this.inputs.get(id);
     this.inputs.set(id, {
       ...i,
+      pendingFire:!!previous&&previous.seq>p.seq&&previous.weapon===i.weapon&&(previous.fire||previous.pendingFire),
       time: Math.max(this.state.now - 150, Math.min(this.state.now, i.time)),
     });
   }
@@ -593,7 +596,8 @@ export class Game {
         p.ammoByWeapon[p.weapon] = p.ammo;
         p.reloadAt = 0;
       }
-      if (i && p.connected && i.fire) this.shoot(p, i, now);
+      if (i && p.connected && (i.fire||i.pendingFire)) this.shoot(p, i, now);
+      if(i)i.pendingFire=false;
     }
     this.history.push({ at: now, players: this.operation.actors().map((p) => ({ ...p,injuries:{...p.injuries,damage:{...p.injuries.damage}} })) });
     while (this.history.length && this.history[0].at < now - 200)

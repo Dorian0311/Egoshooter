@@ -10,3 +10,20 @@
 .city-lobby :is(.character-picker,.weapon-picker-content,.model-rail)::-webkit-scrollbar {
   display: none;
 }
+
+.city-app.city-lobby .city-entry.lobby-layout {
+  box-sizing:border-box;width:100%;max-width:none;margin:0;
+  padding:clamp(48px,7vh,80px) clamp(18px,5vw,96px) 24px;
+  max-height:100dvh;overflow:auto;scrollbar-width:none;
+}
+.city-entry.lobby-layout::-webkit-scrollbar {display:none}
+.lobby-layout .lobby-wordmark {margin-bottom:20px}
+.lobby-layout .lobby-maps,.lobby-layout .lobby-play {min-width:0}
+.lobby-layout .lobby-play {padding:18px;background:#0e1813e8}
+@media(min-width:960px) {
+  .city-app.city-lobby .city-entry.lobby-layout {min-height:100dvh}
+  .lobby-layout .lobby-play {align-self:end}
+  .city-app.city-lobby .city-entry.lobby-layout {display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:clamp(24px,5vw,96px);align-items:start}
+  .city-lobby .lobby-layout h1 {font-size:clamp(60px,5vw,90px);margin:12px 0}
+}
+@media(max-width:959px) {.lobby-layout .lobby-play {margin-top:20px}}

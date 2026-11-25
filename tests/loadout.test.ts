@@ -62,6 +62,16 @@ test('new weapon inputs, cadence, magazine accounting and reload use the selecte
   }
   for(const weapon of [-1,5,6,14,NaN,7.5])assert.equal(validInput({...neutral(1),weapon}),false);
 });
+test('a scoped tap released before the server tick fires exactly once',()=>{
+  const {game,a}=match([16,1,2,7,8]);
+  game.input(a.id,{...neutral(1),weapon:16,aim:true,fire:true});
+  game.input(a.id,{...neutral(2),weapon:16,aim:true,fire:false});
+  game.tick(4033);
+  assert.equal(a.ammo,9);
+  game.input(a.id,{...neutral(3),weapon:16,aim:true});
+  game.tick(4540);
+  assert.equal(a.ammo,9);
+});
 test('Leatherface can select firearms, while saw use remains tied to its equipped slot',()=>{
   const {game,a}=match([0,1,2,7,8]);game.state.phase='waiting';
   assert.equal(game.selectUniform(a.id,'leatherface'),true);assert.equal(game.selectLoadout(a.id,[7,11,8,9,12]),true);
