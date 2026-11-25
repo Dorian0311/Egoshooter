@@ -1,14 +1,21 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {Game,neutral,STEP} from '../shared/game';
-import {CAR_WARNING_MS,createCarCourse,driveCar,parkedCars} from '../shared/remoteCars';
+import {Game,makePlayer,move,neutral,STEP} from '../shared/game';
+import {CAR_WARNING_MS,createCarCourse,driveCar,parkedCars,parkTrainingCar} from '../shared/remoteCars';
+import {islandCourseRadius,islandRoute} from '../shared/islandRoute';
 import {getWorld,mapIds} from '../shared/world';
 import {initialInteriors,interiorWorld} from '../shared/interiors';
 import {REMOTE_CAR_ID,ROCKET_ID} from '../shared/weapons';
 import {difference,mergeSnapshot} from '../shared/protocol';
 
+function steeringTo(car:{x:number;z:number;yaw:number},gate:{x:number;z:number}){
+ const yaw=Math.atan2(car.x-gate.x,car.z-gate.z);
+ const error=Math.atan2(Math.sin(car.yaw-yaw),Math.cos(car.yaw-yaw));
+ return Math.max(-1,Math.min(1,error*3));
+}
+
 function match(){
- const game=new Game('CARS'),driver=game.add('driver','Fahrer'),other=game.add('target','Testfigur');
+ const game=new Game('CARS',600000,'storm'),driver=game.add('driver','Fahrer'),other=game.add('target','Testfigur');
  game.ready(driver.id,true,1000);game.ready(other.id,true,1000);game.tick(4000);
  driver.protectedUntil=other.protectedUntil=0;
  other.team=driver.team==='de'?'fr':'de';
@@ -18,6 +25,7 @@ function match(){
 test('every building gets one car that can drive out through its open entrance',()=>{
  for(const id of mapIds){
   const world=getWorld(id),cars=parkedCars(world),collision=interiorWorld(world,initialInteriors(world));
+  if(id!=='storm'){assert.equal(cars.length,0);continue;}
   assert.equal(cars.length,world.buildings.length);
   assert.equal(new Set(cars.map(car=>car.id)).size,cars.length);
   for(const [index,car]of cars.entries()){
@@ -29,7 +37,7 @@ test('every building gets one car that can drive out through its open entrance',
 });
 
 test('car control keeps the player stationary, is exclusive, stops at closed doors, then detonates once',()=>{
- const {game,driver,other}=match(),car=game.state.remoteCars![1],world=getWorld(),building=world.buildings[1];
+ const {game,driver,other}=match(),car=game.state.remoteCars![1],world=getWorld('storm'),building=world.buildings[1];
  Object.assign(driver,{x:car.x,y:car.y,z:car.z+1,yaw:0});
  Object.assign(other,{x:car.x,y:car.y,z:car.z+1.6});
  const before=structuredClone(game.state);
@@ -62,7 +70,7 @@ test('car control keeps the player stationary, is exclusive, stops at closed doo
 });
 
 test('training course orders checkpoints, records a best time and resets its car after a safe test blast',()=>{
- const game=new Game('COURSE',600000,'cologne',()=>.5,{kind:'solo',mode:'training'});
+ const game=new Game('COURSE',600000,'storm',()=>.5,{kind:'solo',mode:'training'});
  const driver=game.add('driver','Fahrer');
  game.operation.configureBots();game.ready(driver.id,true,1000);game.tick(4000);
  const course=game.state.carCourse!,car=game.state.remoteCars!.find(item=>item.id===course.carId)!;
@@ -70,9 +78,9 @@ test('training course orders checkpoints, records a best time and resets its car
  Object.assign(driver,{x:car.x,y:car.y,z:car.z+1,yaw:0});
  assert.equal(game.interact(driver.id,car.id),true);
  let sequence=0;
- for(let frame=0;frame<150&&course.elapsedMs===undefined;frame++){
+ for(let frame=0;frame<1500&&course.elapsedMs===undefined;frame++){
   const now=game.state.now+34;
-  game.input(driver.id,{...neutral(++sequence),forward:course.next<3?1:-1,time:now});
+  game.input(driver.id,{...neutral(++sequence),forward:1,side:steeringTo(car,course.gates[course.next]),time:now});
   game.tick(now);
  }
  assert.equal(course.next,course.gates.length);
@@ -90,19 +98,35 @@ test('training course orders checkpoints, records a best time and resets its car
  assert.ok(course.bestMs);
 });
 
-test('the marked training route can be driven forward and in reverse on every map',()=>{
+test('the marked training route can be driven through every turn on Island',()=>{
  for(const id of mapIds){
   const world=getWorld(id),cars=parkedCars(world),course=createCarCourse(world,cars)!;
+  if(id!=='storm'){assert.equal(course,undefined);continue;}
   const car=cars.find(item=>item.id===course.carId)!;
+  parkTrainingCar(car,world);
   const collision=interiorWorld(world,initialInteriors(world));
   let gate=0;
-  for(let frame=0;frame<150&&gate<course.gates.length;frame++){
-   driveCar(car,gate<3?1:-1,0,STEP,collision);
+  for(let frame=0;frame<1500&&gate<course.gates.length;frame++){
    const target=course.gates[gate];
-   if(Math.hypot(car.x-target.x,car.z-target.z)<.66)gate++;
+   driveCar(car,1,steeringTo(car,target),STEP,collision);
+   if(Math.hypot(car.x-target.x,car.z-target.z)<islandCourseRadius)gate++;
   }
   assert.equal(gate,course.gates.length,id);
  }
+});
+
+test('the coastal route is also passable on foot all the way to the radar stairs',()=>{
+ const world=getWorld('storm'),collision=interiorWorld(world,initialInteriors(world));
+ const player=makePlayer('walker','Walker','de',0,world);
+ [player.x,player.z]=islandRoute[0];
+ let checkpoint=1;
+ for(let frame=0;frame<1900&&checkpoint<islandRoute.length;frame++){
+  const [x,z]=islandRoute[checkpoint];
+  const yaw=Math.atan2(player.x-x,player.z-z);
+  move(player,{...neutral(frame),forward:1,sprint:true,yaw},STEP,collision);
+  if(Math.hypot(player.x-x,player.z-z)<islandCourseRadius)checkpoint++;
+ }
+ assert.equal(checkpoint,islandRoute.length);
 });
 
 test('car detaches on exit and disconnect, and a collected rocket explodes on impact',()=>{

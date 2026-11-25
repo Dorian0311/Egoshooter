@@ -1,7 +1,7 @@
 import React,{useState} from 'react';
 import {defaultOperation,modeLabels,difficultyLabels,missionLabels,conditionLabels,type OperationConfig} from '../shared/operationConfig';
 import './operations.css';
-export function OperationSetup({busy,onStart}:{busy:boolean;onStart:(config:OperationConfig)=>void}){
+export function OperationSetup({busy,island,onStart}:{island:boolean;busy:boolean;onStart:(config:OperationConfig)=>void}){
  const [config,setConfig]=useState<OperationConfig>({...defaultOperation,kind:'solo',mode:'training'}),[open,setOpen]=useState(false);
  const select=(key:keyof OperationConfig,value:string)=>setConfig(c=>({...c,[key]:key==='enemies'?Number(value):value}));
  return <section className="operation-setup"><button className="city-primary" disabled={busy} aria-expanded={open} onClick={()=>setOpen(v=>!v)}>Einzelspieler & Koop {open?'−':'+'}</button>{open&&<div className="operation-options">
@@ -12,6 +12,6 @@ export function OperationSetup({busy,onStart}:{busy:boolean;onStart:(config:Oper
   {config.kind==='solo'&&config.mode==='battle'&&<><label>Gefecht<select aria-label="Gefecht" value={config.battleStyle} onChange={e=>select('battleStyle',e.target.value)}><option value="team">Du + 3 Verbündete gegen 4 Bots</option><option value="alone">Allein gegen Bots</option></select></label>{config.battleStyle==='alone'&&<label>Gegner<select aria-label="Gegner" value={config.enemies} onChange={e=>select('enemies',e.target.value)}>{[1,2,3,4].map(n=><option key={n}>{n}</option>)}</select></label>}</>}
   {config.mode==='mission'&&<label>Auftrag<select aria-label="Auftrag" value={config.mission} onChange={e=>select('mission',e.target.value)}>{Object.entries(missionLabels).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></label>}
   <p>{config.mode==='survival'?'Fünf Wellen. Verletzungen bleiben bestehen; Medkits stoppen Blutverlust.':config.mode==='training'?'Bewegliche Ziele ohne Gegenfeuer. Beenden über „Einsatz verlassen“.':config.mode==='mission'?'Auftrag erfüllen, Gegner umgehen oder bekämpfen. Zeitlimit: acht Minuten.':'50 Abschüsse oder zehn Minuten. Wiedereinstieg nach fünf Sekunden.'}</p>
-  <small>Geschenke: E · Wurfstern: G · Medkit: H · Tasten sind umbelegbar.</small><button className="city-primary" disabled={busy} onClick={()=>onStart(config)}>{config.kind==='coop'?'Koop-Einsatz erstellen':config.kind==='multiplayer'?'Mehrspieler-Einsatz erstellen':'Charakter wählen & starten'}</button>
+  <small>{island&&'Geschenke: E · Wurfstern: G · '}Medkit: H · Tasten sind umbelegbar.</small><button className="city-primary" disabled={busy} onClick={()=>onStart(config)}>{config.kind==='coop'?'Koop-Einsatz erstellen':config.kind==='multiplayer'?'Mehrspieler-Einsatz erstellen':'Charakter wählen & starten'}</button>
  </div>}</section>;
 }

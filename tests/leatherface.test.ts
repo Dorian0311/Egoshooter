@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import {Game,move,neutral,makePlayer,STEP,SAW_POWER_MS,SAW_RECOVERY_MS,weaponDamage,weapons} from '../shared/game';
 import {getWorld} from '../shared/world';
 function duel(){
- const game=new Game('SAW123'),a=game.add('a','Leatherface'),b=game.add('b','Target');
+ const game=new Game('SAW123',600000,'storm'),a=game.add('a','Leatherface'),b=game.add('b','Target');
  game.selectUniform('a','leatherface');game.ready('a',true,1000);game.ready('b',true,1000);game.tick(4000);
- Object.assign(a,{x:8,z:8,y:0,yaw:0,pitch:0,protectedUntil:0});Object.assign(b,{x:8,z:6.4,y:0,protectedUntil:0});return {game,a,b};
+ Object.assign(a,{x:-65,z:8,y:0,yaw:0,pitch:0,protectedUntil:0});Object.assign(b,{x:-65,z:6.4,y:0,protectedUntil:0});return {game,a,b};
 }
 test('Leatherface keeps the saw against unselected switches, reload and respawn',()=>{
  const {game,a}=duel();assert.equal(a.weapon,4);
@@ -28,7 +28,7 @@ test('saw honors spawn protection, friendlies and solid walls',()=>{
  const {game,a,b}=duel(),input=neutral(1);b.protectedUntil=5000;game.shoot(a,input,4000);assert.equal(b.hp,100);
  b.protectedUntil=0;b.team=a.team;game.shoot(a,input,4320);assert.equal(b.hp,100);
  b.team='fr';
- const wall=getWorld().boxes.find(w=>w.kind!=='rock'&&w.d<.8&&w.w>3&&w.h>2)!;assert.ok(wall);
+ const wall=game.world().boxes.find(w=>w.kind!=='rock'&&w.d<.8&&w.w>3&&w.h>2)!;assert.ok(wall);
  Object.assign(a,{x:wall.x,z:wall.z+.7,y:wall.y-wall.h/2,yaw:0});Object.assign(b,{x:wall.x,z:wall.z-.7,y:a.y});game.shoot(a,input,4640);assert.equal(b.hp,100);
 });
 test('power boost expires under held attack and cannot restart before recovery',()=>{

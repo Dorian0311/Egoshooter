@@ -11,10 +11,10 @@ export type StepState=Position&{distance:number;grounded:boolean;life?:number};
 
 export function footstepMaterial(world:World,p:Position):FootMaterial{
  const support=world.boxes.find(b=>Math.abs(p.x-b.x)<=b.w/2&&Math.abs(p.z-b.z)<=b.d/2&&Math.abs(p.y-(b.y+b.h/2))<.32);
- if(support&&['truck','container','fence','metal'].includes(support.kind??''))return 'metal';
+ if(support&&['truck','container','fence','metal','steel','railing'].includes(support.kind??''))return 'metal';
  if(support?.kind==='stair'||support?.kind==='floor'&&insideBuilding(world,p.x,p.z)>=0)return 'wood';
  if(insideBuilding(world,p.x,p.z)>=0||support)return 'stone';
- return world.id==='cologne'?'stone':'earth';
+ return world.id==='cologne'||world.id==='frontline'&&Math.abs(Math.abs(p.z)-12)>2.4?'stone':'earth';
 }
 
 /** Distance-based cadence ignores walls, jumps, teleports and respawns. */
@@ -40,6 +40,11 @@ export function createBattleAudio(context:()=>AudioContext|null,output:()=>Audio
  const buffers=new Map<string,AudioBuffer>(),voices=new Set<Voice>(),engines=new Map<string,Engine>();
  const sequences=new Map<SoundName,number>();let disposed=false,mix:DynamicsCompressorNode|undefined,limiter:WaveShaperNode|undefined,mixSink:AudioNode|null=null;
  let reloadVoices:Voice[]=[];
+ let shoreline:{source:AudioBufferSourceNode;gain:GainNode;filter:BiquadFilterNode}|undefined;
+ function stopShoreline(){
+  if(!shoreline)return;
+  shoreline.source.stop();shoreline.source.disconnect();shoreline.gain.disconnect();shoreline.filter.disconnect();shoreline=undefined;
+ }
  const direction=new T.Vector3(),position=new T.Vector3(),up=new T.Vector3(),rotation=new T.Quaternion();
  function sink(){const audio=context(),target=output();if(!audio||!target||disposed)return;
   if(!mix){mix=audio.createDynamicsCompressor();mix.threshold.value=-13;mix.knee.value=8;mix.ratio.value=8;mix.attack.value=.003;mix.release.value=.16;
@@ -76,7 +81,18 @@ export function createBattleAudio(context:()=>AudioContext|null,output:()=>Audio
   sample(surface:Surface,point:T.Vector3|undefined,volume:number,rate=1){return effect(surface==='footstep'?'step-stone':surface,point,volume,rate);},
   effect,
   shot(weapon:number,point:T.Vector3|undefined,volume:number,muffled:boolean,name='',indoors=false){effect(weaponSound(weapon,name),point,volume*(weapon===0?.85:weapon===4?.28:.6),1,muffled);if(indoors)play('stone',point,volume*.09,.7,muffled,.055,true);},
-  footstep(material:FootMaterial,point:T.Vector3|undefined,volume:number,sprinting=false,crouching=false,muffled=false){effect(`step-${material}`,point,volume*(crouching?.35:sprinting?1:.7),sprinting?1.06:crouching?.9:1,muffled);},
+  footstep(material:FootMaterial,point:T.Vector3|undefined,volume:number,sprinting=false,crouching=false,muffled=false,covered=false){play(`step-${material}`,point,volume*(crouching?.35:sprinting?1:.7),sprinting?1.06:crouching?.9:1,muffled,0,covered);},
+  coastalAmbience(level:number,shelter:number){
+   const audio=context(),target=sink();if(!audio||audio.state!=='running'||!target||!shoreline&&level<=0)return;
+   if(!shoreline){
+    const source=audio.createBufferSource(),gain=audio.createGain(),filter=audio.createBiquadFilter();
+    source.buffer=buffer('surf',0)??null;source.loop=true;gain.gain.value=0;
+    filter.type='lowpass';source.connect(filter).connect(gain).connect(target);source.start();
+    shoreline={source,gain,filter};
+   }
+   shoreline.gain.gain.setTargetAtTime(level*(1-shelter*.72),audio.currentTime,.28);
+   shoreline.filter.frequency.setTargetAtTime(2100-shelter*1650,audio.currentTime,.28);
+  },
   reload(weapon:number,duration:number,volume:number){cancelReload();if(weapon===4)return;reloadVoices=[play('reload-out',undefined,volume*.21),play('reload-in',undefined,volume*.25,1,false,duration*.62),play('bolt',undefined,volume*.22,1,false,Math.max(.2,duration-.28))].filter((v):v is Voice=>!!v);},
   cancelReload,
   engines(actors:{id:string;point:T.Vector3;active:boolean;muffled:boolean;carSpeed?:number}[],volume:number){
@@ -95,7 +111,7 @@ export function createBattleAudio(context:()=>AudioContext|null,output:()=>Audio
   listener(){const audio=context();if(!audio||disposed)return;camera.getWorldPosition(position);camera.getWorldDirection(direction);camera.getWorldQuaternion(rotation);up.set(0,1,0).applyQuaternion(rotation);const listener=audio.listener;
    listener.positionX.value=position.x;listener.positionY.value=position.y;listener.positionZ.value=position.z;listener.forwardX.value=direction.x;listener.forwardY.value=direction.y;listener.forwardZ.value=direction.z;listener.upX.value=up.x;listener.upY.value=up.y;listener.upZ.value=up.z;
   },
-  clear(){cancelReload();for(const voice of [...voices])voice.stop();for(const id of engines.keys())stopEngine(id);},
+  clear(){stopShoreline();cancelReload();for(const voice of [...voices])voice.stop();for(const id of engines.keys())stopEngine(id);},
   dispose(){this.clear();disposed=true;buffers.clear();mix?.disconnect();limiter?.disconnect();mix=undefined;limiter=undefined;mixSink=null;},
  };
 }

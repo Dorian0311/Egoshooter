@@ -7,12 +7,13 @@ import {uniformOptions,defaultUniform} from '../shared/uniforms.ts';
 
 const ids=['deadpool','harley','rocket','homer','leatherface','commander','kroenen'] as const;
 test('bonus choices are valid for both factions and maps and synchronize',()=>{
- for(const map of ['cologne','alpine'] as const){
+ for(const map of ['storm','cologne','frontline','alpine'] as const){
   const game=new Game('ABC234');game.add('a','A');game.add('b','B');game.selectMap('a',map);
   for(const team of ['de','fr'] as const){
    assert.ok(!ids.includes(defaultUniform(team,map) as typeof ids[number]));
-   for(const id of ids)assert.ok(uniformOptions(team,map).includes(id));
+   for(const id of ids)assert.equal(uniformOptions(team,map).includes(id),map==='storm');
   }
+  if(map!=='storm'){assert.equal(game.selectUniform('a','rocket'),false);continue;}
   for(const player of ['a','b'])for(const id of ids){
    const before=structuredClone(game.state);assert.equal(game.selectUniform(player,id),true);
    assert.equal(mergeSnapshot(before,difference(before,game.state))!.players.find(p=>p.id===player)!.uniform,id);

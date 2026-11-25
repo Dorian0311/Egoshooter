@@ -46,6 +46,7 @@ export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
   // Stay in linear HDR until OutputPass performs the single tone/color conversion.
   for (const pass of [render, ao, weaponPass, bloom, fxaa, smaa, output]) composer.addPass(pass);
   let quality = initialQuality, width = 0, height = 0, ratio = 0;
+  let resolutionScaling=true;
   // Contact shading is low-frequency; its normal/depth buffers need fewer pixels
   // than the crisp full-resolution color/SMAA buffers.
   const resizeOcclusion = ao.setSize.bind(ao);
@@ -61,6 +62,7 @@ export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
   const governor=new ResolutionGovernor();
   const gpuTiming=createGpuTiming(renderer.getContext() as WebGL2RenderingContext);
   const shadowCadence=new ShadowCadence();let timingFrame=0,timingEnabled=true;
+  let frameCpuAverage=0;
   const frameState={shadowUpdated:false,resized:false,pixelRatio:0,gpuMs:undefined as number|undefined};
   scene.add(sun.target);
   Object.assign(sun.shadow.camera, {
@@ -73,7 +75,7 @@ export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
 
   function setQuality(value: GraphicsQuality) {
     quality = value;
-    governor.reset();gpuTiming.reset();timingFrame=0;shadowCadence.reset();
+    governor.reset();gpuTiming.reset();timingFrame=0;shadowCadence.reset();frameCpuAverage=0;
     const preset = graphicsPresets[quality];
     // Spend the automatic/performance shadow budget near the player. Spatial
     // world batches let the smaller light frustum actually reject distant work.
@@ -93,14 +95,46 @@ export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
     ratio = 0;
   }
   setQuality(quality);
+  function warmup(object:T.Object3D,weapon=false){
+    if(weapon)viewmodel.sync();
+    // Three chooses shader variants from the bound render target. Compile in
+    // the same linear HDR target used by the world and viewmodel passes.
+    const previous=renderer.getRenderTarget();
+    renderer.setRenderTarget(composer.readBuffer);
+    try{return renderer.compileAsync(object,weapon?weaponCamera:camera,weapon?viewmodel.scene:scene);}
+    finally{renderer.setRenderTarget(previous);}
+  }
+  function warmupWorldDraw(){
+    // compileAsync links colour programs. A tiny off-screen draw also
+    // initializes vertex buffers, texture bindings and shadow depth programs.
+    const target=composer.readBuffer,previous=renderer.getRenderTarget();
+    const scissor=target.scissor.clone(),scissorTest=target.scissorTest;
+    const shadowUpdate=renderer.shadowMap.needsUpdate;
+    const uncull:T.Object3D[]=[];
+    scene.traverseVisible(object=>{
+      if(object instanceof T.Mesh&&object.frustumCulled){uncull.push(object);object.frustumCulled=false;}
+    });
+    try{
+      target.scissor.set(0,0,1,1);target.scissorTest=true;
+      renderer.setRenderTarget(target);
+      renderer.shadowMap.needsUpdate=true;
+      renderer.render(scene,camera);
+    }finally{
+      for(const object of uncull)object.frustumCulled=true;
+      target.scissor.copy(scissor);target.scissorTest=scissorTest;
+      renderer.setRenderTarget(previous);
+      renderer.shadowMap.needsUpdate=shadowUpdate;
+    }
+  }
   return {
     setQuality,
+    setResolutionScaling(value:boolean){resolutionScaling=value;governor.reset();},
     setTimingEnabled(value:boolean){timingEnabled=value;gpuTiming.reset();timingFrame=0;},
     frameState,
-    warmup:(object:T.Object3D,weapon=false)=>{if(weapon)viewmodel.sync();return renderer.compileAsync(object,weapon?weaponCamera:camera,weapon?viewmodel.scene:scene);},
+    warmup,warmupWorldDraw,
     weaponFov:()=>weaponCamera.fov,
     stats:()=>({quality,antialias:fxaa.enabled?'fxaa':'smaa',aaPasses:Number(fxaa.enabled)+Number(smaa.enabled),scale:ratio/Math.max(.01,renderPixelRatio(quality,window.devicePixelRatio,width,height)),pixelRatio:ratio,gpuMs:gpuTiming.state.ms}),
-    render(dt: number,aimBlend=0,adaptive=true,cpuMs?:number,frameSeconds=dt,viewport?:{width:number;height:number}) {
+    render(dt: number,aimBlend=0,adaptive=true,cpuMs?:number,frameSeconds=dt,viewport?:{width:number;height:number},weaponVisible=true) {
       const w = Math.max(1, viewport?.width??renderer.domElement.clientWidth);
       const h = Math.max(1, viewport?.height??renderer.domElement.clientHeight);
       // A few asynchronous samples/second are enough for the quality governor;
@@ -108,10 +142,11 @@ export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
       const currentTimingFrame=timingFrame++;
       if(timingEnabled&&currentTimingFrame%4===0)gpuTiming.poll();
       frameState.gpuMs=gpuTiming.state.ms;
-      const scale=quality==='auto'?governor.update(frameSeconds,!document.hidden&&adaptive,gpuTiming.state.ms,cpuMs):1;
+      const scale=quality==='auto'&&resolutionScaling?governor.update(frameSeconds,!document.hidden&&adaptive,gpuTiming.state.ms,cpuMs):1;
       const baseRatio=renderPixelRatio(quality, window.devicePixelRatio, w, h);
-      // Keep the 3D image at least 540 pixels tall when the viewport permits it.
-      const nextRatio = Math.max(Math.min(baseRatio,540/h),baseRatio*scale);
+      // Keep the image legible without cancelling adaptive scaling in
+      // smaller windows. The HUD is still drawn at native resolution.
+      const nextRatio = Math.max(Math.min(baseRatio*.8,540/h),baseRatio*scale);
       frameState.resized=w!==width||h!==height||ratio!==nextRatio;frameState.pixelRatio=nextRatio;
       if (w !== width || h !== height || ratio !== nextRatio) {
         const resized=w!==width||h!==height,ratioChanged=ratio!==nextRatio;
@@ -123,7 +158,8 @@ export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
         camera.updateProjectionMatrix();
       }
       // Snap in LIGHT space, not world space, so shadows remain stable while moving.
-      const updateShadow=shadowCadence.update(dt,quality);
+      if(cpuMs!==undefined&&Number.isFinite(cpuMs))frameCpuAverage+=(Math.min(50,cpuMs)-frameCpuAverage)*.1;
+      const updateShadow=shadowCadence.update(dt,quality,quality==='auto'&&(scale<=.9||frameCpuAverage>13));
       frameState.shadowUpdated=updateShadow;
       if(updateShadow){
         const texel = shadowExtent * 2 / sun.shadow.mapSize.x;
@@ -137,11 +173,17 @@ export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
       }
       renderer.info.reset();
       renderer.shadowMap.needsUpdate = updateShadow;
-      camera.updateWorldMatrix(true,false);
-      camera.matrixWorld.decompose(weaponCamera.position,weaponCamera.quaternion,weaponCamera.scale);
-      weaponCamera.aspect=camera.aspect;weaponCamera.fov=62-12*aimBlend;
-      weaponCamera.updateProjectionMatrix();weaponCamera.updateMatrixWorld();
-      viewmodel.sync();
+      weaponPass.enabled=weaponVisible;
+      const fov=62-12*aimBlend;
+      if(weaponCamera.aspect!==camera.aspect||weaponCamera.fov!==fov){
+        weaponCamera.aspect=camera.aspect;weaponCamera.fov=fov;weaponCamera.updateProjectionMatrix();
+      }
+      if(weaponVisible){
+        camera.updateWorldMatrix(true,false);
+        camera.matrixWorld.decompose(weaponCamera.position,weaponCamera.quaternion,weaponCamera.scale);
+        weaponCamera.updateMatrixWorld();
+        viewmodel.sync();
+      }
       if(timingEnabled&&quality==='auto'&&adaptive&&currentTimingFrame%17===0)gpuTiming.begin();
       try{composer.render(dt);}finally{gpuTiming.end();}
     },

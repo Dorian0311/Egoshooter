@@ -1,15 +1,15 @@
 /** Original procedural foley. Built once per variation, never in the render loop. */
 export type FootMaterial='stone'|'wood'|'metal'|'earth';
-export type SoundName='rifle'|'pistol'|'smg'|'g36'|'stone'|'wood'|'metal'|'glass'|
+export type SoundName='rifle'|'pistol'|'smg'|'g36'|'earth'|'stone'|'wood'|'metal'|'glass'|
  'step-stone'|'step-wood'|'step-metal'|'step-earth'|'flesh'|'sever'|'harvest'|
- 'body'|'swing'|'throw'|'reload-out'|'reload-in'|'bolt'|'equip'|'door'|'confirm'|'hurt'|'pickup'|'bandage'|'saw'|'blast'|'rocket'|'rc-engine'|'rc-warning';
+ 'body'|'swing'|'throw'|'reload-out'|'reload-in'|'bolt'|'equip'|'door'|'confirm'|'hurt'|'pickup'|'bandage'|'saw'|'blast'|'rocket'|'surf'|'rc-engine'|'rc-warning';
 
 export const soundDurations:Record<SoundName,number>={
- rifle:1.15,pistol:.65,smg:.45,g36:.85,stone:.3,wood:.34,metal:.65,glass:1.05,
+ rifle:1.15,pistol:.65,smg:.45,g36:.85,earth:.24,stone:.3,wood:.34,metal:.65,glass:1.05,
  'step-stone':.24,'step-wood':.3,'step-metal':.4,'step-earth':.28,
  flesh:.34,sever:.85,harvest:1.35,body:.48,swing:.3,throw:.3,
  'reload-out':.3,'reload-in':.35,bolt:.32,equip:.28,door:.55,confirm:.09,hurt:.5,pickup:.25,bandage:.65,saw:1,
- blast:.86,rocket:.58,'rc-engine':1,'rc-warning':.84,
+ blast:.86,rocket:.58,surf:4,'rc-engine':1,'rc-warning':.84,
 };
 
 export function designSound(name:SoundName,sampleRate:number,variant=0):Float32Array{
@@ -48,6 +48,9 @@ export function designSound(name:SoundName,sampleRate:number,variant=0):Float32A
   noise(.012,rifle?.42:.24,.55,450,6);
   for(const [delay,level] of [[.055,.22],[.12,.13],[.205,.07]] as const)noise(delay,rifle?.65:.33,level,1900,5);
   clack(rifle?.24:.045,.21);if(rifle){clack(.52,.3);clack(.68,.22);}
+ }else if(name==='surf'){
+  noise(0,3.85,.73,420,1.4);noise(.2,3.3,.4,1550,2.8);
+  noise(1.35,2.6,.48,620,2.3);noise(2.4,1.55,.26,1700,2.1);
  }else if(name==='rc-engine'){
   for(let i=0;i<out.length;i++){
    const angle=2*Math.PI*i/out.length;
@@ -82,6 +85,7 @@ export function designSound(name:SoundName,sampleRate:number,variant=0):Float32A
   for(let i=0;i<35;i++){const at=i===0?0:random()*.75,frequency=1800+random()*7000;tone(at,.025+random()*.13,(i===0?.5:.17)*(1-at),frequency,frequency*.98,7);noise(at,.018,.15,3600,5,true);}
  }else if(name==='metal'){clack(0,.9);for(const f of [330,780,1640,3100])tone(.002,.58,.22,f*variation,f*.97,6);}
  else if(name==='wood'||name==='door'){tone(0,.24,.8,155,65,5,.4);noise(.005,.15,.7,1600);if(name==='door'){tone(.03,.4,.15,290,115,3,1);clack(.18,.3);}}
+ else if(name==='earth'){noise(0,.08,.65,1150,5,false,65);for(let i=0;i<7;i++)noise(.018+random()*.12,.018,.16,2400,5);}
  else if(name==='stone'){noise(0,.095,.9,4800);tone(0,.1,.65,190,60,7);for(let i=0;i<9;i++)noise(.025+random()*.18,.025,.15,3500);}
  else if(name==='swing'||name==='throw'){noise(0,.28,.65,name==='swing'?1800:3800,1,false,0);noise(.045,.16,.4,700,2);}
  else if(name==='reload-out'){clack(0,.65);noise(.06,.2,.45,2100,2);clack(.16,.3);}

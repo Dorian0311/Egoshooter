@@ -1,3 +1,4 @@
+import {HistoricalAwards} from './HistoricalAwards';
 import {OperationSetup} from './OperationSetup';
 import {ReleaseNotes} from './ReleaseNotes';
 import {OperationHud} from './OperationHud';
@@ -309,8 +310,12 @@ export default function App({
             <br />
             Vier Karten. Taktische Gefechte mit bis zu acht Spielern.
           </p>
-          <div className="city-map-picker">{mapIds.map(id=><button key={id} aria-pressed={selectedMap===id} className={`city-map-${id} ${selectedMap===id?"selected":""}`} onClick={()=>setSelectedMap(id)}><span className={`map-preview map-preview-${id}`} aria-hidden="true"/><span className="map-card-copy"><strong>{getWorld(id).name}</strong><small>{getWorld(id).subtitle}</small></span></button>)}</div>
-          <OperationSetup busy={!access||busy} onStart={operation=>setStartIntent({create:true,training:operation.kind==='solo',operation})}/>
+          <div className="theme-picker" role="group" aria-label="Spielwelt">
+            <button aria-pressed={selectedMap==='storm'} onClick={()=>setSelectedMap('storm')}>Island</button>
+            <button aria-pressed={selectedMap!=='storm'} onClick={()=>{if(selectedMap==='storm')setSelectedMap('frontline');}}>2. Weltkrieg</button>
+          </div>
+          <div className="city-map-picker">{mapIds.filter(id=>(id==='storm')===(selectedMap==='storm')).map(id=><button key={id} aria-pressed={selectedMap===id} className={`city-map-${id} ${selectedMap===id?"selected":""}`} onClick={()=>setSelectedMap(id)}><span className={`map-preview map-preview-${id}`} aria-hidden="true"/><span className="map-card-copy"><strong>{getWorld(id).name}</strong><small>{getWorld(id).subtitle}</small></span></button>)}</div>
+          <OperationSetup island={selectedMap==='storm'} busy={!access||busy} onStart={operation=>setStartIntent({create:true,training:operation.kind==='solo',operation})}/>
 
           <div className="city-actions">
             <button
@@ -375,6 +380,7 @@ export default function App({
                     ? `Start in ${Math.max(0, Math.ceil((snapshot.startsAt - snapshot.now) / 1000))}`
                     : "Dein Team wartet."}
               </h2>
+              {snapshot.phase==='finished'&&<HistoricalAwards snapshot={snapshot} player={me}/>}
               <div className="city-teams">
                 {(["de", "fr"] as const).map((t) => (
                   <div key={t}>

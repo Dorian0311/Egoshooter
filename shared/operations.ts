@@ -7,7 +7,8 @@ import {freshInjuries,armCount,eyeHeight,eyePosition,isCrawling,hasLost,limbBits
 import {parseOperation,type OperationConfig,type Condition} from './operationConfig';
 import {Remains} from './remains';
 import {weapons,ROCKET_ID,REMOTE_CAR_ID} from './weapons';
-import {CAR_WARNING_MS,createCarCourse,driveCar,parkedCars,type RemoteCar} from './remoteCars';
+import {islandCourseRadius} from './islandRoute';
+import {CAR_WARNING_MS,createCarCourse,driveCar,parkedCars,parkTrainingCar,type RemoteCar} from './remoteCars';
 
 export type Point={x:number;y:number;z:number};
 type BotNoise={point:Point;team:Team;range:number;decoy:boolean};
@@ -34,7 +35,8 @@ export function createOperation(config:unknown,world:World,random:()=>number):Op
 }
 export function initialPickups(world:World):Pickup[]{
  const points=safePoints(world).filter(p=>[...world.spawns.de,...world.spawns.fr].every(s=>Math.hypot(p.x-s[0],p.z-s[1])>12));
- return Array.from({length:12},(_,i)=>({...points[Math.floor((i+.5)*points.length/12)],id:`pickup-${i}`,kind:i%3!==2?'gift':'bandage',taken:false}));
+ const pickups=Array.from<unknown,Pickup>({length:12},(_,i)=>({...points[Math.floor((i+.5)*points.length/12)],id:`pickup-${i}`,kind:i%3!==2?'gift':'bandage',taken:false}));
+ return world.id==='storm'?pickups:pickups.filter(p=>p.kind==='bandage');
 }
 export class Operation {
  readonly remains:Remains;
@@ -75,6 +77,12 @@ export class Operation {
   o.wave=o.completedWaves=o.remaining=o.nextWaveAt=0;o.result=null;o.paused=false;o.objective.stage='target';o.objective.progress=0;
   s.remoteCars=parkedCars(w);
   s.carCourse=this.config.mode==='training'?createCarCourse(w,s.remoteCars):undefined;
+  const courseCar=s.remoteCars.find(car=>car.id===s.carCourse?.carId);
+  if(courseCar){
+   parkTrainingCar(courseCar,w);
+   const driver=this.humans[0],z=courseCar.z+1.55;
+   if(driver)Object.assign(driver,{x:courseCar.x,y:ground(courseCar.x,z,w),z,yaw:0});
+  }
   s.pickups=[...initialPickups(w),...s.remoteCars.map((car,index):Pickup=>({
    id:`pickup-rocket-${index}`,kind:'rocket',taken:false,x:car.x+1.15,y:car.y,z:car.z,
   }))];
@@ -266,8 +274,7 @@ export class Operation {
  }
  private resetTrainingCar(car:RemoteCar){
   if(car.id!==this.game.state.carCourse?.carId)return;
-  const parked=parkedCars(getWorld(this.game.state.mapId)).find(candidate=>candidate.id===car.id);
-  if(parked)Object.assign(car,parked);
+  parkTrainingCar(car,getWorld(this.game.state.mapId));
  }
  driveRemoteCar(p:Player,input:Input|undefined){
   const car=this.game.state.remoteCars?.find(candidate=>candidate.driver===p.id&&candidate.driverLife===p.life);
@@ -277,7 +284,7 @@ export class Operation {
    driveCar(car,input?.forward??0,input?.side??0,STEP,this.game.world());
    const s=this.game.state,course=s.carCourse;
    const gate=course?.carId===car.id?course.gates[course.next]:undefined;
-   if(gate&&course&&Math.hypot(car.x-gate.x,car.z-gate.z)<.66&&Math.abs(car.y-gate.y)<.4){
+   if(gate&&course&&Math.hypot(car.x-gate.x,car.z-gate.z)<islandCourseRadius&&Math.abs(car.y-gate.y)<.4){
     if(course.next===0)course.startedAt=s.now;
     course.next++;
     if(course.next===course.gates.length){

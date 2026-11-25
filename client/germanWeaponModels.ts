@@ -1,7 +1,7 @@
 import * as T from 'three';
 import {createMP34} from './mp34Model';
 
-export const germanWeaponNames:Record<number,string>={7:'stg44',8:'gewehr43',9:'mg42',10:'mp34',11:'p38',12:'fg42',13:'kar98k-zf39'};
+export const germanWeaponNames:Record<number,string>={7:'stg44',8:'gewehr43',9:'mg42',10:'mp34',11:'p38',12:'fg42',13:'kar98k-zf39',16:'gewehr43-zf4'};
 export function germanWeaponId(name:string){return Object.keys(germanWeaponNames).map(Number).find(id=>germanWeaponNames[id]===name);}
 
 /** Original game meshes in metres, grip at the origin and muzzle along +Z. */
@@ -42,7 +42,7 @@ export function createGermanWeapon(id:number):T.Group {
     box(0,.178,.093,.027,.031,.028,dark,'scope-turret');
     sights(.805);trigger();root.userData.muzzle=[0,.063,.865];root.userData.sightY=.152;return root;
   }
-  const rifle=id===8,mp=id===10,mg=id===9,fg=id===12;
+  const rifle=id===8||id===16,mp=id===10,mg=id===9,fg=id===12;
   const muzzle=rifle?.83:mg?.91:mp?.59:fg?.70:.66;
   stock(mg?.32:rifle?.31:.28,mg?.12:.15);
   box(0,.035,.13,mg?.064:.052,mg?.08:.075,rifle?.35:.29,steel);
@@ -68,5 +68,10 @@ export function createGermanWeapon(id:number):T.Group {
   sights(muzzle-.055);trigger();
   box(.032,.055,.035,.034,.015,.02,steel,'charging-handle');
   root.userData.muzzle=[0,.054,muzzle];root.userData.sightY=.122;
+  if(id===16){
+    box(0,.093,.09,.035,.05,.15,dark,'scope-mount');
+    tube(0,.14,.09,.024,.32,dark,'scope-tube');
+    root.userData.sightY=.14;
+  }
   return root;
 }

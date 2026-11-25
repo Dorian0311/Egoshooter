@@ -406,7 +406,20 @@ export class Game {
     this.state.host ||= id;
     return p;
   }
-  selectMap(id:string,mapId:unknown){if(id!==this.state.host||this.state.phase!=='waiting'||!validMap(mapId))return false;this.state.mapId=mapId;this.state.interiors=initialInteriors(getWorld(mapId));this.history=[];this.inputs.clear();for(const p of this.state.players){const fresh=makePlayer(p.id,p.name,p.team,0,getWorld(mapId));Object.assign(p,fresh,{uniform:validUniform(p.uniform,p.team,mapId)?p.uniform:fresh.uniform,connected:p.connected,loadout:p.loadout,weapon:p.loadout[0],ammo:weapons[p.loadout[0]].mag});}return true;}
+  selectMap(id:string,mapId:unknown){
+    if(id!==this.state.host||this.state.phase!=='waiting'||!validMap(mapId))return false;
+    this.state.mapId=mapId;
+    const world=getWorld(mapId);
+    this.state.interiors=initialInteriors(world);
+    this.history=[];this.inputs.clear();
+    for(const p of this.state.players){
+      const fresh=makePlayer(p.id,p.name,p.team,0,world);
+      const uniform=validUniform(p.uniform,p.team,mapId)?p.uniform:fresh.uniform;
+      const loadout=validLoadout(p.loadout,uniform,mapId)?p.loadout:fresh.loadout;
+      Object.assign(p,fresh,{uniform,connected:p.connected,loadout,weapon:loadout[0],ammo:weapons[loadout[0]].mag});
+    }
+    return true;
+  }
   count(t: Team) {
     return this.state.players.filter((p) => p.team === t&&!p.departed).length;
   }
@@ -454,7 +467,7 @@ export class Game {
   }
   selectLoadout(id:string,value:unknown){
     const p=this.player(id);
-    if(!p||this.state.phase!=='waiting'||!validLoadout(value,p.uniform))return false;
+    if(!p||this.state.phase!=='waiting'||!validLoadout(value,p.uniform,this.state.mapId))return false;
     p.loadout=[...value];p.weapon=startingWeapon(p.loadout,p.uniform);p.ammoByWeapon=weapons.map(w=>w.mag);p.ammo=p.ammoByWeapon[p.weapon];p.reloadAt=0;p.ready=false;return true;
   }
   player(id: string) {

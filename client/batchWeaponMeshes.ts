@@ -9,7 +9,7 @@ export function batchWeaponMeshes(root:T.Group){
   root.traverse(o=>{
     if(!(o instanceof T.Mesh)||o instanceof T.SkinnedMesh||Array.isArray(o.material)||o.morphTargetInfluences)return;
     for(let p:T.Object3D|null=o;p&&p!==root;p=p.parent){
-      if(/^(hand-|view-sleeve-)/.test(p.name)||/g36[_ ]30rd[_ ]magazine/.test(p.name))return;
+      if(/^(hand-|view-sleeve-)/.test(p.name)||p.userData.viewmodelMovingPart||/g36[_ ]30rd[_ ]magazine/.test(p.name))return;
     }
     const attributes=Object.keys(o.geometry.attributes).sort().map(k=>`${k}:${o.geometry.attributes[k].itemSize}:${o.geometry.attributes[k].normalized}`).join(',');
     const key=o.material.uuid+'|'+attributes+'|'+o.castShadow+'|'+o.receiveShadow;

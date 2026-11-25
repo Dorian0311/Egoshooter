@@ -45,7 +45,7 @@ export function createInteriors(scene:T.Scene,world:World){
   box(b.x,.012,b.z,b.w-.5,.025,b.d-.5,floorMat);
   if(b.upper)box(b.x,4.14,b.z,b.w-8,.025,b.d-.5,floorMat);
   for(const z of [-5,0,5])box(b.x,3.83,b.z+z,b.w-.5,.18,.18,wood);
-  sign(roomThemes[index%roomThemes.length].toUpperCase(),b.x+4,2.65,b.z-b.d/2+.26,2.8);
+  sign(b.name==='UNION-LICHTSPIELE'?'PARKETT':roomThemes[index%roomThemes.length].toUpperCase(),b.x+4,2.65,b.z-b.d/2+.26,2.8);
   for(const f of furnitureFor(b,index)){
    const q=f.box,base=mesh(q,f.style==='sandbags'||f.style==='bed'?fabric:f.style==='stove'||f.style==='radio'?metal:f.style==='rubble'?plaster:wood);
    if(f.style==='desk'){box(q.x,q.y+q.h/2+.025,q.z,q.w+.06,.05,q.d+.06,wood);box(q.x-.4,q.y+q.h/2+.07,q.z,.55,.025,.38,paper);}

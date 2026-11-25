@@ -8,10 +8,13 @@ test('rigid batching preserves world bounds and independently moving parts',()=>
  const root=new Group(),nested=new Group(),material=new MeshStandardMaterial();nested.position.set(2,1,0);root.add(nested);
  for(let i=0;i<4;i++){const mesh=new Mesh(new BoxGeometry(),material);mesh.position.x=i;nested.add(mesh);}
  const hand=new Mesh(new BoxGeometry(),material);hand.name='hand-l';root.add(hand);
+ const magazine=new Group();magazine.userData.viewmodelMovingPart=true;root.add(magazine);
+ const shell=new Mesh(new BoxGeometry(),material);magazine.add(shell);
  const bounds=new Box3().setFromObject(root);assert.deepEqual(batchWeaponMeshes(root),{before:4,after:1});
  assert.ok(new Box3().setFromObject(root).min.distanceTo(bounds.min)<1e-7);
  assert.ok(new Box3().setFromObject(root).max.distanceTo(bounds.max)<1e-7);
  assert.equal(hand.parent,root);hand.position.y=4;assert.equal(hand.position.y,4);
+ assert.equal(shell.parent,magazine);
 });
 test('actual Kar98k rigid meshes batch below twenty draws without losing muzzle metadata',async()=>{
  const bytes=await readFile('public/shooter/models/kar98k.glb');

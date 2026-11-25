@@ -48,11 +48,11 @@ export function createMP34(){
   cylinder(0,.040,.682,.010,.020,dark,true);
 
   box(.034,.040,.145,.038,.048,.072,steel,.004,'mp34-side-feed-block');
-  const magazine=new T.Group();magazine.position.set(.044,.042,.145);magazine.rotation.z=-.06;root.add(magazine);
+  const magazine=new T.Group();magazine.name='mp34-magazine-assembly';magazine.position.set(.044,.042,.145);magazine.rotation.z=-.06;root.add(magazine);
   const mag=box(.158,.042,.145,.229,.036,.062,dark,.004,'mp34-side-magazine');root.remove(mag);mag.position.set(.114,0,0);magazine.add(mag);
   const lip=box(.276,.042,.145,.012,.043,.069,steel,.003,'mp34-magazine-base');root.remove(lip);lip.position.set(.231,0,0);magazine.add(lip);
-  for(const z of [.123,.167])box(.156,.023,z,.213,.002,.003,edge,.0005,'mp34-magazine-fold');
-  for(let i=0;i<5;i++){const hole=add(new T.CircleGeometry(.0023,12),dark,.071+i*.036,.042,.177,'mp34-magazine-witness-hole');hole.rotation.x=.03;}
+  for(const z of [.123,.167])magazine.attach(box(.156,.023,z,.213,.002,.003,edge,.0005,'mp34-magazine-fold'));
+  for(let i=0;i<5;i++){const hole=add(new T.CircleGeometry(.0023,12),dark,.071+i*.036,.042,.177,'mp34-magazine-witness-hole');hole.rotation.x=.03;magazine.attach(hole);}
 
   box(-.028,.048,.151,.004,.026,.102,dark,.002,'mp34-ejection-port');
   box(-.030,.045,.145,.005,.014,.075,edge,.002,'mp34-bolt');

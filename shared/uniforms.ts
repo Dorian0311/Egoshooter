@@ -20,6 +20,7 @@ export const uniforms = {
 export type UniformId=keyof typeof uniforms;
 export function uniformOptions(team:'de'|'fr',map:MapId):UniformId[]{
   const historical:UniformId[]=map==='storm'?[team==='de'?'task-olive':'task-sand']:team==='de'?['de-panzer','de-field','de-greatcoat']:map==='alpine'?['fr-alpine','fr-liberation']:['us-field'];
+  if(map!=='storm')return historical;
   return [...historical,'deadpool','harley','rocket','homer','leatherface','commander','kroenen'];
 }
 export function defaultUniform(team:'de'|'fr',map:MapId):UniformId{return uniformOptions(team,map)[0];}

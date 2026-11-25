@@ -1,17 +1,15 @@
 import React,{useEffect,useRef,useState} from 'react';
 import './releaseNotes.css';
 
-const release='combat-and-vehicles-2026-11-18';
+const release='themenwelten-und-lichtspiele-2026-11-25';
 const storageKey='eiserne-front-changelog';
 let acknowledgedInSession=false;
 const changes=[
- ['Rennwagen und Stielraketen','In jedem Gebäude stehen pro Runde ein Sprengrennwagen und eine Stielrakete bereit. Mit E übernimmst du den Wagen, mit WASD fährst du ihn und mit Linksklick zündest du. Die Kamera folgt dem Wagen. Stielraketen nimmst du mit E auf und startest sie mit B.'],
- ['Motor, Warnsignal und Parcours','Der Motorsound folgt der Geschwindigkeit. Vor der Zündung ertönen drei Warntöne und eine Lampe blinkt. Im Trainingsmodus kannst du auf jeder Karte vier Tore fahren und deine Bestzeit im selben Einsatz verbessern.'],
- ['Zielfernrohr und neue Bewegungen','Der Karabiner 98k mit ZF39 steht in der Waffenauswahl. Rechtsklick öffnet das Zielfernrohr. Geduckt streut die Waffe weniger und schlägt weniger zurück. Halte X zum Kriechen.'],
- ['Sichtbarere Schüsse','Breitere Leuchtspuren, kräftigere Mündungsblitze und Funken machen Schüsse und Einschläge besser erkennbar. Rauch und Funken werden gebündelt gezeichnet und Explosionsobjekte wiederverwendet.'],
- ['Funkwache und Innenräume','Die Anzeige liest ihre Abmessungen bei Größenänderungen. Der Renderer aktualisiert nur ausgerüstete Waffen im sichtbaren Szenenbaum. Einschlagmarken werden gemeinsam pro Bild aktualisiert.'],
- ['Koop, Trefferanzeige und Schritte','Gegner reagieren auf Schüsse und Ablenkungen, feuern in Salven und starten mit mehr Abstand. Die Trefferanzeige nennt Schaden, Körperregion und Richtung. Schritte anderer Figuren sind räumlich hörbar.'],
- ['Bewohner, Medkits und Lobby','Vier Bewohner haben leichter erkennbare Kleidung und eigene Sprüche. Medkits stecken in rot-weißen Kisten. Die Waffenauswahl zeigt Vorschaubilder, und die Lobby blendet den Scrollbalken aus.'],
+ ['Zwei Themenwelten','Wähle in der Lobby zwischen Island und 2. Weltkrieg. Köln, die Alpen und Operation Abendrot bieten historische Ausrüstung. Bonusfiguren und Sprengrennwagen gehören zur Insel.'],
+ ['Union-Lichtspiele','Im Güterviertel von Operation Abendrot steht am Platz der Alten Mühle ein begehbares Kino. Sechs historische Propagandaplakate hängen in den Schaukästen. Im Saal siehst du das Archivfoto von 1935.'],
+ ['Gewehr 43 mit ZF4','Das neue Gewehr ergänzt den Karabiner 98k mit ZF39. Wähle es für einen deiner fünf Waffenplätze. Halte die rechte Maustaste für den vierfachen Zoom.'],
+ ['Luftschutzzeichen und Auszeichnungen','In Köln und im Güterviertel findest du LSR- und NA-Markierungen. Nach historischen Gefechten zeigt die Ergebnisansicht verdiente Auszeichnungen.'],
+ ['Inselparcours','Die Küstenroute führt durch eine Unterführung. Den Sprengrennwagen kannst du im Inseltraining über den Parcours steuern.'],
 ] as const;
 
 export function ReleaseNotes(){
@@ -21,7 +19,7 @@ export function ReleaseNotes(){
  const dismiss=()=>{acknowledgedInSession=true;try{localStorage.setItem(storageKey,release);}catch{/* Keep the acknowledgement for this app session. */}setOpen(false);};
  if(!open)return null;
  return <dialog ref={dialog} className="release-notes" aria-labelledby="release-notes-title" onCancel={event=>{event.preventDefault();dismiss();}}>
-  <header><span>UPDATE · 18. NOVEMBER 2026</span><h2 id="release-notes-title">Neu in Eiserne Front</h2><p>Die Änderungen seit der letzten Meldung. Die genannten Tasten entsprechen der Standardbelegung.</p></header>
+  <header><span>UPDATE · 25. NOVEMBER 2026</span><h2 id="release-notes-title">Neu in Eiserne Front</h2><p>Die Änderungen seit der letzten Meldung. Die genannten Tasten entsprechen der Standardbelegung.</p></header>
   <div className="release-notes-content">{changes.map(([title,description])=><section key={title}><h3>{title}</h3><p>{description}</p></section>)}</div>
   <footer><button autoFocus className="release-notes-ack" onClick={dismiss}>Verstanden · zur App</button></footer>
  </dialog>;

@@ -1,10 +1,12 @@
+import {islandRoute,islandCourseRadius} from '../shared/islandRoute';
+import {createCarCourse,driveCar,parkedCars,parkTrainingCar} from '../shared/remoteCars';
 import {createOperation} from '../shared/operations';
-import {initialInteriors,interiorFixtures} from '../shared/interiors';
+import {initialInteriors,interiorFixtures,interiorWorld} from '../shared/interiors';
 import { createScene } from '../client/scene.ts';
 import '../client/crosshair.css';
 import { parseGraphicsQuality } from '../client/graphicsSettings.ts';
-import { makePlayer, VERSION, weapons, type Snapshot,type Player } from '../shared/game.ts';
-import { getWorld } from '../shared/world.ts';
+import { makePlayer, move, neutral, STEP, VERSION, weapons, type Snapshot,type Player } from '../shared/game.ts';
+import { getWorld, ground } from '../shared/world.ts';
 import {bonusIds} from '../client/bonusCharacters.ts';
 
 const canvas = document.querySelector('canvas')!;
@@ -17,6 +19,7 @@ const reloadButton=document.querySelector<HTMLButtonElement>('#reload')!;
 const characters=document.querySelector<HTMLSelectElement>('#characters')!;
 const params=new URLSearchParams(location.search);
 const stress=params.get('stress')==='1';
+const routeMode=params.get('route');
 const clean=params.get('overview')==='1';
 if(clean){document.querySelector('aside')!.style.display='none';document.documentElement.classList.add('clean-overview');}
 if(['storm','frontline','street','river','alpine','combat','residents','interior','upstairs','station'].includes(params.get('view')??''))view.value=params.get('view')!;
@@ -25,18 +28,24 @@ crowd.checked=params.get('crowd')==='1';
 if(params.get('characters')==='bonus')characters.value='bonus';
 if(['0','1','2','3','4'].includes(params.get('weapon')??''))weapon.value=params.get('weapon')!;
 let currentSnapshot:Snapshot,simulation:ReturnType<typeof setInterval>|undefined;
+let routeRunning=false;
 let stressTick=0,stressRun=0,stressFrames=0,stressShots=0,stressBlasts=0;
 let scene: ReturnType<typeof createScene> | undefined;
 let samples: number[] = [], warmup = performance.now() + 5000;
 const history:Record<string,unknown>[]=[];
 function resetMeasurement() { samples = [];history.length=0;output.dataset.benchmark='[]';warmup = performance.now() + 5000; output.textContent = 'Messung läuft …'; }
 function show() {
+  routeRunning=false;
   scene?.dispose();
   if(simulation)clearInterval(simulation);
   const mapId = view.value === 'storm'||view.value==='combat' ? 'storm' : view.value === 'frontline' ? 'frontline' : view.value === 'alpine' ? 'alpine' : 'cologne';
   const player = makePlayer('review', 'Grafikprüfung', 'de', 0, getWorld(mapId));
   if(view.value==='storm')Object.assign(player,{x:-25,y:0,z:9,yaw:-1.18,pitch:-.04});
   if(view.value==='frontline')Object.assign(player,{x:-28,y:0,z:0,yaw:-.9,pitch:-.01});
+  if(view.value==='frontline'&&params.get('focus')==='station'){
+    const station=getWorld(mapId).buildings.find(building=>building.name==='GÜTERBAHNHOF')!;
+    Object.assign(player,{x:station.x-10,y:0,z:station.z+21,yaw:-.47,pitch:.035});
+  }
   if(view.value==='interior')Object.assign(player,{x:-48,y:0,z:5,yaw:0,pitch:-.08});
   if(view.value==='upstairs')Object.assign(player,{x:-48,y:4.125,z:-29,yaw:0,pitch:-.08});
   if(view.value==='station')Object.assign(player,{x:48,y:0,z:-29,yaw:0,pitch:-.08});
@@ -49,22 +58,43 @@ function show() {
     interiors:initialInteriors(getWorld(mapId)),phase: 'playing', now: 0, startsAt: 0, endsAt: 600000, host: player.id,
     scores: { de: 0, fr: 0 }, players: [player], winner: null, events: [], persistence: 'practice',
   };
+  const routeReview=mapId==='storm'&&['sprint','drive','turn'].includes(routeMode??'');
+  const routeWorld=interiorWorld(getWorld(mapId),snapshot.interiors);
+  let routeIndex=params.get('focus')==='radar-bend'?(routeMode==='turn'?6:5):routeMode==='drive'?3:1;
+  const [routeX,routeZ]=islandRoute[routeIndex-1];
+  const routeYaw=(x:number,z:number)=>Math.atan2(x-islandRoute[routeIndex][0],z-islandRoute[routeIndex][1]);
+  if(routeReview)Object.assign(player,{x:routeX,y:ground(routeX,routeZ,routeWorld),z:routeZ,yaw:routeYaw(routeX,routeZ)});
+  if(mapId==='storm'&&params.get('focus')==='passage')Object.assign(player,{x:-21,y:0,z:72,yaw:.08,pitch:.03});
+  if(mapId==='storm'&&params.get('focus')==='coast')Object.assign(player,{x:-20,y:ground(-20,107,routeWorld),z:107,yaw:.55,pitch:-.03});
   if(params.has('supplies'))snapshot.pickups=[{id:'review-medkit',kind:'bandage',x:player.x-.8,y:player.y,z:player.z-2.6,taken:false}];
   if(params.get('phase')==='waiting')snapshot.phase='waiting';
   player.weapon=Number(weapon.value) as typeof player.weapon;
   if(player.weapon===4)player.uniform='leatherface';
   if(view.value==='combat'){const target=makePlayer('target','Testfigur','fr');Object.assign(target,{x:-43,z:4.5,y:0,yaw:Math.PI,uniform:characters.value==='bonus'?'leatherface':'task-sand'});snapshot.players.push(target);}
-  if(crowd.checked&&view.value!=='combat')for(let i=0;i<7;i++){
+  const requestedActors=params.get('actors');
+  const actorCount=crowd.checked?7:routeReview
+    ?Math.max(1,Math.min(7,Number.parseInt(requestedActors??'1',10)||1)):0;
+  if(view.value!=='combat')for(let i=0;i<actorCount;i++){
     const bot=makePlayer(`bot-${i}`,`Figur ${i+1}`,i%2?'de':'fr',0,getWorld(mapId));
     bot.x=mapId==='alpine'?-50+i*2.7:-48+i*6;bot.z=(mapId==='alpine'?0:-19)+((i%3)-1)*(mapId==='alpine'?2.5:4);
     bot.yaw=i%2?0:Math.PI;bot.uniform=mapId==='storm'?(i%2?'task-olive':'task-sand'):i%2?'de-field':mapId==='alpine'?'fr-alpine':'us-field';
     if(characters.value==='bonus')bot.uniform=bonusIds[i%bonusIds.length];
     snapshot.players.push(bot);
   }
+  const cars=routeReview&&routeMode==='drive'?parkedCars(routeWorld):[];
+  const course=createCarCourse(routeWorld,cars);
+  const car=cars.find(item=>item.id===course?.carId);
+  if(car&&course){
+    parkTrainingCar(car,routeWorld);
+    Object.assign(car,{x:routeX,y:ground(routeX,routeZ,routeWorld),z:routeZ,
+      yaw:routeYaw(routeX,routeZ),driver:player.id,driverLife:player.life});
+    snapshot.remoteCars=[car];snapshot.carCourse=course;course.next=routeIndex-1;
+  }
   currentSnapshot=snapshot;
   const overview=mapId==='storm'?{position:[-72,27,87] as [number,number,number],target:[0,1,0] as [number,number,number]}:mapId==='frontline'?{position:[-72,24,77] as [number,number,number],target:[0,1,0] as [number,number,number]}:mapId==='alpine'?{position:[-72,25,38] as [number,number,number],target:[0,2,-20] as [number,number,number]}:{position:[-73,27,62] as [number,number,number],target:[8,2,-10] as [number,number,number]};
   // Replay the fixed view on each update so test shots cannot accumulate recoil.
-  scene = createScene(canvas, () => {}, mapId, parseGraphicsQuality(quality.value),undefined,undefined,clean?overview:undefined,stress);
+  scene = createScene(canvas, () => {}, mapId, parseGraphicsQuality(quality.value),undefined,undefined,clean?overview:undefined,stress||routeReview,stress);
+  if(params.get('native')==='1')scene.setResolutionScaling(false);
   scene.update(snapshot, player.id);
   simulation=setInterval(()=>{
     snapshot.now+=1000/30;
@@ -74,6 +104,26 @@ function show() {
       target.x=-43+(motion==='walk'||motion==='sprint'?Math.sin(snapshot.now*(motion==='sprint'?.003:.0015))*1.3:0);
     }
     if(view.value!=='combat')for(let i=1;i<snapshot.players.length;i++)snapshot.players[i].x=(mapId==='alpine'?-50+(i-1)*2.7:-48+(i-1)*6)+Math.sin(snapshot.now*.001+i)*1.3;
+    if(routeReview){
+      const [x,z]=islandRoute[routeIndex];
+      const active=car??player;
+      if(routeRunning&&routeMode==='turn'){
+        player.yaw=Math.sin(snapshot.now*.0034)*1.95;
+      }else if(routeRunning&&car&&course){
+        const angle=car.yaw-routeYaw(car.x,car.z);
+        driveCar(car,1,Math.max(-1,Math.min(1,Math.atan2(Math.sin(angle),Math.cos(angle))*3)),STEP,routeWorld);
+      }else if(routeRunning){
+        move(player,{...neutral(),yaw:routeYaw(player.x,player.z),forward:1,sprint:true},STEP,routeWorld);
+      }
+      if(routeRunning&&Math.hypot(x-active.x,z-active.z)<islandCourseRadius&&routeIndex<islandRoute.length-1){
+        routeIndex++;if(course)course.next=routeIndex-1;
+      }
+      for(const [index,bot] of snapshot.players.slice(1).entries()){
+        bot.x=active.x+((index%4)-1.5)*1.36+Math.sin(snapshot.now*.003+index)*.38;
+        bot.z=active.z-5-index*.7;
+        bot.y=ground(bot.x,bot.z,routeWorld);bot.yaw=Math.PI;
+      }
+    }
     if(stress){
       stressTick++;
       const events:Snapshot['events']=[];
@@ -133,7 +183,7 @@ function measure(now: number) {
   }
   raf = requestAnimationFrame(measure);
 }
-Object.assign(window,{graphicsReview:{profile:(limit=1200)=>scene?.profileFrames(limit),samples:()=>scene?.frameProfile()??[],gpuTiming:(enabled:boolean)=>scene?.gpuTiming(enabled),
+Object.assign(window,{graphicsReview:{ready:()=>scene?.worldPrepared,routeStart:()=>{routeRunning=true;},profile:(limit=1200)=>scene?.profileFrames(limit),samples:()=>scene?.frameProfile()??[],gpuTiming:(enabled:boolean)=>scene?.gpuTiming(enabled),
   stressStart:(ticks=420)=>{stressRun++;stressTick=0;stressFrames=ticks;stressShots=stressBlasts=0;scene?.profileFrames(3600);},
   stressStats:()=>({remaining:stressFrames,shots:stressShots,blasts:stressBlasts}),
 }});

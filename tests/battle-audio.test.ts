@@ -39,7 +39,8 @@ test('foot cadence follows distance and resets for air, death, teleports and dis
 
 test('foot material comes from the supporting floor, not surrounding props',()=>{
  const world:World={id:'frontline',name:'test',subtitle:'',opponent:'',opponentCode:'',spawns:{de:[],fr:[]},buildings:[],boxes:[{x:0,y:1,z:0,w:2,h:2,d:2,kind:'container'}]};
- assert.equal(footstepMaterial(world,actor),'earth');assert.equal(footstepMaterial(world,{...actor,y:2}),'metal');
+ assert.equal(footstepMaterial(world,actor),'stone');assert.equal(footstepMaterial(world,{...actor,z:12}),'earth');
+ assert.equal(footstepMaterial(world,{...actor,y:2}),'metal');
  world.boxes[0].kind='stair';assert.equal(footstepMaterial(world,{...actor,y:2}),'wood');
  world.boxes=[];world.id='cologne';assert.equal(footstepMaterial(world,actor),'stone');
  world.buildings=[{x:0,z:0,w:10,d:10,upper:true,name:'test'}];world.boxes=[{x:0,y:3.9,z:0,w:8,h:.2,d:8,kind:'floor'}];

@@ -15,8 +15,18 @@ export function createWeaponScene(world:T.Scene,camera:T.PerspectiveCamera,weapo
   }
   scene.add(copy);lights.push({source:object,copy});
  });
+ const sky=lights.find(({source})=>source instanceof T.HemisphereLight)?.source;
+ // A broad bounce from the sky catches the grip and the underside of the
+ // sleeves when the world sun is behind the player.
+ const bounce=new T.DirectionalLight('#dce8ff',0);
+ bounce.name='first-person-sky-bounce';
+ bounce.layers.mask=weaponCamera.layers.mask;
+ bounce.position.set(-1,.48,.25);
+ bounce.target.position.set(0,-.27,-.75);
+ camera.add(bounce,bounce.target);
  function sync(){
   scene.environment=world.environment;scene.environmentIntensity=world.environmentIntensity;
+  bounce.intensity=sky?.visible?Math.min(.62,.67*sky.intensity):0;
   for(const {source,copy}of lights){
    source.updateWorldMatrix(true,false);copy.matrix.copy(source.matrixWorld);
    copy.visible=source.visible;copy.color.copy(source.color);copy.intensity=source.intensity;
@@ -26,5 +36,5 @@ export function createWeaponScene(world:T.Scene,camera:T.PerspectiveCamera,weapo
   }
  }
  sync();
- return {scene,sync,dispose(){camera.removeFromParent();if(previousParent)previousParent.add(camera);scene.clear();}};
+ return {scene,sync,dispose(){camera.remove(bounce,bounce.target);bounce.dispose();camera.removeFromParent();if(previousParent)previousParent.add(camera);scene.clear();}};
 }

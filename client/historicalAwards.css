@@ -1,0 +1,10 @@
+.historical-awards{margin:14px 0;color:#ede3c9}
+.historical-awards h3{font-size:16px;margin:0 0 10px}
+.historical-awards ul{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(300px,100%),1fr));gap:8px;padding:0;margin:0;list-style:none}
+.historical-awards li{display:flex;align-items:center;gap:10px;min-height:82px;padding:9px 10px;border:1px solid #a48e635c;border-radius:6px;background:linear-gradient(135deg,#363329,#20251f)}
+.historical-award-photo{display:grid;place-items:center;flex:0 0 64px;height:72px;overflow:hidden;border:1px solid #bbae9458;border-radius:3px;background:#1d201d}
+.historical-award-photo img{display:block;width:64px;height:72px;object-fit:contain}
+.historical-awards strong,.historical-awards small{display:block;font-size:12px}
+.historical-awards small{color:#c2bba8;margin-top:4px;line-height:1.35}
+.historical-awards .historical-award-credit{font-size:9px}
+.historical-award-credit a{color:inherit;text-decoration:underline;text-underline-offset:2px}

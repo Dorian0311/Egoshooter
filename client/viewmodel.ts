@@ -32,6 +32,7 @@ export function createViewmodel(parent:T.Group){
   const restPosition=parent.position.clone(),restRotation=parent.rotation.clone();
   const pose:ViewmodelPose={aimBlend:0,reloadProgress:0,reloadBlend:0,recoil:0};
   let recoil=0,velocity=0,phase=0,swayX=0,swayY=0,lastYaw=0,lastPitch=0,movementBlend=0;
+  let aimVelocity=0,sprintBlend=0,sprintVelocity=0;
   let initialized=false,lastWeapon=-1,equip=0,disposed=false;
   return {
     /** Call once for each server-confirmed local shot, never from mouse-down. */
@@ -44,7 +45,18 @@ export function createViewmodel(parent:T.Group){
       const reloading=input.reloadRemainingMs>0&&input.reloadDurationMs>0;
       pose.reloadProgress=reloading?clamp(1-input.reloadRemainingMs/input.reloadDurationMs,0,1):0;
       pose.reloadBlend=reloading?reloadEnvelope(pose.reloadProgress):0;
-      pose.aimBlend+=(Number(input.aim&&!reloading&&!input.sprinting)-pose.aimBlend)*(1-Math.exp(-dt*16));
+      // Both carry and sighting retain velocity when the player reverses input.
+      // Aim takes priority immediately, including between two movement ticks.
+      const aimTarget=Number(input.aim&&!reloading);
+      const aimError=pose.aimBlend-aimTarget,aimRate=24,aimDecay=Math.exp(-aimRate*dt);
+      const aimStep=aimVelocity+aimRate*aimError;
+      pose.aimBlend=aimTarget+(aimError+aimStep*dt)*aimDecay;
+      aimVelocity=(aimVelocity-aimRate*aimStep*dt)*aimDecay;
+      const sprintTarget=Number(input.sprinting&&!input.aim&&!reloading);
+      const sprintError=sprintBlend-sprintTarget,sprintRate=19,sprintDecay=Math.exp(-sprintRate*dt);
+      const sprintStep=sprintVelocity+sprintRate*sprintError;
+      sprintBlend=sprintTarget+(sprintError+sprintStep*dt)*sprintDecay;
+      sprintVelocity=(sprintVelocity-sprintRate*sprintStep*dt)*sprintDecay;
       equip*=Math.exp(-dt*12);
       // Stable, critically damped recoil spring (exact solution for constant timestep).
       const omega=23,e=Math.exp(-omega*dt),c=velocity+omega*recoil;
@@ -60,16 +72,16 @@ export function createViewmodel(parent:T.Group){
       swayY+=(clamp(pitchDelta*referenceFrames*1.4,-.025,.025)-swayY)*follow;
       movementBlend+=(clamp(input.moving,0,1)*Number(input.grounded)-movementBlend)*(1-Math.exp(-dt*10));
       const movement=movementBlend;
-      phase+=dt*(input.sprinting?13:9)*movement;
-      const hip=1-pose.aimBlend,bob=movement*hip*(input.sprinting?.012:.006);
-      parent.position.set(restPosition.x-.24*pose.aimBlend+swayX*hip+Math.sin(phase)*bob,
-        restPosition.y+(-(input.sightY??input.muzzleY)-.008)*pose.aimBlend+swayY*hip+Math.cos(phase*2)*bob*.6-pose.reloadBlend*.13-equip*.18,
-        restPosition.z-.18*pose.aimBlend+recoil+equip*.10);
-      parent.rotation.set(restRotation.x-recoil*.8-pose.reloadBlend*.48+equip*.25,
-        restRotation.y+swayX*.6,restRotation.z+pose.reloadBlend*.32-Math.sin(phase)*bob*.6);
+      phase+=dt*(9+4*sprintBlend)*movement;
+      const hip=1-pose.aimBlend,bob=movement*hip*.006*(1+sprintBlend);
+      parent.position.set(restPosition.x-.065*sprintBlend-.24*pose.aimBlend+swayX*hip+Math.sin(phase)*bob,
+        restPosition.y-.038*sprintBlend+(-(input.sightY??input.muzzleY)-.008)*pose.aimBlend+swayY*hip+Math.cos(phase*2)*bob*.6-pose.reloadBlend*.018-equip*.18,
+        restPosition.z+.046*sprintBlend-.18*pose.aimBlend+recoil+equip*.10-pose.reloadBlend*.09);
+      parent.rotation.set(restRotation.x-.085*sprintBlend-recoil*.8+pose.reloadBlend*.12+equip*.25,
+        restRotation.y+.25*sprintBlend+swayX*.6*hip,restRotation.z-.13*sprintBlend+pose.reloadBlend*.28-Math.sin(phase)*bob*.6);
       return pose;
     },
-    reset(){initialized=false;lastWeapon=-1;recoil=velocity=swayX=swayY=phase=movementBlend=0;pose.aimBlend=0;},
+    reset(){initialized=false;lastWeapon=-1;recoil=velocity=swayX=swayY=phase=movementBlend=aimVelocity=sprintVelocity=sprintBlend=0;pose.aimBlend=0;},
     dispose(){disposed=true;parent.position.copy(restPosition);parent.rotation.copy(restRotation);},
   };
 }

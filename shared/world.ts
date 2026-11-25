@@ -1,3 +1,4 @@
+import {islandUnderpass} from './islandRoute';
 import {furnitureFor,furnitureColliders} from './interiors';
 import {terrainHeight} from './terrain';
 export type Box = {x:number;y:number;z:number;w:number;h:number;d:number;kind?:string};
@@ -34,7 +35,7 @@ const frontlineBuildings:Building[]=[
 {x:-46,z:35,w:18,d:16,upper:false,name:'SANITÄTSSTELLE'},
 {x:46,z:-35,w:18,d:16,upper:false,name:'GÜTERBAHNHOF'},
 {x:46,z:35,w:18,d:16,upper:true,name:'KOMMANDANTUR'},
-{x:0,z:-51,w:18,d:16,upper:true,name:'ALTE MÜHLE'},
+{x:0,z:-51,w:18,d:16,upper:true,name:'UNION-LICHTSPIELE'},
 {x:0,z:51,w:18,d:16,upper:false,name:'LAGERHALLE'}];
 for(const side of [-1,1])for(const [n,z]of [-62,-28,12,62].entries())frontlineBuildings.push({x:side*92,z,w:18,d:16,upper:n%2===1,name:['ARBEITERHAUS','MASCHINENHALLE','WERKSHOF','QUARTIER'][n]+(side<0?' WEST':' OST')});
 frontlineBuildings.push({x:0,z:-88,w:18,d:16,upper:true,name:'NÖRDLICHE WACHE'},{x:0,z:88,w:18,d:16,upper:false,name:'SÜDLICHES DEPOT'});
@@ -64,15 +65,26 @@ const alpineBoxes=build(alpineBuildings);
 for(const [x,z,w,d]of [[-23,-6,12,9],[23,6,12,9],[0,20,11,7],[0,-20,11,7],[-64,50,14,10],[64,-50,14,10]])alpineBoxes.push({x,y:2,z,w,h:4,d,kind:'rock'});
 for(const [x,z]of [[-14,5],[14,-5],[-31,22],[31,-22]])alpineBoxes.push({x,y:.8,z,w:3,h:1.6,d:2,kind:'cover'});
 const stormBoxes=build(stormBuildings);
+const passage=islandUnderpass;
+for(const side of [-1,1])
+ stormBoxes.push({x:passage.x+side*(passage.width/2+.55),z:passage.z,y:1.75,w:1.1,d:passage.depth,h:3.5,kind:'coastal-portal'});
+stormBoxes.push({x:passage.x,z:passage.z,y:passage.clearance+.36,w:passage.width+2.2,d:passage.depth,h:.72,kind:'coastal-portal'});
+for(const [x,z,w,h,d] of [[-33,103,10,5,9],[-20,91,8,5.7,8],[-43,66,11,7,8],[-13,72,10,6,11],[-32,64,10,6,12],[-14,59,9,6,11],[-34,43,9,5,10],[-31,22,8,4.4,10]])
+ stormBoxes.push({x,y:h/2,z,w,h,d,kind:'rock'});
 stormBoxes.push({x:0,y:1.5,z:0,w:18,h:3,d:18,kind:'platform'});
 for(const side of [-1,1])for(let step=0;step<15;step++)stormBoxes.push({x:side*(16.25-step*.5),y:(step+1)*.1,z:0,w:.55,h:(step+1)*.2,d:5,kind:'stair'});
 for(const side of [-1,1])for(const x of [-5.5,5.5])stormBoxes.push({x,y:3.55,z:side*8,w:4.8,h:1.1,d:.8,kind:'sandbags'});
-for(const [x,z]of [[-25,-20],[25,20],[-25,21],[25,-21]])stormBoxes.push({x,y:1.3,z,w:7,h:2.6,d:2.7,kind:'container'});
+for(const [x,z]of [[-25,-20],[25,20],[-12,23],[25,-21]])stormBoxes.push({x,y:1.3,z,w:7,h:2.6,d:2.7,kind:'container'});
 for(const [x,z]of [[-16,34],[16,-34],[-33,-8],[33,8]])stormBoxes.push({x,y:.65,z,w:4,h:1.3,d:1.2,kind:'sandbags'});
 for(const [x,z]of [[-65,-52],[65,52],[-32,57],[32,-57],[-62,51],[62,-51],[-26,-47],[26,47]])stormBoxes.push({x,y:2.5,z,w:.65,h:5,d:.65,kind:'tree'});
+// Elevated shelf on the west side of the radar bend. Its walk/drive
+// clearance is represented by the same hull the renderer uses.
+stormBoxes.push({x:-29.4,y:4.75,z:46.5,w:12.8,h:2.2,d:5.6,kind:'rock'});
+for(const [x,z,h] of [[-29.9,51,6.1],[-16.2,45,5.3],[-31.4,36.3,6.6]])
+ stormBoxes.push({x,y:h/2,z,w:.68,h,d:.68,kind:'tree'});
 const frontlineBoxes=build(frontlineBuildings);
 for(const [x,z,w,d]of [[-20,-16,6,1.2],[20,16,6,1.2],[-30,7,5,1.2],[30,-7,5,1.2],[0,-27,7,1.2],[0,27,7,1.2]])frontlineBoxes.push({x,y:.65,z,w,h:1.3,d,kind:'sandbags'});
-frontlineBoxes.push({x:0,y:1.45,z:12,w:11,h:2.9,d:3.1,kind:'wagon'},{x:23,y:1.25,z:-26,w:5.8,h:2.5,d:2.4,kind:'truck'});
+frontlineBoxes.push({x:60,y:1.45,z:-22,w:11,h:2.9,d:2.8,kind:'wagon'},{x:52,y:.58,z:-25.2,w:1.65,h:1.16,d:1.25,kind:'cover'},{x:0,y:1.45,z:12,w:11,h:2.9,d:3.1,kind:'wagon'},{x:23,y:1.25,z:-26,w:5.8,h:2.5,d:2.4,kind:'truck'});
 for(const [x,z]of [[-24,23],[24,-15],[-22,-34],[22,34]])frontlineBoxes.push({x,y:1.1,z,w:4.5,h:2.2,d:1.1,kind:'ruin'});
 for(const [x,z]of [[-11,-10],[13,9],[-16,19],[16,-20]])frontlineBoxes.push({x,y:.8,z,w:3,h:1.6,d:2,kind:'cover'});
 export const worlds:Record<MapId,World>={

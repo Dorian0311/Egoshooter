@@ -1,4 +1,4 @@
-import {weaponSlot,fallbackSidearm,SNIPER_ID,ROCKET_ID} from '../shared/weapons';
+import {weaponSlot,fallbackSidearm,SNIPER_ID,G43_SCOPE_ID,ROCKET_ID} from '../shared/weapons';
 import {nearbyBoxes} from '../shared/boxIndex';
 import {createBattleAudio,advanceFootstep,footstepMaterial,type StepState} from './battleAudio';
 import {createAnatomy} from './anatomy';
@@ -15,6 +15,7 @@ import {createMapDetails,detailedPropKinds} from './mapDetails';
 import {CameraMotion} from './cameraMotion';
 import {createActorDetails} from './actorDetails';
 import {RemoteMotion} from './remoteMotion';
+import {terrainHeight} from '../shared/terrain';
 import {createContactShadows} from './contactShadows';
 import {loadEnvironmentUpgrade} from './environmentAssets';
 import {addMilitaryRoofs} from './militaryRoofs';
@@ -39,8 +40,10 @@ import {addArchitecture,facadeColor} from './architecture.ts';
 import {createRockGeometry} from './rockGeometry.ts';
 import {createViewmodel,projectWeaponMuzzle} from './viewmodel.ts';
 import {createFallbackHands} from './fallbackHands.ts';
+import {RoundedBoxGeometry} from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import {loadSceneAssets} from './sceneAssets.ts';
 import {loadHuman,createHuman} from './humanoid.ts';
+import {islandUnderpass} from '../shared/islandRoute';
 import { getWorld,type MapId } from "../shared/world.ts";
 import {
   move,
@@ -61,12 +64,13 @@ export function createScene(
   onInteract:(id:string)=>void=()=>{},
   inspectionView?:{position:[number,number,number];target:[number,number,number]},
   readOnly=false,
+  preserveDrawingBuffer=readOnly,
 ) {
-  let settings=initialSettings,enabled=true;
+  let settings=initialSettings,enabled=true,quality=graphicsQuality;
   const pressed=(action:Action)=>keys.has(settings.bindings[action]);
   const world=getWorld(mapId),{boxes,buildings}=world;
   let collisionWorld=world;
-  const renderer = new T.WebGLRenderer({ canvas, antialias: false, preserveDrawingBuffer:readOnly, powerPreference: 'high-performance' });
+  const renderer = new T.WebGLRenderer({ canvas, antialias: false, preserveDrawingBuffer, powerPreference: 'high-performance' });
   const releaseWorldWeapons=retainWorldWeaponSession();
   renderer.shadowMap.enabled = true;
   renderer.localClippingEnabled = true;
@@ -87,7 +91,9 @@ export function createScene(
     ?snapshot.remoteCars?.find(car=>car.driver===local?.id&&car.driverLife===local?.life&&!car.spent)
     :undefined;
   camera.rotation.order = "YXZ";
-  const skyLight=new T.HemisphereLight("#c0d4ed", "#5e5241", .45);
+  const island=mapId==='storm';
+  const daylight=island?.92:.64;
+  const skyLight=new T.HemisphereLight(island?'#c3e9ff':'#cfdaeb',island?'#96a477':'#827662',daylight);
   skyLight.layers.enable(1);scene.add(skyLight);
   const sun = new T.DirectionalLight("#fff0e0", 2.8);
   if(mapId==='storm'){sun.color.set('#fff2d0');sun.intensity=3.1;}
@@ -107,8 +113,10 @@ export function createScene(
     d: number,
     color: string,
     parent: T.Object3D = scene,
+    bevel = 0,
   ) {
-    const mesh = new T.Mesh(new T.BoxGeometry(w, h, d), mat(color));
+    const geometry=bevel>0?new RoundedBoxGeometry(w,h,d,1,bevel):new T.BoxGeometry(w,h,d);
+    const mesh = new T.Mesh(geometry, mat(color));
     mesh.position.set(x, y, z);
     if(mesh.material.map)projectBoxUVs(mesh.geometry,mesh.position);
     mesh.castShadow = true;
@@ -134,7 +142,7 @@ export function createScene(
   const coverVisuals:{box:(typeof boxes)[number];mesh:T.Mesh}[]=[];
   for (const b of boxes){
     if(b.kind==='interior'||detailedPropKinds.has(b.kind??''))continue;
-    if(b.kind==='rock'){const rock=new T.Mesh(createRockGeometry(b),mat('#818783'));rock.position.set(b.x,b.y,b.z);rock.castShadow=true;rock.receiveShadow=true;scene.add(rock);continue;}
+    if(b.kind==='rock'){const rock=new T.Mesh(createRockGeometry(b,island),mat('#818783'));rock.position.set(b.x,b.y,b.z);rock.castShadow=true;rock.receiveShadow=true;scene.add(rock);continue;}
     const buildingIndex=buildings.findIndex(item=>Math.abs(b.x-item.x)<=item.w/2+.1&&Math.abs(b.z-item.z)<=item.d/2+.1);
     const visual=cube(
       b.x,
@@ -152,10 +160,12 @@ export function createScene(
             : b.kind === "stair" || b.kind === "floor"
               ? "#827866"
               : facadeColor(Math.max(0,buildingIndex)),
+      scene,
+      b.kind==='wall'||b.kind==='furniture'||b.kind==='wagon'?Math.min(.085,b.w*.12,b.h*.12,b.d*.12):0,
     );
     if(b.kind==='cover')coverVisuals.push({box:b,mesh:visual});
   }
-  const sceneAssets=loadSceneAssets(scene,renderer,coverVisuals,graphicsQuality);
+  const sceneAssets=loadSceneAssets(scene,renderer,coverVisuals,graphicsQuality,island);
   for (const b of buildings) {
     if(mapId!=='storm'){
     const shape = new T.Shape();
@@ -192,13 +202,80 @@ export function createScene(
       new T.PlaneGeometry(7, 0.9),
       new T.MeshBasicMaterial({ map: texture }),
     );
-    sign.position.set(b.x, 3.4, b.z + b.d / 2 + 0.26);
+    const cinema=mapId==='frontline'&&b.name==='UNION-LICHTSPIELE';
+    const front=b.z+b.d/2;
+    sign.position.set(b.x, cinema?4.32:3.4, front+(cinema?1.61:.26));
     scene.add(sign);
+    if(cinema){
+      const brass='#a58753',lacquer='#4a2928';
+      cube(b.x,3.75,front+1,10.4,.2,2,lacquer);
+      cube(b.x,3.89,front+1,9.8,.08,1.9,brass);
+      cube(b.x,4.32,front+1.37,7.3,.99,.46,brass);
+      cube(b.x,4.88,front+1.32,6.3,.13,.55,lacquer);
+      // The screen faces the benches on the solid wall beside the entrance.
+      cube(b.x+4,2.08,front-.32,4.3,2.5,.12,lacquer);
+      cube(b.x+4,2.08,front-.39,4.04,2.24,.04,'#d5cbb4');
+      const loader=new T.TextureLoader();
+      const photo=loader.load('/shooter/posters/archiv-1935.jpg');
+      photo.colorSpace=T.SRGBColorSpace;
+      const projection=new T.Mesh(new T.PlaneGeometry(2.24*800/534,2.24),
+        new T.MeshBasicMaterial({map:photo,toneMapped:false}));
+      projection.rotation.y=Math.PI;
+      projection.position.set(b.x+4,2.08,front-.415);
+      scene.add(projection);
+      const posters=[
+        ['ausstellung',300/433],['rekrutierung',538/768],['musik',490/688],
+        ['aufruf',768/582],['verschwiegenheit',548/768],['versailles',519/768],
+      ] as const;
+      for(const side of [-1,1]){
+        const center=b.x+side*5.35;
+        cube(center,1.92,front+.53,5.1,1.93,.54,brass);
+        cube(center,1.92,front+.81,4.96,1.8,.035,lacquer);
+        for(let slot=0;slot<3;slot++){
+          const [motif,aspect]=posters[(side<0?0:3)+slot];
+          const height=Math.min(1.5,1.54/aspect);
+          const paper=loader.load(`/shooter/posters/${motif}.jpg`);
+          paper.colorSpace=T.SRGBColorSpace;
+          const print=new T.Mesh(new T.PlaneGeometry(height*aspect,height),
+            new T.MeshStandardMaterial({map:paper,roughness:1}));
+          print.position.set(center+(slot-1)*1.62,1.92,front+.835);
+          print.receiveShadow=true;scene.add(print);
+        }
+      }
+    }
+    if(mapId==='frontline'||mapId==='cologne'){
+      const shelter=['FELDPOST','ARBEITERHAUS WEST','AM DOMHOF','DEUTZER BAHNHOF'].includes(b.name);
+      const exit=['GÜTERBAHNHOF','QUARTIER OST','BAHNWACHE'].includes(b.name);
+      if(shelter||exit){
+        const paint=document.createElement('canvas');
+        paint.width=256;paint.height=192;
+        const brush=paint.getContext('2d')!;
+        brush.fillStyle='#e7e1cd';
+        brush.textAlign='center';
+        brush.font='bold 76px Georgia';
+        brush.fillText(shelter?'LSR':'NA',128,76);
+        brush.beginPath();
+        brush.moveTo(119,88);brush.lineTo(137,88);brush.lineTo(137,147);
+        brush.lineTo(156,147);brush.lineTo(128,180);brush.lineTo(100,147);
+        brush.lineTo(119,147);brush.closePath();brush.fill();
+        // Small gaps let the masonry show through the old paint.
+        for(let i=0;i<760;i++)brush.clearRect((i*97)%251,(i*i+37*i)%191,2+i%4,2);
+        const ink=new T.CanvasTexture(paint);
+        ink.colorSpace=T.SRGBColorSpace;
+        const marking=new T.Mesh(new T.PlaneGeometry(1.6,1.2),
+          new T.MeshStandardMaterial({map:ink,transparent:true,opacity:.88,depthWrite:false,roughness:1}));
+        const side=b.x<0?1:-1;
+        marking.rotation.y=side*Math.PI/2;
+        marking.position.set(b.x+side*(b.w/2+.235),1.85,b.z+(b.z>0?-6.5:6.5));
+        marking.receiveShadow=true;
+        scene.add(marking);
+      }
+    }
   }
   addFacadeDetails(scene,buildings,mat);
   if(mapId!=='storm')addArchitecture(scene,buildings,mat,true);
   const disposeMilitaryRoofs=mapId==='storm'?addMilitaryRoofs(scene,buildings,mat):undefined;
-  const disposeEnvironmentUpgrade=loadEnvironmentUpgrade(scene,world,renderer);
+  const environmentUpgrade=loadEnvironmentUpgrade(scene,world,renderer);
   const mapDetails=createMapDetails(scene,world,mat,camera);
   for (const x of [-34, 34])
     for (const z of [-12, 12]) {
@@ -207,7 +284,7 @@ export function createScene(
       bulb.position.set(x, 5.2, z);
       scene.add(bulb);
     }
-  batchStaticMeshes(scene,new Set(coverVisuals.map(cover=>cover.mesh)),32);
+  batchStaticMeshes(scene,new Set(coverVisuals.map(cover=>cover.mesh)),island?64:32);
   const interiors=createInteriors(scene,world);
   const interactionHint=document.createElement('div');interactionHint.style.cssText='position:absolute;bottom:23%;left:50%;transform:translateX(-50%);background:#15221ee6;color:#eef2df;padding:10px 18px;border:1px solid #cbd9a955;border-radius:6px;font:13px system-ui;pointer-events:none;z-index:4;display:none';canvas.parentElement?.append(interactionHint);
   const ammoReadout=document.createElement('div');ammoReadout.className='weapon-ammo';ammoReadout.setAttribute('aria-label','Munition an der Waffe');
@@ -331,6 +408,7 @@ export function createScene(
   const hitEffects=createHitEffects(scene);
   const gore=createGore(scene,()=>collisionWorld),operationScene=createOperationScene(scene),seenEvents=new Set<string>();
   const remainsScene=createRemainsScene(scene,camera,weapon,mapId,id=>avatars.get(id)?.userData.human?.group);
+  let lastAmbienceAt:number|undefined;
   let condition="",shakeAt=0,shakeStrength=0;
   const pending: Input[] = [];
   const keys = new Set<string>();
@@ -424,7 +502,7 @@ export function createScene(
     if(oldPhase&&oldPhase!==s.phase){battleAudio.clear();stepPositions.clear();}
     if(snapshot?.interiors&&s.interiors&&local){for(const f of interiorFixtures(world)){if(f.type==='door'&&snapshot.interiors.doors[f.id]!==s.interiors.doors[f.id]&&Math.hypot(f.box.x-local.x,f.box.z-local.z)<12){roomSound(new T.Vector3(f.box.x,f.box.y,f.box.z));break;}}}
     snapshot = s;interiors.sync(s.interiors);operationScene.sync(s);remainsScene.sync(s);
-    if(condition!==s.operation.condition){condition=s.operation.condition;if(condition==='fog')scene.fog=new T.Fog('#a8b3b0',4,42);else if(condition==='night'){scene.fog=new T.Fog('#07101a',20,100);sun.intensity=.18;renderer.setClearColor('#07101a');}}collisionWorld=interiorWorld(world,s.interiors);
+    if(condition!==s.operation.condition){condition=s.operation.condition;if(condition==='fog'){scene.fog=new T.Fog('#a8b3b0',4,42);scene.background=scene.fog.color;}else if(condition==='night'){scene.fog=new T.Fog('#07101a',20,100);scene.background=scene.fog.color;sun.intensity=.18;renderer.setClearColor('#07101a');}}collisionWorld=interiorWorld(world,s.interiors);
     myId = id;
     const own = s.players.find((p) => p.id === id);
     const movingActors=[...s.players,...s.npcs];
@@ -538,15 +616,17 @@ export function createScene(
           victim.userData.deathAxis=new T.Vector3(horizontal.z,0,-horizontal.x);victim.visible=true;
         }}
       }
-      let solidImpact=false;
+      let impactSurface: 'wood'|'metal'|'stone'|'earth'|undefined;
       if(e.point&&(e.type==='impact'||e.type==='shot')){
         const [x,y,z]=e.point,margin=.20;
         const candidates=nearbyBoxes(collisionWorld.boxes,x-margin,z-margin,x+margin,z+margin);
         const box=candidates.find(b=>Math.abs(b.x-x)<b.w/2+margin&&Math.abs(b.y-y)<b.h/2+margin&&Math.abs(b.z-z)<b.d/2+margin);
         const sparksMargin=.16;
-        solidImpact=candidates.some(b=>Math.abs(b.x-x)<=b.w/2+sparksMargin&&Math.abs(b.y-y)<=b.h/2+sparksMargin&&Math.abs(b.z-z)<=b.d/2+sparksMargin);
-        if(e.type==='impact'||!s.events.some(hit=>hit.type==='hit'&&hit.id===e.id)){
-          const surface=box?.kind==='door'?'wood':['truck','container','fence'].includes(box?.kind??'')?'metal':'stone';
+        const surface=box?.kind==='door'||box?.kind==='furniture'?'wood'
+          :['truck','container','fence','steel','railing','wagon'].includes(box?.kind??'')?'metal'
+          :box?'stone':footstepMaterial(collisionWorld,{x,y,z})==='earth'?'earth':'stone';
+        if(e.type==='impact'||box&&Math.abs(box.y-y)<=box.h/2+sparksMargin||Math.abs(y-terrainHeight(x,z,world))<.15)impactSurface=surface;
+        if(impactSurface&&(e.type==='impact'||!s.events.some(hit=>hit.type==='hit'&&hit.id===e.id))){
           battleAudio.effect(e.weapon===6?'body':surface,eventPoint,.24*settings.volume,1,eventMuffled);
         }
       }
@@ -555,7 +635,7 @@ export function createScene(
           const direction=new T.Vector3(-Math.sin(shooter.yaw)*Math.cos(shooter.pitch),Math.sin(shooter.pitch),-Math.cos(shooter.yaw)*Math.cos(shooter.pitch));
           const eye=actorEyePosition(shooter);
           const start=e.id===id?projectWeaponMuzzle(detailedWeapons.muzzleWorld(),camera,graphics.weaponFov()):new T.Vector3(eye.x,eye.y-.10,eye.z).addScaledVector(direction,.65);
-          muzzleEffects.emit(start,direction,eventPoint,solidImpact);
+          muzzleEffects.emit(start,direction,eventPoint,impactSurface);
         }}
         sound(eventActor,e.weapon??eventActor?.weapon);
         if (e.id === id){shakeAt=performance.now();const stability=local?shotStability(local):1;shakeStrength=.7*stability;viewmodel.shot(e.weapon??0,stability);pitch=Math.min(1.45,pitch+weapons[e.weapon??0].recoil*(aim?.7:1)*stability);yaw+=Math.sin(seq*2.3)*weapons[e.weapon??0].recoil*.2*stability;}
@@ -567,6 +647,14 @@ export function createScene(
   }
   const graphics=createGraphics(renderer,scene,camera,sun,graphicsQuality);
   renderer.initTexture(muzzleEffects.texture);
+  const worldPrepared=island?Promise.all([environmentUpgrade.ready,sceneAssets.ready]).then(async()=>{
+    if(stopped)return;
+    await graphics.warmup(scene);
+    if(stopped)return;
+    environmentUpgrade.update(camera.position,'high');
+    try{graphics.warmupWorldDraw();}
+    finally{environmentUpgrade.update(camera.position,quality);}
+  }).catch(error=>console.warn('Island shader warmup unavailable',error)):Promise.resolve();
   void Promise.all([graphics.warmup(muzzleEffects.group),graphics.warmup(operationScene.blastGroup)])
     .catch(error=>console.warn('Combat effects shader warmup unavailable',error));
   let captureFrame:(()=>void)|undefined;
@@ -663,7 +751,7 @@ export function createScene(
       g.rotation.set(0,g.userData.renderYaw,0);
       const actorDistance=g.position.distanceTo(camera.position);
       actorBounds.center.copy(g.position);actorBounds.center.y+=1;
-      const drawActor=actorDistance<28||actorFrustum.intersectsSphere(actorBounds);
+      const drawActor=actorDistance<6||actorFrustum.intersectsSphere(actorBounds);
       if(g.userData.human)g.userData.human.group.visible=drawActor;
       if(drawActor)detailDrawsSkipped+=g.userData.details?.update(actorDistance,viewport.height,camera.fov)??0;
       if(drawActor&&p.hp>0&&p.grounded)contactShadows.actor(remote.x,remote.y,remote.z,p.crouching||isCrawling(p));
@@ -693,7 +781,18 @@ export function createScene(
     }
     contactShadows.end();
     battleAudio.listener();
-    if(local){const step=advanceFootstep(stepPositions.get('local'),local,locked()&&snapshot?.phase==='playing');stepPositions.set('local',step.state);if(step.step)battleAudio.footstep(footstepMaterial(collisionWorld,local),undefined,.24*settings.volume,local.sprinting,local.crouching);}
+    const underpass=island&&Math.abs(camera.position.x-islandUnderpass.x)<islandUnderpass.width/2
+      &&Math.abs(camera.position.z-islandUnderpass.z)<islandUnderpass.depth/2;
+    const covered=underpass||insideBuilding(world,camera.position.x,camera.position.z)>=0
+      ||mapId==='frontline'&&Math.abs(camera.position.x-46)<9.3&&camera.position.z>-27&&camera.position.z<-24.4;
+    if(island&&t-(lastAmbienceAt??-1000)>120){
+      const {x,z}=camera.position;
+      const coast=T.MathUtils.smoothstep(Math.hypot(x,z),63,107);
+      const shelter=covered?1:T.MathUtils.smoothstep(z,68,88)*(x<-23?.63:.21);
+      battleAudio.coastalAmbience(menu?0:coast*.25*settings.volume,shelter);
+      lastAmbienceAt=t;
+    }
+    if(local){const step=advanceFootstep(stepPositions.get('local'),local,locked()&&snapshot?.phase==='playing');stepPositions.set('local',step.state);if(step.step)battleAudio.footstep(footstepMaterial(collisionWorld,local),undefined,.24*settings.volume,local.sprinting,local.crouching,false,covered);}
     const audioNow=(snapshot?.now??0)+t-receivedAt;
     const engines:{id:string;point:T.Vector3;active:boolean;muffled:boolean;carSpeed?:number}[]=[];
     if(snapshot?.phase==='playing'&&!snapshot.operation.paused){
@@ -729,14 +828,19 @@ export function createScene(
     const throwRemaining=(local?.throwAt??0)-renderNow;handStar.visible=!special&&!partThrown&&throwRemaining>610&&throwRemaining<=750;if(throwRemaining>0&&throwRemaining<=(partThrown?850:750)){weapon.rotation.x+=Math.sin(((partThrown?850:750)-throwRemaining)/(partThrown?850:750)*Math.PI)*.45;weapon.position.y-=Math.sin(((partThrown?850:750)-throwRemaining)/(partThrown?850:750)*Math.PI)*.12;}
     weapon.scale.x=local&&armCount(local)===1&&hasLost(local,'armR')?-1:1;
     weapon.visible = !car && !inspectionView && !!local?.hp && armCount(local)>0 && (!local.carriedCorpse||armCount(local)>1) && snapshot?.phase === "playing";
-    const sniperAiming=weapon.visible&&local?.weapon===SNIPER_ID&&!special&&aim;
+    const zoom=local?.weapon===G43_SCOPE_ID?4:local?.weapon===SNIPER_ID?3:1;
+    const sniperAiming=weapon.visible&&zoom>1&&!special;
     const aimBlend=pose?.aimBlend??0;
-    scope.hidden=!sniperAiming||aimBlend<.65;
-    if(!scope.hidden)weapon.visible=false;
-    const scopedFov=T.MathUtils.radToDeg(2*Math.atan(Math.tan(T.MathUtils.degToRad(settings.fov/2))/3));
-    camera.fov=inspectionView?50:T.MathUtils.lerp(settings.fov,local?.weapon===SNIPER_ID&&!special?scopedFov:settings.fov-24,aimBlend);
-    camera.updateProjectionMatrix();
-    ammoReadout.style.display=!car&&local?.hp&&snapshot?.phase==='playing'&&!saw&&!special?'block':'none';
+    const scopeOpacity=sniperAiming?T.MathUtils.smoothstep(aimBlend,.66,.95):0;
+    const scopeHidden=scopeOpacity===0;
+    if(scope.hidden!==scopeHidden)scope.hidden=scopeHidden;
+    if(!scopeHidden&&scope.style.opacity!==String(scopeOpacity))scope.style.opacity=String(scopeOpacity);
+    if(scopeOpacity===1)weapon.visible=false;
+    const scopedFov=T.MathUtils.radToDeg(2*Math.atan(Math.tan(T.MathUtils.degToRad(settings.fov/2))/zoom));
+    const frameFov=inspectionView?50:T.MathUtils.lerp(settings.fov,zoom>1&&!special?scopedFov:settings.fov-24,aimBlend);
+    if(camera.fov!==frameFov){camera.fov=frameFov;camera.updateProjectionMatrix();}
+    const ammoDisplay=!car&&local?.hp&&snapshot?.phase==='playing'&&!saw&&!special?'block':'none';
+    if(ammoReadout.style.display!==ammoDisplay)ammoReadout.style.display=ammoDisplay;
     if(local&&!saw&&!car){
       weapon.updateWorldMatrix(true,false);weapon.localToWorld(ammoAnchor.set(.34,-.15,-.52));
       const projected=projectWeaponMuzzle(ammoAnchor,camera,62-12*(pose?.aimBlend??0)).project(camera);
@@ -754,20 +858,19 @@ export function createScene(
     const lightingPosition=carPose&&local?{...local,x:carPose.position.x,y:carPose.position.y,z:carPose.position.z}:local;
     interiors.update(lightingPosition??undefined,t,dt);
     const target=!car&&local?.hp&&locked()?(remainsScene.interaction(local,yaw)??operationScene.interaction(local,yaw)??interiors.interaction(local,yaw)):undefined;
-    interactionHint.style.display=target?'block':'none';if(target)interactionHint.textContent=`[${settings.bindings.interact.replace('Key','')}] ${('label' in target?target.label:interiors.label(target.id))}${'alternateLabel' in target&&target.alternateLabel?` · [${settings.bindings.sprint.replace('Left','').replace('Right','')}+${settings.bindings.interact.replace('Key','')}] ${target.alternateLabel}`:''}`;
+    let hint=target?`[${settings.bindings.interact.replace('Key','')}] ${('label' in target?target.label:interiors.label(target.id))}${'alternateLabel' in target&&target.alternateLabel?` · [${settings.bindings.sprint.replace('Left','').replace('Right','')}+${settings.bindings.interact.replace('Key','')}] ${target.alternateLabel}`:''}`:'';
     canvas.classList.toggle('city-driving',!!car);
     if(car){
-      interactionHint.style.display='block';
       const key=(action:Action)=>settings.bindings[action].replace('Key','');
       const activeCourse=snapshot?.carCourse;
       const course=activeCourse?.carId===car.id?activeCourse:undefined;
-      if(car.detonateAt!==undefined)interactionHint.textContent='Achtung · Wagen zündet gleich';
+      if(car.detonateAt!==undefined)hint='Achtung · Wagen zündet gleich';
       else if(course?.elapsedMs!==undefined){
         const seconds=(ms:number)=>(ms/1000).toLocaleString('de-DE',{minimumFractionDigits:2,maximumFractionDigits:2});
-        interactionHint.textContent=`Ziel · ${seconds(course.elapsedMs)} s · Bestzeit ${seconds(course.bestMs??course.elapsedMs)} s · Linksklick Testzündung · [${key('interact')}] zurück`;
+        hint=`Ziel · ${seconds(course.elapsedMs)} s · Bestzeit ${seconds(course.bestMs??course.elapsedMs)} s · Linksklick Testzündung · [${key('interact')}] zurück`;
       }else{
-        const stage=course?`Parcours ${course.next+1}/${course.gates.length} · ${course.next===3?'Rückwärts durchs Tor':'Zum gelben Tor'} · `:'Rennwagen · ';
-        interactionHint.textContent=`${stage}${key('forward')}/${key('left')}/${key('back')}/${key('right')} fahren · Linksklick zünden · [${key('interact')}] zurück`;
+        const stage=course?`Parcours ${course.next+1}/${course.gates.length} · Zum gelben Tor · `:'Rennwagen · ';
+        hint=`${stage}${key('forward')}/${key('left')}/${key('back')}/${key('right')} fahren · Linksklick zünden · [${key('interact')}] zurück`;
       }
     }else if(!target&&local?.hp&&snapshot?.phase==='playing'&&snapshot.carCourse){
       const {carId}=snapshot.carCourse;
@@ -775,15 +878,19 @@ export function createScene(
       if(parked&&!parked.driver&&parked.detonateAt===undefined){
         const distance=Math.round(Math.hypot(parked.x-local.x,parked.z-local.z));
         const building=world.buildings[Number(parked.id.slice(4))];
-        if(building){interactionHint.style.display='block';interactionHint.textContent=`Rennwagen-Parcours · ${building.name} · ${distance} m`;}
+        if(building)hint=`Rennwagen-Parcours · Küstenstart · ${distance} m`;
       }
     }
+    const hintDisplay=hint?'block':'none';
+    if(interactionHint.style.display!==hintDisplay)interactionHint.style.display=hintDisplay;
+    if(hint&&interactionHint.textContent!==hint)interactionHint.textContent=hint;
     const indoors=lightingPosition&&insideBuilding(world,lightingPosition.x,lightingPosition.z)>=0;
-    const hemisphere=scene.children.find(o=>o instanceof T.HemisphereLight) as T.HemisphereLight;
-    if(hemisphere)hemisphere.intensity+=( (condition==='night'?.10:indoors?.19:.45)-hemisphere.intensity)*Math.min(1,dt*4);
+    const ambient=condition==='night'?.10:indoors?.24:daylight;
+    skyLight.intensity+=(ambient-skyLight.intensity)*Math.min(1,dt*4);
     river?.update(t/1000);
     mapDetails.update(t/1000);
-    graphics.render(dt,pose?.aimBlend??0,!menu,cpuTimes.at(-1),frameMs/1000,viewport);
+    environmentUpgrade.update(camera.position,quality);
+    graphics.render(dt,pose?.aimBlend??0,!menu,cpuTimes.at(-1),frameMs/1000,viewport,weapon.visible);
     const cpuMs=performance.now()-cpuStarted;
     cpuTimes.push(cpuMs);if(cpuTimes.length>180)cpuTimes.shift();
     if(frameProfile.length<profileLimit)frameProfile.push({frameMs,cpuMs,...graphics.frameState,steps,calls:renderer.info.render.calls,triangles:renderer.info.render.triangles,programs:renderer.info.programs?.length??0,detailDrawsSkipped});
@@ -793,10 +900,12 @@ export function createScene(
   let receivedAt = performance.now();
   raf = requestAnimationFrame(frame);
   return {
-    setQuality(value:GraphicsQuality){sceneAssets.setQuality(value);graphics.setQuality(value);},
+    setQuality(value:GraphicsQuality){quality=value;sceneAssets.setQuality(value);graphics.setQuality(value);},
     setSettings(value:GameSettings){settings=value;if(!value.volume)residentVoice.stop();if(audioOutput)audioOutput.gain.value=value.volume===0?0:1;release();},
     setEnabled(value:boolean){enabled=value;if(!value){residentVoice.stop();release();dragLook=false;if(document.pointerLockElement===canvas)document.exitPointerLock();}},
     startAudio,
+    worldPrepared,
+    setResolutionScaling:graphics.setResolutionScaling,
     capture(callback?:()=>void){captureFrame=callback;},
     profileFrames(limit=1200){frameProfile.length=0;profileLimit=Math.max(0,Math.min(3600,Math.floor(limit)));},
     frameProfile:()=>frameProfile,
@@ -814,7 +923,7 @@ export function createScene(
       residentVoice.dispose();
       hudResize.disconnect();wanderers.dispose();interiors.dispose();interactionHint.remove();
       ammoReadout.remove();scope.remove();
-      mapDetails.dispose();disposeMilitaryRoofs?.();disposeEnvironmentUpgrade();
+      mapDetails.dispose();disposeMilitaryRoofs?.();environmentUpgrade.dispose();
       hitEffects.dispose();gore.dispose();operationScene.dispose();remainsScene.dispose();muzzleEffects.dispose();
       cancelAnimationFrame(raf);
       listeners.forEach((f) => f());

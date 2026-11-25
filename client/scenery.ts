@@ -26,27 +26,41 @@ export function instanceStaticModel(scene: T.Scene|T.Group, source: T.Object3D, 
 
 // One draw per material/cell, rather than per shutter/slat or a town-wide batch.
 // Keep replaceable cover meshes and instances independent.
-export function batchStaticMeshes(scene: T.Scene | T.Group, excluded: Set<T.Object3D>,cellSize=Infinity) {
+export function batchStaticMeshes(scene: T.Scene | T.Group, excluded: Set<T.Object3D>,cellSize=Infinity,tintable:ReadonlySet<T.Material>=new Set()) {
   const groups = new Map<string, T.Mesh<T.BufferGeometry, T.Material>[]>();
   for (const object of scene.children) {
     if (!(object instanceof T.Mesh) || object instanceof T.InstancedMesh ||
       Array.isArray(object.material) || excluded.has(object) || object.children.length) continue;
     const cell=Number.isFinite(cellSize)&&cellSize>0?`${Math.floor(object.position.x/cellSize)},${Math.floor(object.position.z/cellSize)}`:'all';
-    const key = `${object.material.uuid}:${object.castShadow}:${object.receiveShadow}:${cell}`;
+    const material=object.material;
+    const tinted=tintable.has(material)&&material instanceof T.MeshStandardMaterial&&!material.vertexColors;
+    const attributes=Object.keys(object.geometry.attributes).sort().join(',');
+    const appearance=tinted?`tint:${material.roughness}:${material.metalness}:${material.side}:${material.emissive.getHex()}:${material.emissiveIntensity}:${attributes}`:material.uuid;
+    const key = `${appearance}:${object.castShadow}:${object.receiveShadow}:${cell}`;
     const group = groups.get(key) ?? [];
     group.push(object); groups.set(key, group);
   }
-  for (const meshes of groups.values()) {
+  for (const [key,meshes] of groups) {
     if (meshes.length < 2){freezeStaticTransforms(meshes[0]);continue;}
     const mixedIndices=meshes.some(mesh=>!!mesh.geometry.index)&&meshes.some(mesh=>!mesh.geometry.index);
+    const tinted=key.startsWith('tint:');
     const geometries = meshes.map(mesh => {
       mesh.updateMatrix();
-      return (mixedIndices&&mesh.geometry.index?mesh.geometry.toNonIndexed():mesh.geometry.clone()).applyMatrix4(mesh.matrix);
+      const geometry=(mixedIndices&&mesh.geometry.index?mesh.geometry.toNonIndexed():mesh.geometry.clone()).applyMatrix4(mesh.matrix);
+      if(tinted){
+        const material=mesh.material as T.MeshStandardMaterial;
+        const colors=new Float32Array(geometry.getAttribute('position').count*3);
+        for(let index=0;index<colors.length;index+=3)material.color.toArray(colors,index);
+        geometry.setAttribute('color',new T.BufferAttribute(colors,3));
+      }
+      return geometry;
     });
     const geometry = mergeGeometries(geometries);
     geometries.forEach(g => g.dispose());
     if (!geometry) continue;
-    const batch = new T.Mesh(geometry, meshes[0].material);
+    const material=tinted?(meshes[0].material as T.MeshStandardMaterial).clone():meshes[0].material;
+    if(tinted&&material instanceof T.MeshStandardMaterial){material.color.setRGB(1,1,1);material.vertexColors=true;}
+    const batch = new T.Mesh(geometry, material);
     batch.castShadow = meshes[0].castShadow;
     batch.receiveShadow = meshes[0].receiveShadow;
     geometry.computeBoundingSphere();
@@ -55,10 +69,10 @@ export function batchStaticMeshes(scene: T.Scene | T.Group, excluded: Set<T.Obje
   }
 }
 
-export function createRiver(scene: T.Scene,width=60,depth=420,height=-4) {
+export function createRiver(scene: T.Scene,width=60,depth=420,height=-4,color='#254a50',segments:readonly [number,number]=[96,256],receiveShadow=true) {
   const time = { value: 0 };
   const material = new T.MeshPhysicalMaterial({
-    color: '#254a50', roughness: .22, metalness: .12,
+    color, roughness: .22, metalness: .12,
     clearcoat: 1, clearcoatRoughness: .16, envMapIntensity: 1.15,
   });
   const waves = `
@@ -81,11 +95,11 @@ export function createRiver(scene: T.Scene,width=60,depth=420,height=-4) {
     `);
   };
   material.customProgramCacheKey = () => 'river-waves-v1';
-  const geometry = new T.PlaneGeometry(width, depth, 96, 256);
+  const geometry = new T.PlaneGeometry(width, depth, ...segments);
   geometry.rotateX(-Math.PI / 2);
   const river = new T.Mesh(geometry, material);
   river.position.y = height;
-  river.receiveShadow = true;
+  river.receiveShadow = receiveShadow;
   scene.add(river);
   return { update(seconds: number) { time.value = seconds; } };
 }

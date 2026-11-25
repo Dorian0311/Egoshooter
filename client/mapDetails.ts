@@ -1,10 +1,15 @@
 import * as T from 'three';
+import {RoundedBoxGeometry} from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import type {Box,World} from '../shared/world';
 import {batchStaticMeshes,createRiver} from './scenery';
 import {projectBoxUVs} from './materials';
+import {islandCourseRadius,islandRoute,islandUnderpass,nearIslandRoute} from '../shared/islandRoute';
+import {applySurfaceFinish} from './surfaceFinish';
+import {terrainHeight} from '../shared/terrain';
+import {coastalHeadland} from './coastalHeadland';
 import {createBattleTerrain} from './battleTerrain';
 
-export const detailedPropKinds=new Set(['sandbags','container','truck','ruin','tree','platform']);
+export const detailedPropKinds=new Set(['sandbags','container','truck','ruin','tree','platform','coastal-portal']);
 
 /** All substantial playable props follow shared collision boxes. Small dressing
  * stays below step height, on existing walls, or beyond the walking boundary. */
@@ -17,7 +22,8 @@ export function createMapDetails(scene:T.Scene,world:World,get:(color:string)=>T
     let value=colors.get(key);if(!value){value=new T.MeshStandardMaterial({color,metalness,roughness});colors.set(key,value);}return value;
   }
   const box=(x:number,y:number,z:number,w:number,h:number,d:number,mat:T.Material,parent:T.Object3D=root)=>{
-    const geometry=new T.BoxGeometry(w,h,d);projectBoxUVs(geometry,new T.Vector3(x,y,z),2.5);
+    const breadth=Math.min(w,h,d);
+    const geometry=breadth>=.4?new RoundedBoxGeometry(w,h,d,1,Math.min(breadth*.15,.18)):new T.BoxGeometry(w,h,d);projectBoxUVs(geometry,new T.Vector3(x,y,z),2.5);
     const mesh:T.Mesh<T.BufferGeometry,T.Material>=new T.Mesh(geometry,mat);mesh.position.set(x,y,z);mesh.castShadow=true;mesh.receiveShadow=true;parent.add(mesh);return mesh;
   };
   const cylinder=(x:number,y:number,z:number,r:number,h:number,mat:T.Material,segments=12)=>{
@@ -78,16 +84,60 @@ export function createMapDetails(scene:T.Scene,world:World,get:(color:string)=>T
       const mesh=new T.Mesh(geometry,leaf);mesh.position.set(b.x,0,b.z);mesh.castShadow=true;mesh.receiveShadow=true;root.add(mesh);
     }
   }
+  let radarRotor:T.Group|undefined;
   for(const [index,b]of world.boxes.entries()){
     if(b.kind==='sandbags')sandbags(b);
     if(b.kind==='container')container(b,index);
     if(b.kind==='truck')truck(b);
     if(b.kind==='tree')palm(b,index);
+    if(b.kind==='coastal-portal'){
+      box(b.x,b.y,b.z,b.w,b.h,b.d,material('#777b68',.05,.91));
+      if(b.w>3){
+        const danger=material('#d69e46',.07,.78),shade=material('#564631');
+        for(const side of [-1,1]){
+          for(let stripe=0;stripe<22;stripe++){
+            const trim=box(b.x+(stripe-10.5)*.32,b.y,b.z+side*(b.d/2+.024),.19,.36,.04,stripe%2?danger:shade);
+            trim.rotation.z=-.34;
+          }
+          box(b.x,b.y-.39,b.z+side*1.4,2.7,.075,.18,material('#e8d493')).castShadow=false;
+        }
+      }
+    }
     if(b.kind==='platform'){
-      box(b.x,b.y,b.z,b.w,b.h,b.d,get('#9d8b75'));
+      const teal=material('#286d70',.35,.55),enamel=material('#e5d9b1',.18,.64);
+      box(b.x,b.y,b.z,b.w,b.h,b.d,enamel);
+      for(const side of [-1,1]){
+        const x=b.x+side*(b.w/2+.045),z=b.z+side*(b.d/2+.045);
+        box(x,b.y-.65,b.z,.09,.54,b.d,teal);
+        box(b.x,b.y-.65,z,b.w,.54,.09,teal);
+        box(x,b.y+.60,b.z,.10,.08,b.d,teal);
+        box(b.x,b.y+.60,z,b.w,.08,.10,teal);
+        for(const offset of [-.28,.28]){
+          const center=b.z+offset*b.d;
+          box(x+side*.05,b.y,center,.11,1.1,1.8,steel);
+          for(let slat=0;slat<6;slat++)
+            box(x+side*.12,b.y-.43+slat*.17,center,.09,.065,1.58,enamel);
+        }
+      }
       for(const side of [-1,1])box(b.x,b.y+b.h/2-.08,b.z+side*b.d/2,b.w+.2,.16,.25,olive);
       cylinder(0,5.5,0,.13,5,steel);
-      const radar=new T.Group();radar.position.set(0,7.6,0);radar.rotation.z=-.55;root.add(radar);
+      const pedestal=material('#437b7e',.48,.44);
+      const beacon=new T.MeshStandardMaterial({color:'#f2bc5b',emissive:'#ec8126',emissiveIntensity:.65,roughness:.42});
+      colors.set('radar-beacon',beacon);
+      for(const side of [-1,1]){
+        // Low curved service housings flank the mast while the stairs stay clear.
+        const housing=new T.Mesh(new T.CapsuleGeometry(.58,2.1,5,14),teal);
+        housing.rotation.z=Math.PI/2;
+        housing.position.set(b.x+side*4.45,3.57,b.z+1.83);
+        housing.castShadow=housing.receiveShadow=true;root.add(housing);
+        cylinder(b.x+side*5.36,4.25,b.z+1.83,.15,.20,steel,12);
+        cylinder(b.x+side*5.36,4.39,b.z+1.83,.11,.14,beacon,12).castShadow=false;
+      }
+      cylinder(b.x,3.12,b.z,.94,.24,steel,24);
+      cylinder(b.x,3.68,b.z,.56,1.02,pedestal,24);
+      cylinder(b.x,4.24,b.z,.72,.20,steel,24);
+      radarRotor=new T.Group();radarRotor.position.set(b.x,7.6,b.z);root.add(radarRotor);
+      const radar=new T.Group();radar.rotation.z=-.55;radarRotor.add(radar);
       const dishMaterial=material('#c9d4c9',.55,.4);dishMaterial.side=T.DoubleSide;
       const profile=Array.from({length:15},(_,i)=>new T.Vector2(i/14*1.7,Math.pow(i/14,2)*.55));
       const dish=new T.Mesh(new T.LatheGeometry(profile,40),dishMaterial);dish.castShadow=true;radar.add(dish);
@@ -111,7 +161,22 @@ export function createMapDetails(scene:T.Scene,world:World,get:(color:string)=>T
     if(war&&b.kind==='wagon'){
       // Existing shared body collider remains the full extent of the rail car.
       for(const side of [-1,1])for(const x of [-3.7,3.7]){const wheel=cylinder(b.x+x,.45,b.z+side*1.30,.5,.22,steel,16);wheel.rotation.x=Math.PI/2;}
-      for(let i=0;i<22;i++)box(b.x-b.w/2+(i+.5)*b.w/22,b.y,b.z+b.d/2+.025,.055,b.h,.055,get('#67513d'));
+      const frame=material('#343d3b',.52,.62),boards=[material('#6d4634',.03,.94),material('#80553d',.03,.94),material('#67432f',.03,.94)];
+      for(const side of [-1,1]){
+        const z=b.z+side*(b.d/2+.029);
+        for(let i=0;i<24;i++)
+          box(b.x-b.w/2+(i+.5)*b.w/24,b.y+.10,z,b.w/24-.012,b.h-.50,.065,boards[(i*7+Math.floor(i/4))%3]);
+        for(const y of [.37,2.74])box(b.x,y,z+side*.05,b.w,.13,.12,frame);
+        for(const offset of [-1.42,1.42]){
+          box(b.x+offset,1.56,z+side*.07,.11,2.12,.11,frame);
+          const brace=box(b.x+offset*2.05,1.55,z+side*.055,.13,2.58,.1,frame);
+          brace.rotation.z=offset<0?-.57:.57;
+        }
+        box(b.x+.91,1.39,z+side*.10,.23,.1,.10,frame);
+        box(b.x-3.62,1.91,z+side*.064,.86,.36,.023,material('#312f29')).castShadow=false;
+      }
+      box(b.x,2.87,b.z,b.w+.16,.19,b.d+.17,frame);
+      for(const side of [-1,1])box(b.x+side*(b.w/2+.09),.64,b.z,.25,.23,.22,frame);
       for(const x of [-4.8,4.8])box(b.x+x,b.y,b.z+b.d/2+.05,.1,b.h,.08,steel);
     }
   }
@@ -119,12 +184,124 @@ export function createMapDetails(scene:T.Scene,world:World,get:(color:string)=>T
   const terrain=island||war?createBattleTerrain(world,get(island?'#718a48':'#77766b'),get('#d0b37c')):undefined;
   if(terrain)root.add(terrain.mesh);
   if(island){
-    ocean=createRiver(scene,1000,1000,-3.4);
-    // Distant rock islands and buoys remain outside the playable square.
-    for(let i=0;i<10;i++){
-      const angle=i*Math.PI*2/10,r=150+(i%3)*18;
-      const rock=new T.Mesh(new T.DodecahedronGeometry(10+(i%3)*4,1),get('#818783'));rock.position.set(Math.cos(angle)*r,-1,Math.sin(angle)*r);rock.scale.y=.5+(i%2)*.4;root.add(rock);
+    ocean=createRiver(scene,1000,1000,-3.4,'#238f9d',[40,48],false);
+    const route=new T.CatmullRomCurve3(islandRoute.map(([x,z])=>new T.Vector3(x,0,z)));
+    const asphalt=material('#70695b',.04,.98),verge=material('#a7926d'),marking=material('#edd8a3');
+    const center=new T.Vector3(),tangent=new T.Vector3(),roadColor=new T.Color();
+    // Tyre wear is part of the road mesh, so even the sweeping bend needs
+    // just one material and no stacked transparent decals.
+    const offsets=[-2.65,-1.83,-.99,-.76,-.52,.52,.76,.99,1.83,2.65];
+    // Short terrain-following ribbons batch by cell and keep the path free of obstacles.
+    for(let section=0;section<12;section++){
+      const positions:number[]=[],indices:number[]=[],colors:number[]=[];
+
+      for(let i=0;i<=8;i++){
+        const progress=(section+i/8)/12;
+        route.getPointAt(progress,center);route.getTangentAt(progress,tangent);
+        for(const [col,offset] of offsets.entries()){
+          const x=center.x+tangent.z*offset,z=center.z-tangent.x*offset;
+          positions.push(x,terrainHeight(x,z,world)+.043,z);
+          const edge=col===0||col===offsets.length-1;
+          const wear=(col===3||col===6)?(.11+.10*Math.sin(progress*93)**2):0;
+          const mix=(1-wear)*(.96+.07*Math.sin(progress*119+offset*1.7)*Math.cos(progress*73+col*.61));
+          roadColor.copy(edge?verge.color:asphalt.color).multiplyScalar(mix).toArray(colors,colors.length);
+        }
+        if(i)for(let col=0;col<offsets.length-1;col++){
+          const a=(i-1)*offsets.length+col,b=a+offsets.length;
+          indices.push(a,b,a+1,a+1,b,b+1);
+        }
+      }
+      const surface=new T.BufferGeometry();
+      surface.setAttribute('position',new T.Float32BufferAttribute(positions,3));
+      surface.setAttribute('color',new T.Float32BufferAttribute(colors,3));
+      surface.setIndex(indices);surface.computeVertexNormals();
+      const road=material('#ffffff',.03,1);road.vertexColors=true;road.side=T.DoubleSide;applySurfaceFinish(road,false);
+      const strip=new T.Mesh(surface,road);strip.receiveShadow=true;root.add(strip);
     }
+    for(let i=0;i<=32;i++){
+      const progress=i/32;
+      route.getPointAt(progress,center);route.getTangentAt(progress,tangent);
+      const stripe=box(center.x,terrainHeight(center.x,center.z,world)+.07,center.z,.09,.018,.95,marking);
+      stripe.rotation.y=Math.atan2(tangent.x,tangent.z);stripe.castShadow=false;
+    }
+    {
+      const chalk=material('#efcc78',0,1),white=material('#f2e8d3',0,1);
+      for(const [index,[x,z]] of islandRoute.slice(1).entries()){
+        const y=terrainHeight(x,z,world),gate={x,y:y+.057,z};
+        const [previousX,previousZ]=islandRoute[index],[nextX,nextZ]=islandRoute[Math.min(index+2,islandRoute.length-1)];
+        const angle=Math.atan2(nextX-previousX,nextZ-previousZ);
+        const acrossX=Math.cos(angle),acrossZ=-Math.sin(angle);
+        for(const side of [-1,1])
+          {
+            const mark=box(gate.x+side*islandCourseRadius*acrossX,gate.y+.021,gate.z+side*islandCourseRadius*acrossZ,.14,.018,1.06,chalk);
+            mark.rotation.y=angle;mark.castShadow=false;
+          }
+        for(let tile=-4;tile<=4;tile++)
+          {
+            const mark=box(gate.x+tile*.27*acrossX,gate.y+.021,gate.z+tile*.27*acrossZ,.21,.018,.27,(tile+index)%2===0?white:chalk);
+            mark.rotation.y=angle;mark.castShadow=false;
+          }
+      }
+    }
+    // Low vegetation in pockets along the path leaves the sightline down to
+    // the radar and the clearance of the vehicle route intact.
+    for(let i=0;i<25;i++){
+      route.getPointAt((i+.5)/25,center);route.getTangentAt((i+.5)/25,tangent);
+      for(const side of [-1,1]){
+        const offset=side*(3.4+(i%3)*.52),x=center.x+tangent.z*offset,z=center.z-tangent.x*offset;
+        if(Math.abs(z-islandUnderpass.z)<4)continue;
+        const inBend=z>32&&z<55;
+        const bush=new T.Mesh(new T.IcosahedronGeometry(.55+(i%4)*.10,1),material(i%2?'#496c42':'#63814b'));
+        const height=inBend?.63+(i%4)*.25:.62;
+        bush.position.set(x,terrainHeight(x,z,world)+height*.38,z);
+        bush.rotation.y=i*2.4;bush.scale.set(1,height,1.27);
+        root.add(bush);
+      }
+    }
+    const cliffMaterial=material('#ffffff');cliffMaterial.vertexColors=true;
+    const headlands=[
+      [176,-70,36,34,21], [153,-109,24,23,16], [123,-145,18,15,13],
+      [-151,-109,33,28,18], [-183,-64,39,44,24], [-165,54,26,19,18],
+      [-85,163,33,32,25], [133,146,32,39,23], [163,112,19,18,14],
+    ];
+    for(const [i,[x,z,width,height,depth]] of headlands.entries()){
+      const cliff=new T.Mesh(coastalHeadland(i*1.7),cliffMaterial);
+      cliff.position.set(x,-4,z);cliff.scale.set(width,height,depth);
+      cliff.rotation.y=i*.87;root.add(cliff);
+    }
+    // The lighthouse sits on the tallest western headland, above the sea haze.
+    const beaconX=-183,beaconZ=-64,base=42;
+    for(let band=0;band<4;band++)
+      cylinder(beaconX,base+2+band*4,beaconZ,2.8-band*.29,4.05,material(band%2?'#b95c48':'#eee6ca'),20);
+    cylinder(beaconX,base+16.2,beaconZ,2.5,.45,steel,20);
+    cylinder(beaconX,base+17.2,beaconZ,1.55,1.65,material('#ffe5ad',.2,.25),16);
+    cylinder(beaconX,base+18.3,beaconZ,2.1,.55,steel,20);
+
+    // Each tuft shares one bent-leaf mesh. Place patches in grass beside the
+    // sand paths, keeping the road surface and the interiors clear.
+    const blades:number[]=[];
+    for(let blade=0;blade<10;blade++){
+      const angle=blade*2.4,r=.22*Math.sqrt(blade/10),x=r*Math.cos(angle),z=r*Math.sin(angle);
+      const dx=.026*Math.sin(angle),dz=-.026*Math.cos(angle),h=.18+.12*(blade%3);
+      const midX=x*1.25,midZ=z*1.25;
+      blades.push(x-dx,0,z-dz,x+dx,0,z+dz,midX-dx,h*.58,midZ-dz,
+        x+dx,0,z+dz,midX+dx,h*.58,midZ+dz,midX-dx,h*.58,midZ-dz,
+        midX-dx,h*.58,midZ-dz,midX+dx,h*.58,midZ+dz,x*1.8,h,z*1.8);
+    }
+    const tuft=new T.BufferGeometry();tuft.setAttribute('position',new T.Float32BufferAttribute(blades,3));tuft.computeVertexNormals();
+    const greenery=material('#ffffff',0,.99);greenery.side=T.DoubleSide;
+    const grass=new T.InstancedMesh(tuft,greenery,1600),pose=new T.Object3D(),tint=new T.Color();
+    let count=0;
+    const fraction=(n:number)=>n-Math.floor(n);
+    for(let n=0;n<1600;n++){
+      const x=(fraction(Math.sin(n*17.13+1)*43758.5)-.5)*206,z=(fraction(Math.sin(n*79.2+3)*31843.7)-.5)*206;
+      const road=Math.min(Math.abs(x),Math.abs(z),Math.abs(Math.abs(x)-43));
+      if(road<4.4||nearIslandRoute(x,z,3)||Math.hypot(x,z)>100||world.buildings.some(b=>Math.abs(b.x-x)<b.w/2+.5&&Math.abs(b.z-z)<b.d/2+.5))continue;
+      pose.position.set(x,terrainHeight(x,z,world)-.018,z);pose.rotation.y=n*2.4;
+      pose.scale.setScalar(.65+fraction(n*.618)*.7);pose.updateMatrix();
+      grass.setMatrixAt(count,pose.matrix);grass.setColorAt(count++,tint.set(n%3?'#719448':'#a3ae59'));
+    }
+    grass.count=count;grass.receiveShadow=true;root.add(grass);
     for(let i=0;i<80;i++){
       const x=Math.sin(i*29.13)*69,z=Math.cos(i*17.71)*69;
       if(Math.abs(x)<9||Math.abs(z)<7||world.boxes.some(b=>Math.abs(x-b.x)<b.w/2+2&&Math.abs(z-b.z)<b.d/2+2))continue;
@@ -132,6 +309,69 @@ export function createMapDetails(scene:T.Scene,world:World,get:(color:string)=>T
     }
   }
   if(war){
+    // Workers' terraces and pitched roofs extend the freight yard
+    // beyond the walking boundary. The foreground tracks lead into the town.
+    const masonry=material('#876f60'),slate=material('#4e5759'),window=material('#434846');
+    for(const side of [-1,1])for(let block=0;block<12;block++){
+      const x=(block-5.5)*22,z=side*(142+(block%3)*4),h=8+(block*7%5)*1.25;
+      box(x,h/2-.5,z,20,h+1,14,masonry);
+      const shape=new T.Shape();
+      shape.moveTo(-10.5,0);shape.lineTo(0,3.3);shape.lineTo(10.5,0);shape.closePath();
+      const roof=new T.Mesh(new T.ExtrudeGeometry(shape,{depth:15,bevelEnabled:false}),slate);
+      roof.position.set(x,h,z-7.5);root.add(roof);
+      box(x+6,h+2,z-2,1.2,4.6,1.3,masonry);
+      for(let n=0;n<5;n++)for(let floor=0;floor<3;floor++)
+        box(x-8+n*4,1.5+floor*3,z-side*7.04,1.35,1.85,.12,window);
+    }
+    const station=world.buildings.find(b=>b.name==='GÜTERBAHNHOF');
+    if(station){
+      const brick=material('#7b4737',.02,.9),iron=material('#384242',.66,.56);
+      const roof=material('#466360',.45,.6),lamp=material('#f3d794',.10,.45);
+      const {x,z,w,d}=station,front=z+d/2;
+      // The canopy is above head height. Its wall brackets leave both doors
+      // and the full length of the freight quay open to the player.
+      box(x,3.32,front+1.14,w+.38,.15,2.65,roof);
+      box(x,3.27,front+2.43,w+.43,.23,.13,iron);
+      for(const offset of [-7,-3.6,3.6,7]){
+        box(x+offset,2.87,front+.32,.24,.98,.18,brick);
+        const brace=box(x+offset,3.02,front+1.05,.12,.11,1.69,iron);
+        brace.rotation.x=.32;
+        box(x+offset,3.13,front+1.26,.24,.15,.35,lamp).castShadow=false;
+      }
+      applySurfaceFinish(brick,true);
+      const worn=material('#837564',.03,.98),yardTimber=material('#63503b',.02,.92);
+      for(let row=0;row<4;row++){
+        for(let column=0;column<7;column++){
+          const offset=2.25+column*.55+(row%2)*.25;
+          const patch=box(x-offset,.47+row*.21,front+.245,.51,.17,.025,row%3===0?worn:brick);
+          patch.castShadow=false;
+        }
+      }
+      for(let plank=0;plank<12;plank++){
+        const height=.025+plank*.005;
+        box(52.8+plank*.12,height/2,-24.2,.119,height,1.35,yardTimber).castShadow=false;
+      }
+      for(const offset of [2.7,3.5,4.4]){
+        box(x+offset,.026,front+2.70,.47,.047,.061,worn).castShadow=false;
+      }
+      for(const rail of [-.72,.72])box(61,.035,-22+rail,30,.065,.075,iron);
+      for(let tie=0;tie<22;tie++)box(46+tie*1.35,.017,-22,.17,.031,2.1,get('#67513d'));
+      // A raised loading shutter rides inside the existing doorway lintel.
+      for(let slat=0;slat<6;slat++)
+        box(x,2.85+slat*.065,front+.149,3.8,.058,.12,iron);
+      for(const side of [-1,1])box(x+side*1.96,1.45,front+.12,.085,2.9,.16,iron);
+      // Signal mast and raised freight doors sit against the existing facade.
+      const signal=cylinder(x+12,1.72,front+2.83,.08,3.4,iron,10);
+      signal.castShadow=false;
+      box(x+12,3.42,front+2.83,.46,.56,.22,iron);
+      box(x+12,3.42,front+2.97,.19,.19,.075,material('#96453a')).castShadow=false;
+      for(const side of [-1,1]){
+        box(x+side*5.3,.044,front+1.21,6.4,.08,2.75,get('#9d8b75'));
+        box(x+side*5.3,.085,front+2.56,6.35,.018,.095,brick);
+        for(let joint=0;joint<8;joint++)
+          box(x+side*5.3-2.8+joint*.8,.086,front+1.21,.024,.015,2.68,iron).castShadow=false;
+      }
+    }
     // Twin rail lines, sleepers and broken paving give the courtyard a clear use.
     for(const z of [-12,12]){
       for(const offset of [-.8,.8])box(0,.055,z+offset,234,.11,.09,steel);
@@ -163,6 +403,6 @@ export function createMapDetails(scene:T.Scene,world:World,get:(color:string)=>T
   }
   // Low kerbs establish street edges without introducing invisible collisions.
   if(!island)for(const b of world.buildings)for(const side of [-1,1])box(b.x,.055,b.z+side*(b.d/2+1.6),b.w+1,.11,.35,get('#9d8b75'));
-  batchStaticMeshes(root,new Set());
-  return {update(seconds:number){ocean?.update(seconds);},dispose(){terrain?.dispose();colors.forEach(m=>m.dispose());}};
+  batchStaticMeshes(root,new Set(),64,island?new Set(colors.values()):undefined);
+  return {update(seconds:number){ocean?.update(seconds);if(radarRotor)radarRotor.rotation.y=seconds*.25;},dispose(){terrain?.dispose();colors.forEach(m=>m.dispose());}};
 }

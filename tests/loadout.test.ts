@@ -9,13 +9,13 @@ import {createGermanWeapon} from '../client/germanWeaponModels';
 import {parseSettings,defaultSettings} from '../client/gameSettings';
 
 function match(loadout:Loadout){
-  const game=new Game('LOAD05'),a=game.add('a','A'),b=game.add('b','B');
+  const game=new Game('LOAD05',600000,'storm'),a=game.add('a','A'),b=game.add('b','B');
   assert.equal(game.selectLoadout(a.id,loadout),true);
   game.ready(a.id,true,1000);game.ready(b.id,true,1000);game.tick(4000);
   return {game,a,b};
 }
 test('loadouts require five unique selectable weapons and character-compatible saw',()=>{
-  assert.equal(historicalWeaponIds.length,10);assert.ok(historicalWeaponIds.every(id=>id!==3&&id!==4));
+  assert.equal(historicalWeaponIds.length,11);assert.ok(historicalWeaponIds.every(id=>id!==3&&id!==4));
   for(const value of [null,[],[0,1,2,7],[0,1,2,7,8,9],[0,0,1,2,7],[0,1,2,5,6],[0,1,2,7,99],[0,1,2,7,'8'],[0,1,2,7,7.5]])assert.equal(validLoadout(value),false);
   assert.equal(validLoadout([7,8,9,10,11]),true);
   assert.equal(validLoadout([4,1,2,7,8],'de-field'),false);
@@ -52,7 +52,7 @@ test('five chosen weapons survive round start and respawn; unselected switches a
   a.ammo=2;a.hp=0;a.respawnAt=4100;game.tick(4100);assert.equal(a.weapon,7);assert.equal(a.ammo,weapons[7].mag);assert.equal(a.ammoByWeapon[9],100);assert.equal(a.ammoByWeapon[12],100);assert.deepEqual(a.loadout,[7,8,9,10,11]);
 });
 test('new weapon inputs, cadence, magazine accounting and reload use the selected catalog',()=>{
-  for(const id of [7,8,9,10,11,12,13] as WeaponId[]){
+  for(const id of [7,8,9,10,11,12,13,16] as WeaponId[]){
     const selection=[id,...historicalWeaponIds.filter(w=>w!==id).slice(0,4)] as Loadout;
     const {game,a}=match(selection);assert.equal(validInput({...neutral(1),weapon:id}),true);
     game.shoot(a,{...neutral(1),weapon:id},4000);assert.equal(a.ammo,weapons[id].mag-1);assert.equal(a.fireAt,4000+weapons[id].interval);assert.equal(game.state.events.find(e=>e.type==='shot')?.weapon,id);
@@ -68,11 +68,12 @@ test('Leatherface can select firearms, while saw use remains tied to its equippe
   assert.equal(a.weapon,7);game.state.phase='playing';game.input(a.id,{...neutral(1),weapon:11});game.tick(4033);assert.equal(a.weapon,11);
   assert.equal(weaponSlot(a.loadout,4),12);
 });
-test('changing maps preserves the chosen character and five weapons',()=>{
-  const game=new Game('MAP005'),a=game.add('a','A');
+test('changing themes replaces an Island-only character and loadout',()=>{
+  const game=new Game('MAP005',600000,'storm'),a=game.add('a','A');
   game.selectUniform(a.id,'leatherface');game.selectLoadout(a.id,[4,7,8,9,11]);
-  assert.equal(game.selectMap(a.id,'storm'),true);
-  assert.equal(a.uniform,'leatherface');assert.deepEqual(a.loadout,[4,7,8,9,11]);assert.equal(a.weapon,4);assert.equal(a.ammo,1);
+  assert.equal(game.selectMap(a.id,'frontline'),true);
+  assert.equal(a.uniform,'de-panzer');assert.deepEqual(a.loadout,defaultLoadout);assert.equal(a.weapon,0);
+  assert.equal(game.selectLoadout(a.id,[3,7,8,9,11]),false);
 });
 test('every new weapon has finite, distinct geometry and a muzzle outside its bounds origin',()=>{
   const signatures=new Set<string>();

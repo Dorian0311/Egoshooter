@@ -1,3 +1,4 @@
+import {islandRoute} from './islandRoute';
 import {nearbyBoxes} from './boxIndex';
 import {ground,withinPlayArea,type World} from './world';
 
@@ -16,21 +17,21 @@ export type CarCourse={
 };
 
 export function createCarCourse(world:World,cars:RemoteCar[]):CarCourse|undefined{
-  const [spawnX,spawnZ]=world.spawns.de[0];
-  const car=cars.reduce<RemoteCar|undefined>((closest,candidate)=>{
-    const distance=(point:RemoteCar)=>Math.hypot(point.x-spawnX,point.z-spawnZ);
-    return !closest||distance(candidate)<distance(closest)?candidate:closest;
-  },undefined);
+  if(world.id!=='storm')return undefined;
+  const depot=world.buildings.findIndex(building=>building.name==='KÜSTENDEPOT');
+  const car=cars.find(candidate=>candidate.id===`car:${depot}`);
   if(!car)return undefined;
-  const building=world.buildings[cars.indexOf(car)];
-  const gates=[-2.4,-5, -building.d/2-.65,-building.d/2+2.8].map(offset=>{
-    const z=car.z+offset;
-    return {x:car.x,y:ground(car.x,z,world),z};
-  });
+  const gates=islandRoute.slice(1).map(([x,z])=>({x,y:ground(x,z,world),z}));
   return {carId:car.id,gates,next:0,startedAt:0};
 }
 
+export function parkTrainingCar(car:RemoteCar,world:World){
+  const [x,z]=islandRoute[0],[nextX,nextZ]=islandRoute[1];
+  Object.assign(car,{x,z,y:ground(x,z,world),yaw:Math.atan2(x-nextX,z-nextZ),speed:0});
+}
+
 export function parkedCars(world:World):RemoteCar[]{
+  if(world.id!=='storm')return [];
   return world.buildings.map((building,index)=>({
     id:`car:${index}`,x:building.x,y:ground(building.x,building.z,world),z:building.z,
     yaw:0,speed:0,

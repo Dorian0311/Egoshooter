@@ -47,3 +47,25 @@ test('the same sustained mouse turn has the same sway at every refresh rate',()=
  }
  for(const position of positions)for(const axis of [0,1])assert.ok(Math.abs(position[axis]-positions[0][axis])<1e-8);
 });
+
+test('aim immediately raises the sprinting weapon and retraces a continuous path on release',()=>{
+ for(const rate of [30,60,144]){
+  const parent=new Group(),vm=createViewmodel(parent);
+  const run={...input,dt:1/rate,moving:1,sprinting:true};
+  for(let i=0;i<rate;i++)vm.update(run);
+  assert.ok(parent.position.y<-.025 && parent.rotation.z<-.1);
+  const previous=parent.position.clone();
+  let lastAim=0;
+  for(let i=0;i<Math.ceil(rate*.28);i++){
+   // The simulation can still report sprint for the first movement tick.
+   const pose=vm.update({...run,aim:true,sprinting:i===0});
+   assert.ok(pose.aimBlend>lastAim && pose.aimBlend<=1);
+   assert.ok(parent.position.distanceTo(previous)<4/rate);
+   lastAim=pose.aimBlend;previous.copy(parent.position);
+  }
+  assert.ok(lastAim>.98);
+  for(let i=0;i<rate;i++)vm.update(run);
+  assert.ok(parent.rotation.z<-.1);
+  vm.reset();assert.equal(vm.update({...input,dt:0}).aimBlend,0);
+ }
+});

@@ -8,6 +8,25 @@ import {instanceStaticModel,batchStaticMeshes} from '../client/scenery';
 import {getWorld} from '../shared/world';
 import {initialInteriors,interiorFixtures} from '../shared/interiors';
 
+test('opaque colour variants batch without losing surface colours or shadow flags',()=>{
+ const root=new T.Group();
+ const green=new T.MeshStandardMaterial({color:'#376940'}),sand=new T.MeshStandardMaterial({color:'#d6ba75'});
+ for(const material of [green,sand]){
+  const mesh=new T.Mesh(new T.BoxGeometry(),material);
+  mesh.position.x=root.children.length*2;mesh.castShadow=true;mesh.receiveShadow=true;root.add(mesh);
+ }
+ batchStaticMeshes(root,new Set(),16,new Set([green,sand]));
+ assert.equal(root.children.length,1);
+ const batch=root.children[0] as T.Mesh<T.BufferGeometry,T.MeshStandardMaterial>;
+ assert.ok(batch.material.vertexColors&&batch.castShadow&&batch.receiveShadow);
+ const colors=batch.geometry.getAttribute('color'),color=new T.Color();
+ for(const [index,expected] of [[0,green],[24,sand]] as const){
+  color.fromBufferAttribute(colors,index);
+  assert.ok(Math.abs(color.r-expected.color.r)<1e-6&&Math.abs(color.g-expected.color.g)<1e-6&&Math.abs(color.b-expected.color.b)<1e-6);
+ }
+ batch.geometry.dispose();batch.material.dispose();green.dispose();sand.dispose();
+});
+
 test('room lights keep two stable world slots without adding per-pixel lights to the viewmodel',()=>{
  const root=new T.Group(),pool=createInteriorLighting(root,[{x:0,y:3,z:0,building:0},{x:0,y:7,z:0,building:0},{x:50,y:3,z:0,building:1}]);
  const state={doors:{},lights:{'light-0':true,'light-1':true},broken:[]},ids=pool.lights.map(l=>l.uuid);
@@ -32,8 +51,12 @@ test('viewmodel uses its own scene/cache while retaining camera transforms, envi
  assert.equal(copy.shadow,sun.shadow);assert.equal(viewmodel.scene.children.filter(o=>o instanceof T.PointLight).length,0);
  sun.intensity=.25;sun.position.set(2,3,4);sky.intensity=.15;viewmodel.sync();viewmodel.scene.updateMatrixWorld(true);
  assert.equal(copy.intensity,.25);assert.ok(copy.getWorldPosition(new T.Vector3()).equals(sun.position));
+ const bounce=camera.getObjectByName('first-person-sky-bounce') as T.DirectionalLight;
+ assert.ok(bounce.layers.test(weaponCamera.layers)&&bounce.intensity>0);
+ sky.intensity=.6;viewmodel.sync();assert.ok(bounce.intensity>.3);
+ sky.visible=false;viewmodel.sync();assert.equal(bounce.intensity,0);
  assert.equal(viewmodel.scene.environment,environment);assert.deepEqual(weapon.getWorldPosition(new T.Vector3()).toArray(),[4.2,1.4000000000000001,4.5]);
- viewmodel.dispose();assert.equal(camera.parent,world);assert.equal(viewmodel.scene.children.length,0);environment.dispose();
+ viewmodel.dispose();assert.equal(camera.parent,world);assert.equal(bounce.parent,null);assert.equal(viewmodel.scene.children.length,0);environment.dispose();
 });
 
 test('nearest light slots support upper floors and empty worlds without adding shader variants',()=>{

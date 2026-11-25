@@ -8,6 +8,17 @@ import {batchWeaponMeshes} from './batchWeaponMeshes';
 import {createViewmodelArms} from './viewmodelArms';
 import {prepareRealisticWeapon,realisticWeapons,realisticWeaponUrl,type RealisticWeapon} from './realisticWeapons';
 
+// The shared hand asset is authored around the G36. Seat both the
+// hand and cuff on the contact points of each replacement mesh.
+const sharedGripOffsets:Partial<Record<string,readonly [number,number,number,number]>>={
+  // Rear grip (y,z), fore-end (y,z), relative to the shared pose.
+  stg44:[-.012,-.062,-.030,-.105],gewehr43:[.038,-.085,-.033,-.052],
+  mg42:[-.016,-.079,-.025,-.054],mp34:[.021,-.088,-.034,-.110],
+  p38:[-.010,-.085,0,0],fg42:[-.009,-.078,-.031,-.095],
+  'gewehr43-zf4':[.038,-.085,-.033,-.052],
+  'kar98k-zf39':[.024,-.087,-.037,-.063],
+};
+
 /** Authored at real scale. The exported muzzle socket stays with the moving weapon. */
 export function createWeaponModels(parent:T.Group,warmup?:(model:T.Group)=>Promise<unknown>) {
   const models=new Map<string,T.Group>();
@@ -16,8 +27,11 @@ export function createWeaponModels(parent:T.Group,warmup?:(model:T.Group)=>Promi
   let disposed=false, active:T.Group|undefined;
   const root=new T.Group(); parent.add(root);
   const muzzle=new T.Object3D(); root.add(muzzle);
-  type MovingPart={object:T.Object3D;rest:T.Vector3;kind:'support'|'magazine'};
-  const movingParts=new Map<T.Group,MovingPart[]>();
+  type MovingPart={object:T.Object3D;rest:T.Vector3;reach:T.Vector3;travel:T.Vector3;stowed?:T.Vector3};
+  type ReloadParts={support:MovingPart[];magazine?:MovingPart;action:MovingPart[]};
+  const actionName=/^(?:Gun_bolt_01|Magazine|P38_Mag_Mesh|Low_Magazin|mp34-magazine-assembly|mp34-bolt|bolt-handle|Bolt|g36[_ ]charging[_ ]handle|g36[_ ]30rd[_ ]magazine)$/i;
+  const magazineName=/mag(?:azine|azin|_Mesh)/i;
+  const movingParts=new Map<T.Group,ReloadParts>();
   const arms=new Map<T.Group,ReturnType<typeof createViewmodelArms>>();
   function release(object:T.Object3D){const geometries=new Set<T.BufferGeometry>(),materials=new Set<T.Material>(),textures=new Set<T.Texture>();object.traverse(o=>{if(o instanceof T.Mesh){geometries.add(o.geometry);for(const m of Array.isArray(o.material)?o.material:[o.material])materials.add(m);}});for(const m of materials){for(const value of Object.values(m))if(value instanceof T.Texture)textures.add(value);m.dispose();}geometries.forEach(g=>g.dispose());textures.forEach(t=>t.dispose());}
   async function load(name:string){
@@ -59,6 +73,13 @@ export function createWeaponModels(parent:T.Group,warmup?:(model:T.Group)=>Promi
       }
       if(name==='g36'){gltf.scene.rotation.y=-Math.PI/2;gltf.scene.position.set(0,.06,.75);}
       const model=new T.Group();model.add(gltf.scene);if(hands)model.add(hands);if(textured)model.add(textured);
+      const offsets=sharedGripOffsets[name];
+      if(offsets)for(const [side,slot] of [['r',0],['l',2]] as const){
+        for(const prefix of ['hand-','view-sleeve-']){
+          const part=model.getObjectByName(prefix+side);
+          if(part){part.position.y+=offsets[slot];part.position.z+=offsets[slot+1];}
+        }
+      }
       applyHandMaterials(model,name==='g36'?0x42473a:name==='kar98k'||name==='mp40'?0x292d30:0x62624b);
       const replacement=new Map<T.Material,T.Material>();
       model.traverse(o=>{if(!(o instanceof T.Mesh))return;o.castShadow=true;o.receiveShadow=true;if(o.geometry.getAttribute('_aedge'))o.geometry.setAttribute('aEdge',o.geometry.getAttribute('_aedge'));
@@ -71,7 +92,7 @@ export function createWeaponModels(parent:T.Group,warmup?:(model:T.Group)=>Promi
               detailStrength:metal?.10:.16,bump:.008,bumpScale:240,name:m.name};
           }
           if(!params)return m;
-          let result=replacement.get(m);if(!result){result=surface(params);replacement.set(m,result);}return result;
+          let result=replacement.get(m);if(!result){result=surface(params);if(m instanceof T.MeshStandardMaterial)result.vertexColors=m.vertexColors;replacement.set(m,result);}return result;
         };
         o.material=Array.isArray(o.material)?o.material.map(convert):convert(o.material);
       });
@@ -86,6 +107,22 @@ export function createWeaponModels(parent:T.Group,warmup?:(model:T.Group)=>Promi
         }
         positions.needsUpdate=true;o.geometry.computeVertexNormals();
       });
+      if(name==='kar98k'||name==='kar98k-zf39'){
+        const strap=new T.Mesh(new T.PlaneGeometry(.025,.025,1,24),new T.MeshStandardMaterial({
+          color:'#53402d',roughness:.91,side:T.DoubleSide,
+        }));
+        const vertices=strap.geometry.getAttribute('position');
+        for(let i=0;i<vertices.count;i++){
+          const fraction=.5-vertices.getY(i)/.025;
+          vertices.setXYZ(i,-.025-.018*Math.sin(Math.PI*fraction),-.069-.12*Math.sin(Math.PI*fraction)+vertices.getX(i),-.23+.72*fraction);
+        }
+        strap.geometry.computeVertexNormals();
+        model.add(strap);
+      }
+      const mechanisms:T.Object3D[]=[];
+      model.traverse(object=>{
+        if(actionName.test(object.name)){object.userData.viewmodelMovingPart=true;mechanisms.push(object);}
+      });
       model.userData.batching=batchWeaponMeshes(model);
       model.traverse(object=>{object.layers.mask=parent.layers.mask;});
       model.rotation.y=Math.PI;model.position.set(.24,-.23,-.4);
@@ -93,12 +130,41 @@ export function createWeaponModels(parent:T.Group,warmup?:(model:T.Group)=>Promi
       model.userData.muzzle=textured?.userData.muzzle??authored?.userData.muzzle??(name==='g36'?[0,.06,.75]:[0,.06,.8]);
       model.userData.sightY=textured?.userData.sightY??(name in realisticWeapons?realisticWeapons[name as RealisticWeapon].top:name==='g36'?.15:model.userData.muzzle[1]+.05);
       arms.set(model,createViewmodelArms(model));
-      const parts:MovingPart[]=[];
-      model.traverse(object=>{
-        if(object.name==='hand-l'||object.name==='view-sleeve-l')parts.push({object,rest:object.position.clone(),kind:'support'});
-        if(name==='g36'&&/g36[_ ]30rd[_ ]magazine/.test(object.name))parts.push({object,rest:object.position.clone(),kind:'magazine'});
+      model.updateWorldMatrix(true,true);
+      const magazine=mechanisms.find(object=>magazineName.test(object.name));
+      const grip=model.getObjectByName('hand-l');
+      const reach=new T.Vector3(),withdrawal=new T.Vector3(0,-.13,0);
+      if(name==='fg42'||name==='mp34')withdrawal.set(name==='fg42'?-.13:.13,0,0);
+      if(magazine&&grip){
+        const bounds=new T.Box3().setFromObject(magazine);
+        if(!bounds.isEmpty()){
+          const contact=model.worldToLocal(bounds.getCenter(new T.Vector3()));
+          contact.x+=name==='mp34'?.035:-.025;
+          contact.y-=.022;
+          reach.copy(contact).sub(model.worldToLocal(grip.getWorldPosition(new T.Vector3())));
+        }
+      }
+      function part(object:T.Object3D,reach:T.Vector3,travel:T.Vector3):MovingPart{
+        const parent=object.parent!;
+        const origin=parent.worldToLocal(model.localToWorld(new T.Vector3()));
+        const toParent=(vector:T.Vector3)=>parent.worldToLocal(model.localToWorld(vector.clone())).sub(origin);
+        return {object,rest:object.position.clone(),reach:toParent(reach),travel:toParent(travel),
+          stowed:object.visible?undefined:toParent(new T.Vector3(0,-.42,-.10))};
+      }
+      const support:MovingPart[]=[];
+      for(const id of ['hand-l','view-sleeve-l']){
+        const object=model.getObjectByName(id);
+        if(object&&(object.visible||magazine))support.push(part(object,reach,magazine?withdrawal:new T.Vector3(0,-.085,-.045)));
+      }
+      movingParts.set(model,{
+        support,
+        magazine:magazine&&part(magazine,new T.Vector3(),withdrawal),
+        action:mechanisms.filter(object=>object!==magazine).filter(object=>{
+          for(let parent=object.parent;parent&&parent!==model;parent=parent.parent)
+            if(mechanisms.includes(parent))return false;
+          return true;
+        }).map(object=>part(object,new T.Vector3(),new T.Vector3(0,0,-.055))),
       });
-      movingParts.set(model,parts);
       try{await warmup?.(model);}catch(error){console.warn('Weapon shader warmup unavailable',error);}
       if(disposed){release(model);return;}
       models.set(name,model);
@@ -130,10 +196,23 @@ export function createWeaponModels(parent:T.Group,warmup?:(model:T.Group)=>Promi
     /** Pass zero outside reload; normalized server-timed progress during reload. */
     animatePose(progress:number,aimBlend=0){
       if(!active)return;
-      const blend=reloadEnvelope(progress);
-      for(const part of movingParts.get(active)??[]){
-        part.object.position.copy(part.rest);
-        part.object.position.y-=blend*(part.kind==='magazine'?.19:.16);
+      const parts=movingParts.get(active);
+      if(parts){
+        const ease=(from:number,to:number)=>T.MathUtils.smoothstep(progress,from,to);
+        const grasp=ease(.05,.25)*(1-ease(.73,.92));
+        const extraction=ease(.25,.46)*(1-ease(.55,.73));
+        const cycle=ease(.72,.82)*(1-ease(.82,.95));
+        for(const part of parts.support){
+          part.object.position.copy(part.rest).addScaledVector(part.reach,grasp)
+            .addScaledVector(part.travel,parts.magazine?extraction:reloadEnvelope(progress));
+          if(part.stowed){
+            part.object.visible=grasp>0;
+            part.object.position.addScaledVector(part.stowed,1-grasp);
+          }
+        }
+        const magazine=parts.magazine;
+        if(magazine)magazine.object.position.copy(magazine.rest).addScaledVector(magazine.travel,extraction);
+        for(const part of parts.action)part.object.position.copy(part.rest).addScaledVector(part.travel,cycle);
       }
       arms.get(active)?.update(aimBlend);
     },

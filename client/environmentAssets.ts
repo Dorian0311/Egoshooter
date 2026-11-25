@@ -1,8 +1,10 @@
 import * as T from 'three';
 import {GLTFLoader} from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type {World} from '../shared/world';
+import {nearIslandRoute} from '../shared/islandRoute';
 import {terrainHeight} from '../shared/terrain';
 import {instanceStaticModel} from './scenery';
+import type {GraphicsQuality} from './graphicsSettings';
 import {applySurfaceFinish} from './surfaceFinish';
 
 function disposeSource(root:T.Object3D){
@@ -16,6 +18,14 @@ function disposeSource(root:T.Object3D){
  * Entrances, side firing windows, doors, stairs and their collision stay open. */
 export function loadEnvironmentUpgrade(scene:T.Scene,world:World,renderer:T.WebGLRenderer){
  const loader=new GLTFLoader(),sources:T.Group[]=[],root=new T.Group();root.name='imported-environment';root.matrixAutoUpdate=false;scene.add(root);let disposed=false;
+ const distantDetails:T.InstancedMesh[]=[];
+ const markDetails=(from:number)=>{
+  if(world.id!=='storm')return;
+  for(let i=from;i<root.children.length;i++){
+   const object=root.children[i];
+   if(object instanceof T.InstancedMesh)distantDetails.push(object);
+  }
+ };
  const anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());
  const configure=(model:T.Group,foliage=false)=>model.traverse(o=>{if(o instanceof T.Mesh)for(const material of Array.isArray(o.material)?o.material:[o.material]){
   for(const texture of Object.values(material))if(texture instanceof T.Texture)texture.anisotropy=anisotropy;
@@ -23,9 +33,10 @@ export function loadEnvironmentUpgrade(scene:T.Scene,world:World,renderer:T.WebG
   // Cutout leaves sort correctly across instances and cast leaf-shaped shadows.
   if(foliage&&material.transparent){material.transparent=false;material.alphaTest=.4;material.depthWrite=true;material.needsUpdate=true;}
  }});
+ const loading:Promise<unknown>[]=[];
  const packs=world.id==='storm'?['modular_factory_facade']:world.id==='frontline'?['modular_factory_facade','modular_urban_apartments_facade']:['modular_urban_apartments_facade'];
  for(const pack of packs){
-  void loader.loadAsync('/shooter/models/'+pack+'/runtime.gltf').then(({scene:model})=>{
+  loading.push(loader.loadAsync('/shooter/models/'+pack+'/runtime.gltf').then(({scene:model})=>{
    if(disposed){disposeSource(model);return;}sources.push(model);configure(model);
    const placements=new Map<string,T.Matrix4[]>();
    for(const [index,b]of world.buildings.entries()){
@@ -39,11 +50,13 @@ export function loadEnvironmentUpgrade(scene:T.Scene,world:World,renderer:T.WebG
    }
    // The solid building already casts its silhouette. Avoid rendering dense
    // facade dressing a second time into the shadow map; keep received shadows.
-   for(const [variant,matrices]of placements){const part=model.getObjectByName(variant);if(part)instanceStaticModel(root,part,matrices,false,32);}
-  }).catch(error=>console.warn('Facade detail unavailable:',pack,error));
+   const first=root.children.length;
+   for(const [variant,matrices]of placements){const part=model.getObjectByName(variant);if(part)instanceStaticModel(root,part,matrices,false,48);}
+   markDetails(first);
+  }).catch(error=>console.warn('Facade detail unavailable:',pack,error)));
  }
  if(world.id==='storm'||world.id==='frontline')for(const name of ['rock_moss_set_01','grass_medium_01','wild_rooibos_bush']){
-  void loader.loadAsync('/shooter/models/'+name+'/asset.gltf').then(({scene:model})=>{
+  loading.push(loader.loadAsync('/shooter/models/'+name+'/asset.gltf').then(({scene:model})=>{
    if(disposed){disposeSource(model);return;}sources.push(model);configure(model,name!=='rock_moss_set_01');
    // Use one authored clump/rock, not the whole catalogue arrangement.
    const choices:T.Mesh[]=[];model.updateMatrixWorld(true);model.traverse(o=>{if(o instanceof T.Mesh)choices.push(o);});
@@ -54,18 +67,32 @@ export function loadEnvironmentUpgrade(scene:T.Scene,world:World,renderer:T.WebG
    const sample=new T.Group();sample.add(clone);sample.updateMatrixWorld(true);
    const bounds=new T.Box3().setFromObject(sample),size=bounds.getSize(new T.Vector3()),placements:T.Matrix4[]=[];
    sample.position.set(-(bounds.min.x+bounds.max.x)/2,-bounds.min.y,-(bounds.min.z+bounds.max.z)/2);
-   const count=name==='grass_medium_01'?148:name==='wild_rooibos_bush'?42:10;
+   const count=name==='grass_medium_01'?(world.id==='storm'?64:148):name==='wild_rooibos_bush'?42:10;
    for(let n=0;n<count;n++){
     let x=Math.sin(n*27.31+4)*103,z=Math.cos(n*19.17+1)*103;
     if(name==='rock_moss_set_01'){const angle=n/count*Math.PI*2;x=Math.cos(angle)*125;z=Math.sin(angle)*125;}
-    else if(Math.hypot(x,z)>108||Math.abs(x)<8||Math.abs(z)<7||Math.abs(Math.abs(x)-43)<5||world.boxes.some(b=>Math.abs(x-b.x)<b.w/2+2&&Math.abs(z-b.z)<b.d/2+2))continue;
+    else if(world.id==='storm'&&nearIslandRoute(x,z,3)||Math.hypot(x,z)>108||Math.abs(x)<8||Math.abs(z)<7||Math.abs(Math.abs(x)-43)<5||world.boxes.some(b=>Math.abs(x-b.x)<b.w/2+2&&Math.abs(z-b.z)<b.d/2+2))continue;
     const height=name==='grass_medium_01'?.24+(n%3)*.10:name==='wild_rooibos_bush'?.85+(n%3)*.15:2.5+(n%3);
     if(world.id==='frontline'&&name==='rock_moss_set_01')continue;
     const placement=new T.Object3D(),scale=height/Math.max(.01,size.y);placement.scale.setScalar(scale);placement.rotation.y=n*2.39996;
     placement.position.set(x,terrainHeight(x,z,world),z);placement.updateMatrix();placements.push(placement.matrix.clone());
    }
-   if(placements.length){instanceStaticModel(root,sample,placements,true,32);if(name==='grass_medium_01'&&part instanceof T.Mesh)root.traverse(o=>{if(o instanceof T.InstancedMesh&&o.geometry===part.geometry)o.castShadow=false;});}
-  }).catch(error=>console.warn('Natural detail unavailable:',name,error));
+   if(placements.length){
+    const first=root.children.length;
+    instanceStaticModel(root,sample,placements,name==='rock_moss_set_01',48);
+    markDetails(first);
+   }
+  }).catch(error=>console.warn('Natural detail unavailable:',name,error)));
  }
- return ()=>{disposed=true;root.traverse(o=>{if(o instanceof T.InstancedMesh)o.dispose();});sources.forEach(disposeSource);root.removeFromParent();};
+ return {
+  ready:Promise.all(loading),
+  update(position:T.Vector3,quality:GraphicsQuality){
+   const limit=quality==='auto'||quality==='performance'?45:Infinity;
+   for(const item of distantDetails){
+    const bounds=item.boundingSphere;
+    if(bounds)item.visible=bounds.center.distanceToSquared(position)<(limit+bounds.radius)**2;
+   }
+  },
+  dispose(){disposed=true;root.traverse(o=>{if(o instanceof T.InstancedMesh)o.dispose();});sources.forEach(disposeSource);root.removeFromParent();},
+ };
 }

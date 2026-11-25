@@ -2,6 +2,7 @@ import * as T from 'three';
 import {createCombatBillboards} from './combatBillboards';
 
 const particleCapacity=96;
+type ImpactSurface='metal'|'wood'|'stone'|'earth';
 type Particle={
   position:T.Vector3;velocity:T.Vector3;size:number;life:number;total:number;
   color:T.Color;flash:boolean;fresh:boolean;
@@ -20,6 +21,7 @@ export function createMuzzleEffects(scene:T.Scene){
   const smokeBatch=createCombatBillboards(texture,particleCapacity,T.NormalBlending);
   group.add(flashBatch.mesh,smokeBatch.mesh);
   const colors=[0xfff1bc,0xff922e,0x969c99,0xfff3bd,0xffb957].map(color=>new T.Color(color));
+  const dust={wood:new T.Color('#b38a5b'),stone:new T.Color('#a7a8a0'),earth:new T.Color('#9b805c')};
   const free:Particle[]=Array.from({length:particleCapacity},()=>({
     position:new T.Vector3(),velocity:new T.Vector3(),size:0,life:0,total:0,
     color:colors[0],flash:false,fresh:false,
@@ -42,7 +44,7 @@ export function createMuzzleEffects(scene:T.Scene){
   }
   return {
     group,texture,
-    emit(position:T.Vector3,direction:T.Vector3,end?:T.Vector3,solidImpact=false){
+    emit(position:T.Vector3,direction:T.Vector3,end?:T.Vector3,surface?:ImpactSurface){
       const length=end?offset.subVectors(end,position).length():0;
       if(length>.08&&offset.dot(direction)>0){
         const beam=beams.find(entry=>entry.life<=0);
@@ -62,11 +64,12 @@ export function createMuzzleEffects(scene:T.Scene){
         p.velocity.copy(direction).multiplyScalar(flash?0:.5);
         p.velocity.x+=(Math.random()-.5)*.12;p.velocity.y+=.16;
       }
-      if(end&&solidImpact){
+      if(end&&surface){
         for(let n=0;n<3;n++){
-          const p=particle(true,n===0?.19:.085,n===0?.12:.18,colors[n===0?3:4]);
+          const spark=surface==='metal';
+          const p=particle(spark,spark?(n===0?.19:.085):.095+n*.025,spark?.13:.28+n*.04,spark?colors[n===0?3:4]:dust[surface]);
           p.position.copy(end).addScaledVector(direction,-.07);
-          p.velocity.set((n-1)*.8,n*.45,(1-n)*.6).addScaledVector(direction,-1.1);
+          p.velocity.set((n-1)*.8,n*.45+.18,(1-n)*.6).addScaledVector(direction,-1.1);
         }
       }
       light.position.copy(position);light.intensity=2.5;lightLife=.055;

@@ -11,9 +11,18 @@ export function furnitureFor(b:Building,index:number):Furnishing[]{
  const result:Furnishing[]=[];
  const add=(style:Furnishing['style'],x:number,y:number,z:number,w:number,h:number,d:number,label?:string)=>result.push({style,label,box:{x:b.x+x,y,z:b.z+z,w,h,d,kind:'interior'}});
  const theme=index%6;
+ if(b.name==='UNION-LICHTSPIELE'){
+  add('desk',-4,.55,4,2,1.1,1,'KINOKASSE');
+  for(const z of [-4,-1.7,.6,2.9])add('bench',3.9,.48,z,3.2,.96,.85);
+  return result;
+ }
  if(theme===0){add('stove',4,.55,-4,1.4,1.1,1.1);add('desk',3,.48,3,2.3,.96,1.3);add('cabinet',-4,1.1,-5,1.4,2.2,.7);}
  if(theme===1||theme===4){add('desk',4,.48,-3,2.8,.96,1.2);add('radio',4,1.17,-3,.9,.42,.6);add('cabinet',-4,1.1,4,1.8,2.2,.7);}
- if(theme===2){add('cabinet',4,1.1,-4,2,2.2,.8);add('bench',-4,.5,3,2.4,1,1.1);add('bed',3,.35,4,1.2,.7,2.3);}
+ if(b.name==='GÜTERBAHNHOF'){
+  add('cabinet',5,1.1,-4,2.1,2.2,.8);
+  add('desk',-4,.49,-2.6,3.2,.98,1.1,'WERKZEUG');
+  add('bench',4,.5,3.45,2.8,1,1.1);
+ }else if(theme===2){add('cabinet',4,1.1,-4,2,2.2,.8);add('bench',-4,.5,3,2.4,1,1.1);add('bed',3,.35,4,1.2,.7,2.3);}
  if(theme===3){add('desk',4,.75,-3,3,1.5,1.1,'FAHRKARTEN');add('bench',-4,.5,-4,2.6,1,1);add('bench',-4,.5,3,2.6,1,1);}
  if(theme===5){add('bed',-3,.35,-4,1.2,.7,2.3);add('bed',3,.35,4,1.2,.7,2.3);add('stove',4,.6,-4,1,1.2,1);}
  add('sandbags',b.upper?3.5:b.w/2-1.6,.55,b.upper?5.7:3.5,1.5,1.1,2.1);

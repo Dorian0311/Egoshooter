@@ -5,8 +5,8 @@ import {parseOperation} from '../shared/operationConfig';
 import {safePoints,walkable} from '../shared/operations';
 import {getWorld,mapIds} from '../shared/world';
 import {armCount,isCrawling} from '../shared/injuries';
-function start(mode='battle',kind='multiplayer'){
- const g=new Game('SOLOQA',600000,'cologne',()=>.5,{mode,kind});
+function start(mode='battle',kind='multiplayer',map:'storm'|'cologne'='cologne'){
+ const g=new Game('SOLOQA',600000,map,()=>.5,{mode,kind});
  g.add('a','Anna');if(kind!=='solo')g.add('b','Bruno');if(kind!=='multiplayer')g.operation.configureBots();
  for(const p of g.state.players)g.ready(p.id,true,1000);g.tick(4000);
  for(const p of g.operation.actors())p.protectedUntil=0;
@@ -47,8 +47,8 @@ test('Coop bot headshots deal difficulty-scaled damage and leave full-health pla
   assert.equal(target.downedUntil,0);
  }
 });
-test('every map has standable pickup points and exactly eight gifts plus four bandages',()=>{
- for(const map of mapIds){const g=new Game('MAPQA',600000,map);g.add('a','A');g.add('b','B');g.ready('a',true,0);g.ready('b',true,0);g.tick(3000);assert.equal(g.state.pickups.filter(p=>p.kind==='gift').length,8);assert.equal(g.state.pickups.filter(p=>p.kind==='bandage').length,4);for(const p of g.state.pickups)assert.ok(walkable(getWorld(map),p.x,p.y,p.z));assert.ok(safePoints(getWorld(map)).length>12);}
+test('every map has standable pickup points with four bandages and Island-only gifts',()=>{
+ for(const map of mapIds){const g=new Game('MAPQA',600000,map);g.add('a','A');g.add('b','B');g.ready('a',true,0);g.ready('b',true,0);g.tick(3000);assert.equal(g.state.pickups.filter(p=>p.kind==='gift').length,map==='storm'?8:0);assert.equal(g.state.pickups.filter(p=>p.kind==='bandage').length,4);for(const p of g.state.pickups)assert.ok(walkable(getWorld(map),p.x,p.y,p.z));assert.ok(safePoints(getWorld(map)).length>12);}
 });
 test('one human starts solo; asymmetric battle and ally bot counts respect eight actors',()=>{
  const g=start('battle','solo');assert.equal(g.state.phase,'playing');assert.equal(g.state.players.filter(p=>p.kind==='human').length,1);assert.equal(g.count('de'),4);assert.equal(g.count('fr'),4);assert.equal(g.state.persistence,'practice');
@@ -82,7 +82,7 @@ test('taking damage or attacking cancels teammate healing without consuming a me
  const g=start(),a=g.player('a')!,b=g.player('b')!;Object.assign(a,{x:8,y:0,z:8,bandages:1});Object.assign(b,{team:a.team,x:8,y:0,z:9,hp:50});assert.ok(g.interact('a','heal:b'));b.injuries.lastDamageAt=4010;g.tick(4033);assert.equal(a.treatment,undefined);assert.equal(a.bandages,1);g.tick(5000);assert.ok(g.interact('a','heal:b'));g.input('a',{...neutral(1),fire:true,time:5000});g.tick(5033);assert.equal(a.treatment,undefined);assert.equal(b.hp,50);
 });
 test('a gift can be claimed once globally and cannot be claimed from a distance',()=>{
- const g=start(),pickup=g.state.pickups[0],a=g.player('a')!,b=g.player('b')!;assert.equal(g.interact('a',pickup.id),false);Object.assign(a,{x:pickup.x,y:pickup.y,z:pickup.z+1});Object.assign(b,{x:pickup.x,y:pickup.y,z:pickup.z+1});assert.ok(g.interact('a',pickup.id));assert.equal(a.stars,3);assert.equal(g.interact('b',pickup.id),false);assert.equal(b.stars,0);
+ const g=start('battle','multiplayer','storm'),pickup=g.state.pickups[0],a=g.player('a')!,b=g.player('b')!;assert.equal(g.interact('a',pickup.id),false);Object.assign(a,{x:pickup.x,y:pickup.y,z:pickup.z+1});Object.assign(b,{x:pickup.x,y:pickup.y,z:pickup.z+1});assert.ok(g.interact('a',pickup.id));assert.equal(a.stars,3);assert.equal(g.interact('b',pickup.id),false);assert.equal(b.stars,0);
 });
 test('throwing consumes inventory and sweeps a projectile through a target between ticks',()=>{
  const g=start(),a=g.player('a')!,b=g.player('b')!;Object.assign(a,{x:8,y:0,z:8,yaw:0,pitch:-.15,stars:3});Object.assign(b,{x:8,y:0,z:6});assert.ok(g.interact('a','throw'));assert.equal(a.stars,2);assert.equal(g.interact('a','throw'),false);g.tick(4100);assert.ok(b.hp<100);assert.equal(g.state.projectiles.length,0);assert.equal(a.stars,2);
