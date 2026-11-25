@@ -94,9 +94,9 @@ export async function loadHuman(uniformId?:UniformId,civilian=false){
  coatSource??=fetch('/shooter/characters/greatcoat/rigged.json').then(r=>{if(!r.ok)throw Error('Mantelmodell konnte nicht geladen werden');return r.json() as Promise<CoatPiece[]>;}).catch(e=>{coatSource=null;throw e;});
  return {...data,coat:await coatSource};
 }
-export function createHuman(data:HumanData|BonusCharacterData|CivilianCharacterData,team:'de'|'fr',map:MapId,uniform:T.MeshStandardMaterial,uniformId:UniformId=defaultUniform(team,map),civilian=false,residentId?:string){
- if('civilian' in data)return createCivilianCharacter(data,residentId);
- if('character' in data)return createBonusCharacter(data);
+export function createHuman(data:HumanData|BonusCharacterData|CivilianCharacterData,team:'de'|'fr',map:MapId,uniform:T.MeshStandardMaterial,uniformId:UniformId=defaultUniform(team,map),civilian=false,residentId?:string,purpose:'actor'|'remains'='actor'){
+ if('civilian' in data)return createCivilianCharacter(data,residentId,purpose);
+ if('character' in data)return createBonusCharacter(data,purpose);
  const civilianLook=civilian?createCivilianAppearance():undefined;uniform=civilianLook?.cloth??uniform.clone();const outfit=uniforms[uniformId];if(!civilian)uniform.color.set(outfit.color);
  let isDisposed=false;
  const group=new T.Group(),geometry=new T.BufferGeometry();
@@ -146,6 +146,7 @@ export function createHuman(data:HumanData|BonusCharacterData|CivilianCharacterD
  const equipment=new T.Group();group.add(equipment);if(data.coat||civilian){equipment.visible=false;equipment.userData.nonAnatomic=true;}
  function part(x:number,y:number,z:number,w:number,h:number,d:number,color:string,parent:T.Object3D=equipment){const m=new T.Mesh(new T.BoxGeometry(w,h,d),detailMaterial(color));m.position.set(x,y,z);m.castShadow=true;parent.add(m);return m;}
  const headBone=named.get('head')!;const headOrigin=data.bones.find(j=>j.name==='head')!.head;
+ const islandKit=!civilian&&uniformId.startsWith('task-');
  const headgear=new T.Group();headgear.position.set(0,1.72-headOrigin[1],data.bones.find(j=>j.name==='head')!.tail[2]-headOrigin[2]);headBone.add(headgear);
  if(!civilian&&uniformId==='de-panzer'){
   const insigniaCanvas=document.createElement('canvas');insigniaCanvas.width=256;insigniaCanvas.height=128;
@@ -164,7 +165,9 @@ export function createHuman(data:HumanData|BonusCharacterData|CivilianCharacterD
   part(.01,1.22,-.105,.13,.30,.012,'#292d30').rotation.z=-.16;
   for(const side of [-1,1]){part(side*.05,1.50,-.103,.042,.032,.005,'#ad8694').rotation.z=side*.25;part(side*.05,1.50,-.107,.035,.026,.003,'#25292c');const skullMaterial=new T.MeshStandardMaterial({color:'#bfc0ba',roughness:.7});ownMaterials.push(skullMaterial);const skull=new T.Mesh(new T.SphereGeometry(.009,10,8),skullMaterial);skull.scale.set(1,.85,.3);skull.position.set(side*.05,1.503,-.112);equipment.add(skull);part(side*.05,1.493,-.112,.008,.006,.003,'#bfc0ba');}
  }else if(!civilian&&outfit.headgear==='helmet'){
-  const material=new T.MeshStandardMaterial({color:team==='de'?'#454c42':'#5d684b',roughness:.85});ownMaterials.push(material);const helmet=new T.Mesh(new T.SphereGeometry(.17,16,12,0,Math.PI*2,0,Math.PI*.6),material);helmet.position.y=-.025;helmet.scale.set(.75,.55,.9);headgear.add(helmet);
+  const helmetColor=team==='de'?'#454c42':'#5d684b';
+  const material=islandKit?detailMaterial(helmetColor):new T.MeshStandardMaterial({color:helmetColor,roughness:.85});
+  if(!islandKit)ownMaterials.push(material);const helmet=new T.Mesh(new T.SphereGeometry(.17,16,islandKit?9:12,0,Math.PI*2,0,Math.PI*.6),material);helmet.castShadow=islandKit;helmet.position.y=-.025;helmet.scale.set(.75,.55,.9);headgear.add(helmet);
   if(team==='de'&&!uniformId.startsWith('task-'))void new GLTFLoader().loadAsync('/shooter/models/m40-helmet.glb').then(gltf=>{
     if(isDisposed){gltf.scene.traverse(o=>{if(o instanceof T.Mesh){o.geometry.dispose();for(const m of Array.isArray(o.material)?o.material:[o.material])m.dispose();}});return;}
     helmet.visible=false;gltf.scene.rotation.y=Math.PI;gltf.scene.scale.setScalar(1.1);
@@ -178,7 +181,6 @@ export function createHuman(data:HumanData|BonusCharacterData|CivilianCharacterD
   const bell=new T.Mesh(new T.ConeGeometry(.008,.018,12,1,true),hornMaterial);bell.position.set(.099,.012,-.166);bell.rotation.z=-.9;headgear.add(bell);
 
  }
- const islandKit=!civilian&&uniformId.startsWith('task-');
  if(!civilian){
  part(0,.94,0,.34,.035,.24,'#4a3e2b');part(.085,1.15,-.135,.105,.13,.014,outfit.color);part(-.085,1.15,-.135,.105,.13,.014,outfit.color);
  if(islandKit){
@@ -303,11 +305,12 @@ export function createHuman(data:HumanData|BonusCharacterData|CivilianCharacterD
   if(data.coat||civilian)continue;
   const foot=named.get(`foot.${side}`),joint=data.bones.find(j=>j.name===`foot.${side}`);if(!foot||!joint)continue;
   const boot=new T.Group();boot.position.set(joint.head[0]-joint.head[0],-joint.head[1],.035-joint.head[2]);foot.add(boot);
-  const leather=new T.MeshStandardMaterial({color:'#292a26',roughness:.75});ownMaterials.push(leather);
+  const leather=islandKit?detailMaterial('#292a26',.75):new T.MeshStandardMaterial({color:'#292a26',roughness:.75});
+  if(!islandKit)ownMaterials.push(leather);
   const shape=new T.Shape();shape.moveTo(-.065,-.025);shape.lineTo(.065,-.025);shape.lineTo(.07,.18);shape.quadraticCurveTo(.065,.27,0,.275);shape.quadraticCurveTo(-.065,.27,-.07,.18);shape.closePath();
-  const shoeGeometry=new T.ExtrudeGeometry(shape,{depth:.022,bevelEnabled:true,bevelThickness:.005,bevelSize:.005,bevelSegments:3});shoeGeometry.rotateX(-Math.PI/2);shoeGeometry.translate(0,.006,0);const shoe=new T.Mesh(shoeGeometry,leather);shoe.castShadow=true;boot.add(shoe);const upper=new T.Mesh(new T.SphereGeometry(1,16,12),leather);upper.scale.set(.068,.052,.15);upper.position.set(0,.062,-.105);boot.add(upper);
-  const shaft=new T.Mesh(new T.CylinderGeometry(.06,.063,.16,16),leather);shaft.position.set(0,.14,-.025);shaft.castShadow=true;boot.add(shaft);
-  for(let i=0;i<4;i++){const lace=part(0,.095+i*.012,-.08-i*.018,.08,.006,.007,'#41413b',boot);lace.rotation.z=i%2?.12:-.12;}
+  const shoeGeometry=new T.ExtrudeGeometry(shape,{depth:.022,bevelEnabled:true,bevelThickness:.005,bevelSize:.005,bevelSegments:islandKit?1:3,curveSegments:islandKit?5:12});shoeGeometry.rotateX(-Math.PI/2);shoeGeometry.translate(0,.006,0);const shoe=new T.Mesh(shoeGeometry,leather);shoe.castShadow=true;boot.add(shoe);const upper=new T.Mesh(new T.SphereGeometry(1,islandKit?12:16,islandKit?7:12),leather);upper.castShadow=islandKit;upper.scale.set(.068,.052,.15);upper.position.set(0,.062,-.105);boot.add(upper);
+  const shaft=new T.Mesh(new T.CylinderGeometry(.06,.063,.16,islandKit?12:16),leather);shaft.position.set(0,.14,-.025);shaft.castShadow=true;boot.add(shaft);
+  for(let i=0;i<4;i++){const lace=part(0,.095+i*.012,-.08-i*.018,.08,.006,.007,'#41413b',boot);if(islandKit)lace.material=detailMaterial('#41413b',.75);lace.rotation.z=i%2?.12:-.12;}
   batchDetails(boot);
  }
  if(civilianLook)civilianLook.addDetails(group,named,data.bones,mesh);
@@ -317,7 +320,7 @@ export function createHuman(data:HumanData|BonusCharacterData|CivilianCharacterD
  if(!civilian){group.updateMatrixWorld(true);named.get('spine01')?.attach(equipment);}
  const motion=data.motion&&!civilian?createCharacterMotion(group,named,data.motion,false):undefined;
  group.userData.limbRoots={head:'head',armL:'upperarm01.L',armR:'upperarm01.R',legL:'upperleg01.L',legR:'upperleg01.R'};
- const held=createActorEquipment(group,{armL:rigArm(group,['upperarm01.L','lowerarm01.L','wrist.L']),armR:rigArm(group,['upperarm01.R','lowerarm01.R','wrist.R'])},civilian);
+ const held=createActorEquipment(group,{armL:rigArm(group,['upperarm01.L','lowerarm01.L','wrist.L']),armR:rigArm(group,['upperarm01.R','lowerarm01.R','wrist.R'])},civilian,false,purpose==='actor');
  group.userData.hasCrouchAnimation=!!motion;
  let previous=new T.Vector3(),speed=0,movementInitialized=!civilian;const rootHeight=named.get('root')?.position.y??0;
  const upperPose=new T.Quaternion(),upperParent=new T.Quaternion(),leanPose=new T.Quaternion(),poseAxis=new T.Vector3(1,0,0);

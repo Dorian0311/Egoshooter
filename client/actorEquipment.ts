@@ -33,9 +33,10 @@ export function solveArm(chain:ArmChain,target:T.Vector3,pole:T.Vector3){
 export function findRigObject(root:T.Group,name:string){let match:T.Object3D|undefined;root.traverse(o=>{if(o.name===name&&(!match||o.children.length>match.children.length))match=o;});return match;}
 export function rigArm(root:T.Group,names:string[]):ArmChain|undefined{const [upper,lower,hand]=names.map(name=>findRigObject(root,name));return upper&&lower&&hand?{upper,lower,hand}:undefined;}
 
-export function createActorEquipment(root:T.Group,chains:Partial<Record<'armL'|'armR',ArmChain>>,civilian=false,embeddedSaw=false){
+export function createActorEquipment(root:T.Group,chains:Partial<Record<'armL'|'armR',ArmChain>>,civilian=false,embeddedSaw=false,weaponModels=true){
  void loadCombatHands();
- if(!civilian)prewarmWorldWeapons();
+ const armed=weaponModels;
+ if(armed&&!civilian)prewarmWorldWeapons();
  root.userData.armChains=chains;
  root.updateWorldMatrix(true,true);
  const arms=Object.fromEntries(Object.entries(chains).filter(([,chain])=>!!chain).map(([key,chain])=>{const upper=root.worldToLocal(chain!.upper.getWorldPosition(new T.Vector3())),lower=root.worldToLocal(chain!.lower.getWorldPosition(new T.Vector3())),hand=root.worldToLocal(chain!.hand.getWorldPosition(new T.Vector3()));return [key,{...chain,rest:[chain!.upper.quaternion.clone(),chain!.lower.quaternion.clone(),chain!.hand.quaternion.clone()],reach:(upper.distanceTo(lower)+lower.distanceTo(hand))*.985,shoulder:upper}];})) as Partial<Record<'armL'|'armR',SavedArm>>;
@@ -45,7 +46,8 @@ export function createActorEquipment(root:T.Group,chains:Partial<Record<'armL'|'
  const metal=new T.MeshStandardMaterial({color:'#333c3b',metalness:.7,roughness:.38}),wood=new T.MeshStandardMaterial({color:'#5d4731',roughness:.72}),polymer=new T.MeshStandardMaterial({color:'#242a27',roughness:.75}),starMaterial=new T.MeshStandardMaterial({color:'#b8c0c1',metalness:.9,roughness:.25});
  const geometries:T.BufferGeometry[]=[],models:T.Group[]=[];
  const box=(parent:T.Group,x:number,y:number,z:number,w:number,h:number,d:number,material:T.Material)=>{const geometry=new T.BoxGeometry(w,h,d);geometries.push(geometry);const mesh=new T.Mesh(geometry,material);mesh.position.set(x,y,z);mesh.castShadow=true;parent.add(mesh);};
- for(let index=0;index<weapons.length;index++){const model=new T.Group();models.push(model);
+ // Settled-body templates still pose their arms but never display this arsenal.
+ if(armed)for(let index=0;index<weapons.length;index++){const model=new T.Group();models.push(model);
   if(index>=4&&index<=6)continue;
   if(germanWeaponNames[index]){const gun=createGermanWeapon(index);gun.rotation.y=Math.PI;model.add(gun);continue;}
   if(index===1){box(model,0,.018,-.075,.035,.045,.19,metal);box(model,0,-.04,.015,.035,.105,.045,polymer);}
@@ -57,7 +59,7 @@ export function createActorEquipment(root:T.Group,chains:Partial<Record<'armL'|'
   batchWeaponProxy(model);
   model.traverse(o=>{if(o instanceof T.Mesh){geometries.push(o.geometry);for(const material of Array.isArray(o.material)?o.material:[o.material])authoredMaterials.add(material);}});
  }
- const starGeometry=createThrowingStarGeometry(),star=new T.Mesh(starGeometry,starMaterial);star.name='held-throwing-star';star.userData.nonAnatomic=true;root.add(star);star.visible=false;
+ const starGeometry=armed?createThrowingStarGeometry():new T.BufferGeometry(),star=new T.Mesh(starGeometry,starMaterial);star.name='held-throwing-star';star.userData.nonAnatomic=true;root.add(star);star.visible=false;
  let previousWeapon=-1,changedAt=-Infinity;
  let disposed=false;const worldModels=new Map<number,Awaited<ReturnType<typeof acquireWorldWeapon>> & {name:WorldWeapon}>(),pendingModels=new Map<number,WorldWeapon>(),failedModels=new Set<WorldWeapon>();
  function textured(index:number,team:Player['team']){if(typeof window==='undefined')return;const german=germanWeaponNames[index];if(index>3&&(!german||!(german in realisticWeapons)))return;const name:WorldWeapon=german as WorldWeapon??(index===3?'g36':index===1?'luger':index===0?'kar98k':'mp40');if(worldModels.get(index)?.name===name||pendingModels.get(index)===name||failedModels.has(name))return;pendingModels.set(index,name);void acquireWorldWeapon(name).then(asset=>{if(disposed||pendingModels.get(index)!==name){asset.release();return;}const old=worldModels.get(index);if(old){old.object.removeFromParent();old.release();}for(const child of models[index].children)child.visible=false;models[index].add(asset.object);worldModels.set(index,{...asset,name});pendingModels.delete(index);}).catch(()=>{pendingModels.delete(index);failedModels.add(name);});}
@@ -82,7 +84,7 @@ export function createActorEquipment(root:T.Group,chains:Partial<Record<'armL'|'
     for(const finger of fingers){const digit=Number(finger.name[6]),joint=Number(finger.name[8]),sign=finger.name.endsWith('.L')?1:-1;finger.rotation.set(digit===1?.18:joint===1?.14:joint===2?.28:.18,0,digit===1?sign*.12:0);}
    }return;
   }
-  const available=armCount(p),harvesting=p.treatment?.kind==='harvest';mount.visible=p.hp>0&&available>0&&!throwing&&p.weapon!==4&&!p.heldPart&&!harvesting;star.visible=throwing&&p.throwAt-now>610&&available>0&&(root.userData.partThrowUntil??0)<now;
+  const available=armCount(p),harvesting=p.treatment?.kind==='harvest';mount.visible=armed&&p.hp>0&&available>0&&!throwing&&p.weapon!==4&&!p.heldPart&&!harvesting;star.visible=throwing&&p.throwAt-now>610&&available>0&&(root.userData.partThrowUntil??0)<now;
   if(harvesting&&p.hp){mount.visible=star.visible=false;const progress=1-(p.treatment!.until-now)/3000,pose=harvestAnimation(progress),clip=sampleCombatHands('interact',progress);for(const side of ['armL','armR'] as const){if(hasLost(p,side))continue;const arm=arms[side];if(!arm)continue;const hand=(side==='armL'?clip?.left:clip?.right)?.clone()??new T.Vector3(side==='armL'?-.19:.19,1.12,-.45);hand.y-=.32-pose.pull*.16;hand.z-=pose.reach*.08-pose.pull*.22;hand.x+=pose.twist*(side==='armL'?-.025:.025);grip(arm,hand,side==='armL'?-1:1);}return;}
   if(p.heldPart&&p.hp){mount.visible=star.visible=false;const remaining=(root.userData.partSwingUntil??0)-now,progress=remaining>0&&remaining<=800?1-remaining/800:0,clip=sampleCombatHands('swing',progress),swing=Math.sin(progress*Math.PI);for(const side of ['armL','armR'] as const){if(hasLost(p,side))continue;const arm=arms[side];if(!arm)continue;const hand=(side==='armL'?clip?.left:clip?.right)?.clone()??new T.Vector3(side==='armL'?-.04:.19,1.13+swing*.15,-.30-swing*.18);grip(arm,hand,side==='armL'?-1:1);}return;}
   if(p.carriedCorpse&&available<2){mount.visible=star.visible=false;const side=hasLost(p,'armL')?'armR':'armL',arm=arms[side];if(arm)grip(arm,new T.Vector3(side==='armL'?-.12:.12,1.28,-.5),side==='armL'?-1:1);return;}

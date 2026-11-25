@@ -16,7 +16,7 @@ export async function loadCivilianCharacter():Promise<CivilianCharacterData>{
 }
 
 /** Native Rocketbox skin: no rigid cuts or replacement mannequin. */
-export function createCivilianCharacter(data:CivilianCharacterData,residentId='resident-0'){
+export function createCivilianCharacter(data:CivilianCharacterData,residentId='resident-0',purpose:'actor'|'remains'='actor'){
  const group=new T.Group(),body=clone(data.entry.root);body.rotation.y+=Math.PI;group.add(body);data.entry.refs++;
  group.name='civilian-rocketbox-male-adult-03';group.userData.civilianSource='Microsoft Rocketbox Male_Adult_03';group.userData.civilianModel='rocketbox-male-adult-03';
  group.userData.limbRoots={head:'Bip01_Head',armL:'Bip01_L_UpperArm',armR:'Bip01_R_UpperArm',legL:'Bip01_L_Thigh',legR:'Bip01_R_Thigh'};
@@ -40,7 +40,7 @@ export function createCivilianCharacter(data:CivilianCharacterData,residentId='r
  const head=group.getObjectByName('Bip01_Head'),headScale=head?.scale.clone(),baseY=body.position.y;
  const feet=['Bip01_L_Foot','Bip01_R_Foot'].map(name=>group.getObjectByName(name)).filter((foot):foot is T.Object3D=>!!foot),footGround=Math.min(...feet.map(foot=>group.worldToLocal(foot.getWorldPosition(new T.Vector3())).y));
  const arms={armL:rigArm(group,['Bip01_L_UpperArm','Bip01_L_Forearm','Bip01_L_Hand']),armR:rigArm(group,['Bip01_R_UpperArm','Bip01_R_Forearm','Bip01_R_Hand'])};
- const held=createActorEquipment(group,arms,true);
+ const held=createActorEquipment(group,arms,true,false,purpose==='actor');
  const fingers:{bone:T.Object3D;rest:T.Quaternion;axis:T.Vector3;side:'armL'|'armR';digit:number;joint:number}[]=[];
  for(const side of ['L','R'] as const){const index=group.getObjectByName(`Bip01_${side}_Finger1`),pinky=group.getObjectByName(`Bip01_${side}_Finger4`);if(!index||!pinky)continue;
   const across=index.getWorldPosition(new T.Vector3()).sub(pinky.getWorldPosition(new T.Vector3())).normalize();

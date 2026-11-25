@@ -29,7 +29,7 @@ export const joints:Record<BonusId,{upper:string[];lower:string[];arms:string[];
  homer:{upper:['Hip_L','Hip_R'],lower:['Knee_L','Knee_R'],arms:['Shoulder_L','Shoulder_R'],head:'Head'},
 };
 
-export function createBonusCharacter(data:BonusCharacterData){
+export function createBonusCharacter(data:BonusCharacterData,purpose:'actor'|'remains'='actor'){
  const group=new T.Group(),body=clone(data.entry.root);group.add(body);data.entry.refs++;
  const geometries=new Set<T.BufferGeometry>(),materials=new Set<T.Material>(),skeletons=new Set<T.Skeleton>();
  const clonedGeometry=new Map<T.BufferGeometry,T.BufferGeometry>(),clonedMaterial=new Map<T.Material,T.Material>();
@@ -74,7 +74,7 @@ export function createBonusCharacter(data:BonusCharacterData){
  });
  const heads=bones.filter(b=>b.name===config.head),rotation=new T.Quaternion();
  const armNames:Record<BonusId,string[][]>={kroenen:[['n36','n37','n38'],['n57','n58','n59']],deadpool:[['UN_j_L__Arm_00','UN_j_L__Arm_05','UN_L_Arm_Wrist'],['UN_j_R__Arm_00','UN_j_R__Arm_05','UN_R_Arm_Wrist']],harley:[['arm_stretchl','forearm_stretchl','handl'],['arm_stretchr','forearm_stretchr','handr']],rocket:[['Bip001-L-UpperArm','Bip001-L-Forearm','Bip001-L-Hand'],['Bip001-R-UpperArm','Bip001-R-Forearm','Bip001-R-Hand']],homer:[['Shoulder_L','Elbow_L','Wrist_L'],['Shoulder_R','Elbow_R','Wrist_R']],commander:[['static-armL','static-lowerL','static-handL'],['static-armR','static-lowerR','static-handR']],leatherface:[]};
- const names=armNames[data.character],held=createActorEquipment(group,{armL:names[0]?rigArm(group,names[0]):undefined,armR:names[1]?rigArm(group,names[1]):undefined},false,data.character==='leatherface');
+ const names=armNames[data.character],held=createActorEquipment(group,{armL:names[0]?rigArm(group,names[0]):undefined,armR:names[1]?rigArm(group,names[1]):undefined},false,data.character==='leatherface',purpose==='actor');
  const coat=data.character==='kroenen'?createCoatDynamics(group):undefined;
  // Static bonus models have no head bone. Clip their upper head in model space.
  const headCut=new T.Plane(new T.Vector3(0,-1,0),1.44),worldHeadCut=new T.Plane();

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import * as T from 'three';
 import {createHuman} from '../client/humanoid.ts';
+import {createActorDetails} from '../client/actorDetails.ts';
 import {makePlayer} from '../shared/game.ts';
 
 test('greatcoat keeps the neck down inside the collar instead of a floating head',()=>{
@@ -38,4 +39,24 @@ test('standard attachments stay inside draw budget and follow their animated bon
  assert.ok(boot.getWorldPosition(new T.Vector3()).distanceTo(before)>1e-5);
  human.setHeadVisible(false);assert.equal(human.group.getObjectByName('head')!.scale.x,.001);
  human.dispose();human.dispose();assert.equal(human.group.children.length,0);
+});
+
+test('Island boots keep a complete shadow-casting silhouette when small details are culled',()=>{
+ const data=JSON.parse(readFileSync(new URL('../public/shooter/characters/humanoid.json',import.meta.url),'utf8'));
+ const human=createHuman(data,'de','storm',new T.MeshStandardMaterial(),'task-olive');
+ const details=createActorDetails(human.group);
+ for(const distance of [8,100,8]){
+  details.update(distance,720,80);
+  for(const name of ['foot.L','foot.R']){
+   const foot=human.group.getObjectByName(name)!;
+   const boot=foot.children.find(child=>child instanceof T.Group)!;
+   assert.equal(boot.children.length,1);
+   const shoe=boot.children[0] as T.Mesh;
+   assert.ok(shoe.castShadow&&shoe.layers.isEnabled(0));
+   shoe.geometry.computeBoundingBox();
+   const size=shoe.geometry.boundingBox!.getSize(new T.Vector3());
+   assert.ok(size.y>.21&&size.z>.29,'shaft, sole and toe preserved');
+  }
+ }
+ details.dispose();human.dispose();
 });

@@ -1,9 +1,29 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
 import * as T from 'three';
+import {createHuman} from '../client/humanoid';
 import {Game,makePlayer} from '../shared/game';
 import {corpseQuaternion,freezeRemains,harvestAnimation,remainsInteraction} from '../client/remainsScene';
 import type {Corpse,BodyPartItem} from '../shared/remains';
+
+test('the settled-body template preserves every posed bone without building held weapon geometry',()=>{
+ const data=JSON.parse(readFileSync('public/shooter/characters/humanoid.json','utf8'));
+ const pose=makePlayer('body','Vorlage','fr');pose.hp=0;
+ const material=new T.MeshStandardMaterial();
+ const actor=createHuman(data,'fr','cologne',material,'us-field');
+ const remains=createHuman(data,'fr','cologne',material,'us-field',false,pose.id,'remains');
+ try{
+  function bones(human:typeof actor){
+   human.update(pose,0,1/60,0);human.group.updateWorldMatrix(true,true);
+   const rows:number[][]=[];human.group.traverse(o=>{if(o instanceof T.Bone)rows.push(o.matrixWorld.toArray());});
+   return rows;
+  }
+  const expected=bones(actor);assert.ok(expected.length>10);assert.deepEqual(bones(remains),expected);
+  const star=remains.group.getObjectByName('held-throwing-star') as T.Mesh;
+  assert.equal(star.geometry.hasAttribute('position'),false);
+ }finally{actor.dispose();remains.dispose();material.dispose();}
+});
 
 function fixture(){const game=new Game('REMAINSUI',600000,'cologne',()=>.5,{kind:'coop',mode:'mission'}),p=game.add('carrier','Helfer');Object.assign(p,{x:8,y:0,z:8,yaw:0});const corpse:Corpse={id:'corpse:1',sourceId:'patient',sourceLife:1,name:'Partner',uniform:'kroenen',team:'de',kind:'human',x:8,y:0,z:6,yaw:0,pitch:0,crouching:false,createdAt:1000,lost:0,carrierId:null,shield:150,harvesterId:null,harvestUntil:0,medicalUntil:0,tentId:null};game.state.corpses=[corpse];return {game,p,corpse};}
 test('corpse interactions expose carry and a distinct head-removal action; reserved heads cannot be stolen',()=>{

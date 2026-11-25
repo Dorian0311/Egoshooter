@@ -3,6 +3,7 @@ import {RoundedBoxGeometry} from 'three/examples/jsm/geometries/RoundedBoxGeomet
 import type {Box,World} from '../shared/world';
 import {batchStaticMeshes} from './scenery';
 import {createIslandQuay} from './islandQuay';
+import {harbourEntrance} from './harbourEntrance';
 import {createCoastalWater} from './coastalWater';
 import {projectBoxUVs} from './materials';
 import {islandCourseRadius,islandRoute,islandUnderpass,nearIslandRoute} from '../shared/islandRoute';
@@ -193,6 +194,7 @@ export function createMapDetails(scene:T.Scene,world:World,get:(color:string)=>T
   const disposeStreet=island?addIslandStreet(root):undefined;
   if(island){
     root.add(createIslandQuay());
+    root.add(harbourEntrance(world,get('#818783').map));
     ocean=createCoastalWater(scene,world);
     const route=new T.CatmullRomCurve3(islandRoute.map(([x,z])=>new T.Vector3(x,0,z)));
     const loader=new T.TextureLoader();

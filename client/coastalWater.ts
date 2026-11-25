@@ -54,23 +54,31 @@ export function createCoastalWater(scene:T.Scene,world:World){
       mat2 crosswind=mat2(.80,.60,-.60,.80);
       vec3 longRipples=texture2D(oceanRipples,vOceanXZ*.057+vec2(-.016,.004)*oceanTime).rgb;
       vec3 shortRipples=texture2D(oceanRipples,crosswind*vOceanXZ*.137+vec2(.014,.009)*oceanTime).rgb;
-      // Shoaling water takes on the colour of the sand underneath; the outer sea is less transmissive.
-      float deep=smoothstep(.1,4.2,vDepth);
-      vec3 seabed=mix(vec3(.085,.34,.285),vec3(.012,.085,.105),deep);
-      float breaker=.5+.5*sin(6.*vDepth-1.25*oceanTime+3.*longRipples.g);
-      float wash=(1.-smoothstep(.10,.75,vDepth))*.76 + (1.-smoothstep(.6,1.7,vDepth))*smoothstep(.84,1.,breaker)*.47;
-      float foam=clamp(wash*(.16+.84*smoothstep(.16,.72,longRipples.b+.32*shortRipples.b)),0.,1.);
-      diffuseColor.rgb=mix(seabed,vec3(.73,.84,.81),foam);
+      // Wet sand is visible immediately behind the advancing waterline. The
+      // green shallows turn into a darker blue as the bottom falls away.
+      float deep=smoothstep(.3,4.5,vDepth);
+      vec3 shallow=mix(vec3(.155,.169,.126),vec3(.040,.188,.156),smoothstep(-.13,1.42,vDepth));
+      vec3 water=mix(shallow,vec3(.011,.054,.077),deep);
+      float pattern=longRipples.b+.25*shortRipples.b;
+      float disturbedDepth=vDepth+.34*(longRipples.g-.5);
+      float breaker=.5+.5*sin(6.*disturbedDepth+1.42*oceanTime);
+      float edge=1.-smoothstep(.055,.41,disturbedDepth);
+      float crest=(1.-smoothstep(.63,2.25,vDepth))*smoothstep(.83,.98,breaker);
+      float spray=smoothstep(.22,.72,pattern);
+      float foam=clamp(edge*(.09+.66*spray)+crest*(.15+.47*spray),0.,1.);
+      diffuseColor.rgb=mix(water,vec3(.66,.75,.73),foam);
     `).replace('#include <roughnessmap_fragment>',`#include <roughnessmap_fragment>
       roughnessFactor+=.40*foam;
     `).replace('#include <normal_fragment_maps>',`#include <normal_fragment_maps>
-      vec2 slope=.32*(longRipples.rg-.5)+.19*((shortRipples.rg-.5)*crosswind);
+      // Fine normal detail fades at distance to suppress moving pixel shimmer.
+      float nearRipples=1.-smoothstep(36.,150.,length(vViewPosition));
+      vec2 slope=.31*(longRipples.rg-.5)+.19*nearRipples*((shortRipples.rg-.5)*crosswind);
       slope+=vec2(.020,.011)*cos(dot(vOceanXZ,vec2(.17,.09))+oceanTime*.81)
             +vec2(-.005,.014)*cos(dot(vOceanXZ,vec2(-.08,.24))-oceanTime*1.12);
       normal=normalize(mat3(viewMatrix)*vec3(-slope.x,1.,-slope.y));
     `);
   };
-  material.customProgramCacheKey=()=>'island-coastal-water-v1';
+  material.customProgramCacheKey=()=>'island-coastal-water-v2';
   const water=new T.Mesh(createWaterGeometry(world),material);
   water.name='Island coastal water';water.position.y=seaLevel;scene.add(water);
   return {update(seconds:number){time.value=seconds;},dispose(){ripples.dispose();}};

@@ -89,6 +89,10 @@ def read_profile(page, name):
         result['slowShaders']=page.evaluate("()=>window.slowShaders.filter(s=>s.start>=window.turnStarted).map(({start,duration,path})=>({start,duration,path}))")
     result['longTasks']=page.evaluate("""()=> (window.harbourLongFrames??[])
         .filter(f=>f.startTime>=(window.turnStarted??Infinity)).sort((a,b)=>b.duration-a.duration).slice(0,4)""")
+    if os.environ.get('BATTLE_TIMER_PROFILE')=='1':
+        result['timers']=page.evaluate(r"""()=> (window.roadTimers??[]).filter(t=>
+          (window.harbourLongFrames??[]).some(f=>f.startTime>=window.turnStarted&&t.start>=f.startTime-1&&t.start<f.startTime+f.duration)
+        ).map(t=>({start:t.start,duration:t.end-t.start,handler:t.handler,scheduled:t.origin.stack?.split('\n').slice(2,7)}))""")
     return result
 
 
@@ -107,6 +111,21 @@ with sync_playwright() as pw:
     }""")
     page.on('response',lambda r: print('HTTP',r.status,r.url.split('?')[0],flush=True) if r.status>=400 else None)
     page.on('pageerror',lambda error: print('Browserfehler:',str(error)[:350],flush=True))
+    if os.environ.get('BATTLE_TIMER_PROFILE')=='1':
+        page.add_init_script("""window.roadTimers=[];
+          const nativeTimeout=window.setTimeout;
+          window.setTimeout=function(callback,delay,...args){
+            if(typeof callback!=='function')return nativeTimeout.call(this,callback,delay,...args);
+            const origin=new Error();
+            return nativeTimeout.call(this,function(...values){
+              const record={origin,start:performance.now(),end:0,handler:callback.name||String(callback).slice(0,180)};
+              try{return callback.apply(this,values);}
+              finally{
+                record.end=performance.now();roadTimers.push(record);
+                if(roadTimers.length>512)roadTimers.splice(0,256);
+              }
+            },delay,...args);
+          };""")
     page.on('console',lambda msg: print('Konsole:',msg.text[:350],flush=True) if msg.type=='error' else None)
     if os.environ.get('BATTLE_SHADER_PROFILE')=='1':
         def tag_draw(route):
@@ -265,6 +284,13 @@ with sync_playwright() as pw:
         raise SystemExit(0)
 
     approach()
+    road_profiler=None
+    if os.environ.get('BATTLE_CPU_PROFILE')=='1':
+        road_profiler=page.context.new_cdp_session(page)
+        road_profiler.send('Profiler.enable')
+        road_profiler.send('Profiler.setSamplingInterval',{'interval':1500})
+        road_profiler.send('Profiler.start')
+        profile_start=page.evaluate('performance.now()')
     results = []
     for name,x,inside,door in [('Harbour Supply',51,-9,-18),('Diner',63,-36,-28),('Coast Records',75,-9,-18)]:
         for attempt in range(3):
@@ -305,6 +331,11 @@ with sync_playwright() as pw:
         page.keyboard.press('e')
         page.get_by_text('Für Ihre Sterbeurkunde',exact=False).wait_for(timeout=5000)
         print('Nachlassschalter: two successive decisions confirmed in game',flush=True)
+    if road_profiler:
+        profile=road_profiler.send('Profiler.stop')['profile']
+        (OUT/'storm-shops.cpuprofile').write_text(json.dumps(profile))
+        (OUT/'storm-shops-profile-timing.json').write_text(json.dumps(dict(start=profile_start)))
+        road_profiler.detach()
     suffix=f'-{condition}' if condition else ''
     report=dict(bots=bots,width=width,height=height,condition=condition or 'standard',results=results)
     (OUT/f'report-{bots}-bots-{width}x{height}{suffix}.json').write_text(json.dumps(report,indent=2))
