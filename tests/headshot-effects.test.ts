@@ -18,9 +18,10 @@ test('lethal headshot sprays away from the shooter and debris stays above an ele
  const scene=new T.Scene(),effects=createHitEffects(scene);
  effects.emit({type:'kill',id:'a',hitZone:'head',point:[0,5.7,0]},false,new T.Vector3(1,0,0),4);
  assert.equal((scene.getObjectByName('headshot-mist') as T.Points).geometry.drawRange.count,8);
- effects.update(.1);
  const droplets=scene.getObjectByName('hit-droplet') as T.InstancedMesh,matrix=new T.Matrix4();
- for(let i=0;i<droplets.count;i++){droplets.getMatrixAt(i,matrix);assert.ok(matrix.elements[12]>0);}
+ const startX=Array.from({length:droplets.count},(_,i)=>{droplets.getMatrixAt(i,matrix);return matrix.elements[12];});
+ effects.update(.1);
+ for(let i=0;i<droplets.count;i++){droplets.getMatrixAt(i,matrix);assert.ok(matrix.elements[12]>startX[i]);}
  for(let i=0;i<12;i++)effects.update(.1);
  for(const mesh of scene.children)if(mesh instanceof T.InstancedMesh)for(let i=0;i<mesh.count;i++){mesh.getMatrixAt(i,matrix);assert.ok(matrix.elements[13]>=4);}
  effects.dispose();assert.equal(scene.children.length,0);
