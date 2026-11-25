@@ -1,5 +1,6 @@
 import {weaponSlot,fallbackSidearm,SNIPER_ID,G43_SCOPE_ID,ROCKET_ID} from '../shared/weapons';
 import {createCatSilencer} from './catSilencer';
+import {islandShops} from '../shared/islandStreet';
 import {nearbyBoxes} from '../shared/boxIndex';
 import {createBattleAudio,advanceFootstep,footstepMaterial,type StepState} from './battleAudio';
 import {createAnatomy} from './anatomy';
@@ -93,6 +94,12 @@ export function createScene(
     :undefined;
   camera.rotation.order = "YXZ";
   const island=mapId==='storm';
+  const streetRooms=island?islandShops.map(shop=>{
+    const front=shop.z+shop.front*shop.d/2;
+    return {shop,opening:new T.Box3(
+      new T.Vector3(shop.x-shop.w/2,0,front-.30),
+      new T.Vector3(shop.x+shop.w/2,shop.h,front+.30))};
+  }):[];
   const daylight=island?.92:.64;
   const skyLight=new T.HemisphereLight(island?'#c3e9ff':'#cfdaeb',island?'#96a477':'#827662',daylight);
   skyLight.layers.enable(1);scene.add(skyLight);
@@ -745,6 +752,18 @@ export function createScene(
     if(local&&!local.hp&&!local.downedUntil&&snapshot?.operation.config.kind==='coop'){const ally=snapshot.players.find(p=>p.kind==='human'&&p.hp>0&&p.id!==local?.id);if(ally){camera.position.set(ally.x,ally.y+actorEyeHeight(ally),ally.z);camera.rotation.set(ally.pitch,ally.yaw,0);}}
     camera.updateMatrixWorld();
     actorFrustum.setFromProjectionMatrix(actorProjection.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse));
+    // A shop has one open facade. Solid walls and ceiling hide the island when that facade leaves the view.
+    if(island){
+      const eye=camera.position;
+      const room=streetRooms.find(({shop:s})=>eye.y>.12&&eye.y<s.h-.3&&
+        Math.abs(eye.x-s.x)<s.w/2-.4&&Math.abs(eye.z-s.z)<s.d/2-.4);
+      // The short far plane still spans the entire room, including its facade on the next turn.
+      const far=room&&!actorFrustum.intersectsBox(room.opening)?24:350;
+      if(camera.far!==far){
+        camera.far=far;camera.updateProjectionMatrix();
+        actorFrustum.setFromProjectionMatrix(actorProjection.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse));
+      }
+    }
     contactShadows.begin();
     let detailDrawsSkipped=0;
     for (const g of avatars.values()) {

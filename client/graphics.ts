@@ -142,7 +142,8 @@ export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
       const currentTimingFrame=timingFrame++;
       if(timingEnabled&&currentTimingFrame%4===0)gpuTiming.poll();
       frameState.gpuMs=gpuTiming.state.ms;
-      const scale=quality==='auto'&&resolutionScaling?governor.update(frameSeconds,!document.hidden&&adaptive,gpuTiming.state.ms,cpuMs):1;
+      const adaptiveQuality=quality==='auto'||quality==='performance';
+      const scale=adaptiveQuality&&resolutionScaling?governor.update(frameSeconds,!document.hidden&&adaptive,gpuTiming.state.ms,cpuMs):1;
       const baseRatio=renderPixelRatio(quality, window.devicePixelRatio, w, h);
       // Keep the image legible without cancelling adaptive scaling in
       // smaller windows. The HUD is still drawn at native resolution.
@@ -184,7 +185,7 @@ export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
         weaponCamera.updateMatrixWorld();
         viewmodel.sync();
       }
-      if(timingEnabled&&quality==='auto'&&adaptive&&currentTimingFrame%17===0)gpuTiming.begin();
+      if(timingEnabled&&adaptiveQuality&&adaptive&&currentTimingFrame%17===0)gpuTiming.begin();
       try{composer.render(dt);}finally{gpuTiming.end();}
     },
     dispose() {

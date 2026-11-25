@@ -43,6 +43,12 @@ export function addIslandStreet(scene:T.Group){
   const prints=loader.load(base+'interior-prints.webp');
   prints.colorSpace=T.SRGBColorSpace;prints.anisotropy=4;
   const printMaterial=new T.MeshStandardMaterial({map:prints,roughness:.9});
+  function boards(file:string){
+    const map=loader.load(base+file+'.webp');
+    map.colorSpace=T.SRGBColorSpace;map.wrapS=map.wrapT=T.RepeatWrapping;map.anisotropy=4;
+    return new T.MeshStandardMaterial({map,roughness:.88});
+  }
+  const timberFloor=boards('wood_floor_worn'),paintedBoards=boards('distressed_painted_planks');
   const awnings=['#a64c38','#397071','#ae7e39'];
   islandShops.forEach((s,index)=>{
     const edge=s.z+s.front*s.d/2;
@@ -56,7 +62,10 @@ export function addIslandStreet(scene:T.Group){
       for(let x=-6;x<6;x++)for(let z=-3;z<3;z++)if((x+z)%2===0)
         detail(x+.5,.051,z+.5,1,.004,1,paint('#657168'));
     }else{
-      for(let x=-s.w/2+.7;x<s.w/2-.25;x+=.65)detail(x,.051,0,.012,.004,s.d-.5,wood);
+      const floor=new T.PlaneGeometry(s.w-.42,s.d-.42),uv=floor.getAttribute('uv');
+      for(let i=0;i<uv.count;i++)uv.setXY(i,uv.getX(i)*s.w/2,uv.getY(i)*s.d/2);
+      const planks=new T.Mesh(floor,timberFloor);planks.rotation.x=-Math.PI/2;
+      planks.position.set(s.x,.051,s.z);planks.receiveShadow=true;street.add(planks);
     }
     for(const part of shopParts(s)){
       const {role,x,y,z,w,h,d}=part;
@@ -110,7 +119,9 @@ export function addIslandStreet(scene:T.Group){
     const board=new T.Mesh(new T.PlaneGeometry(3.35,1.68),new T.MeshBasicMaterial({map:texture}));
     board.rotation.y=s.front===1?0:Math.PI;board.position.set(s.x,2.29,s.z-s.front*(s.d/2-.255));street.add(board);
     const back=-s.d/2+.27;
-    detail(0,.59,back,s.w-.48,1.18,.055,wood);
+    const panel=detail(0,.59,back,s.w-.48,1.18,.055,paintedBoards);
+    const panelUV=panel.geometry.getAttribute('uv');
+    for(let i=0;i<panelUV.count;i++)panelUV.setX(i,panelUV.getX(i)*s.w/1.6);
     for(const side of [-1,1]){
       detail(side*(s.w/2-.27),.59,0,.055,1.18,s.d-.52,wood);
       detail(side*3.85,2.3,back+.05,1.46,1.46,.08,iron);

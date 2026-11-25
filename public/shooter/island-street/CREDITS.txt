@@ -7,3 +7,6 @@ https://github.com/petroulacl/fps-buildings-env-kit/tree/1dd8e932402deb82422920d
 
 Original storefront artwork incorporating the project's CC0 damaged plaster
 texture from Poly Haven: https://polyhaven.com/a/damaged_plaster
+
+Wood Floor Worn by Dimitrios Savva (CC0): https://polyhaven.com/a/wood_floor_worn
+Distressed Painted Planks by Rob Tuytel (CC0): https://polyhaven.com/a/distressed_painted_planks
