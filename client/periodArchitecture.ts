@@ -137,6 +137,79 @@ export function createPeriodArchitecture(world:World){
         for(let x=-wallX+.38;x<wallX;x+=.58)
           box(x,upper+.05,face,.26,.24,.21,brick,0,0,true);
         for(let j=0;j<6;j++)box(0,upper+.73+.16*j,face+.07*side,2.35,.083,.10,iron,side*.15,0,true);
+      }else if(cinema&&side===1){
+        const wine='#623e3b',bronze='#988462',ivory='#d8ccb0',green='#41524d';
+        const front=wallZ+.58;
+        // The poster vitrines already occupy the flanks. Fluted portal jambs sit on the solid
+        // ends of the wall, beyond the four-metre opening and above the pavement.
+        for(const wing of [-1,1]){
+          const jamb=wing*2.28;
+          box(jamb,1.75,front,.44,3.50,.38,green);
+          box(jamb,.28,front+.03,.52,.56,.43,'#655d54');
+          for(const dx of [-.11,0,.11])box(jamb+dx,1.97,front+.21,.037,2.68,.055,bronze,0,0,true);
+          box(jamb,3.48,front,.56,.21,.49,ivory);
+          // Vertical opal glass sconces light the ends of the poster cases.
+          const x=wing*8.18;
+          box(x,2.13,front,.31,1.42,.23,green);
+          add(new T.CylinderGeometry(.15,.15,1.18,8),x,2.13,front+.18,ivory);
+          for(const y of [1.51,2.75])box(x,y,front+.11,.40,.10,.43,bronze);
+          // Upper-floor masonry bands taper toward the centre above the existing marquee.
+          for(let line=0;line<3;line++){
+            const length=3.35-line*.49;
+            box(wing*(2.12+length/2),5.34+line*.23,front,length,.095,.14,bronze);
+          }
+        }
+        // A fanlight and its radiating glazing bars bridge the canopy and upper storey.
+        const fanY=5.16,fanZ=front+.08,radius=1.76;
+        const fan=new T.Shape();
+        fan.moveTo(-radius,0);fan.absarc(0,0,radius,Math.PI,0,true);fan.closePath();
+        const fanGeometry=new T.ShapeGeometry(fan,20);
+        add(fanGeometry,0,fanY,fanZ,'#42504a');
+        box(0,fanY,fanZ,3.72,.12,.19,ivory);
+        for(let i=0;i<9;i++){
+          const a=Math.PI*i/8,x=Math.cos(a),y=Math.sin(a);
+          box(x*radius/2,fanY+y*radius/2,fanZ+.047,radius,.051,.06,bronze,0,a);
+          if(i<8){
+            const middle=a+Math.PI/16;
+            box(Math.cos(middle)*radius,fanY+Math.sin(middle)*radius,fanZ+.025,
+              2*radius*Math.tan(Math.PI/16),.10,.11,ivory,0,middle+Math.PI/2);
+          }
+        }
+        // The tall blade sign gets its lettering from raised metal strokes; no extra texture or draw.
+        const bladeX=6.98,bladeZ=front+.48;
+        box(bladeX,7.46,bladeZ,1.20,6.18,.55,wine);
+        for(const wing of [-1,1]){
+          box(bladeX+wing*.60,7.53,bladeZ,.095,6.07,.64,bronze);
+          box(bladeX+wing*.78,7.20,bladeZ-.10,.16,5.75,.32,green);
+        }
+        box(bladeX,10.61,bladeZ,.90,.18,.56,bronze);
+        box(bladeX,10.76,bladeZ,.53,.17,.46,ivory);
+        const letterZ=bladeZ+.305;
+        function stroke(y:number,x1:number,y1:number,x2:number,y2:number){
+          box(bladeX+(x1+x2)/2,y+(y1+y2)/2,letterZ,Math.hypot(x2-x1,y2-y1),.085,.048,ivory,0,Math.atan2(y2-y1,x2-x1));
+        }
+        const left=-.30,right=.30,top=.42,bottom=-.42;
+        stroke(9.55,left,bottom,left,top);stroke(9.55,left,-.05,right,top);stroke(9.55,-.17,.05,right,bottom);
+        stroke(8.26,0,bottom,0,top);stroke(8.26,-.22,top,.22,top);stroke(8.26,-.22,bottom,.22,bottom);
+        stroke(6.97,left,bottom,left,top);stroke(6.97,left,top,right,bottom);stroke(6.97,right,bottom,right,top);
+        for(let i=0;i<12;i++){
+          const a=i*Math.PI/6,b=(i+1)*Math.PI/6;
+          stroke(5.68,.33*Math.cos(a),.44*Math.sin(a),.33*Math.cos(b),.44*Math.sin(b));
+        }
+        // Flush stone flags laid in a runner from the street; offset rows reveal the coursing.
+        const stoneTones=['#858479','#918d80','#807e75','#969185'];
+        for(let row=0;row<5;row++){
+          const offset=row%2?.58:0;
+          for(let col=-3;col<=2;col++){
+            const lo=Math.max(-2.9,col*1.16+offset),hi=Math.min(2.9,(col+1)*1.16+offset);
+            if(hi-lo>.05)box((lo+hi)/2,.024,wallZ+.92+row*.83,hi-lo-.024,.046,.81,stoneTones[(row+col+4)%4]);
+          }
+        }
+        for(const wing of [-1,1]){
+          box(wing*3.02,.026,wallZ+2.58,.18,.050,4.16,green);
+          box(wing*3.16,.026,wallZ+2.58,.055,.050,4.16,bronze);
+        }
+        box(0,.027,wallZ+4.73,6.25,.052,.12,green);
       }else if(!cinema){
         // Limewashed townhouse gables have a small oculus, a cut stone belt and rusticated corners.
         add(new T.CylinderGeometry(.62,.62,.13,24),0,upper+1.30,face+.07*side,stone,Math.PI/2);

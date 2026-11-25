@@ -11,6 +11,7 @@ import {acquireWorldWeapon,retainWorldWeaponSession,worldWeaponStats} from './wo
 import {createOperationScene,createThrowingStarGeometry} from './operationScene';
 import {isCrawling,shotStability,eyeHeight as actorEyeHeight,eyePosition as actorEyePosition,armCount,hasLost} from '../shared/injuries';
 import {createInteriors} from './interiors';
+import {bakeShopLights} from './shopLighting';
 import {interiorWorld,insideBuilding,interiorFixtures} from '../shared/interiors';
 import {createChainsaw} from './chainsaw';
 import {createWanderers} from './wanderers';
@@ -289,6 +290,8 @@ export function createScene(
   const disposeMilitaryRoofs=mapId==='storm'?addMilitaryRoofs(scene,buildings,mat):undefined;
   const environmentUpgrade=loadEnvironmentUpgrade(scene,world,renderer);
   const mapDetails=createMapDetails(scene,world,mat,camera);
+  const harbourStreet=island?scene.getObjectByName('Harbour Road'):undefined;
+  const disposeShopLights=harbourStreet?bakeShopLights(harbourStreet):undefined;
   const claims=island?createHarbourClaims(scene):undefined;
   for (const x of [-34, 34])
     for (const z of [-12, 12]) {
@@ -1025,7 +1028,7 @@ export function createScene(
       residentVoice.dispose();
       hudResize.disconnect();wanderers.dispose();interiors.dispose();interactionHint.remove();
       ammoReadout.remove();scope.remove();
-      claims?.dispose();mapDetails.dispose();disposeMilitaryRoofs?.();environmentUpgrade.dispose();
+      claims?.dispose();disposeShopLights?.();mapDetails.dispose();disposeMilitaryRoofs?.();environmentUpgrade.dispose();
       hitEffects.dispose();gore.dispose();operationScene.dispose();remainsScene.dispose();muzzleEffects.dispose();
       cancelAnimationFrame(raf);
       listeners.forEach((f) => f());

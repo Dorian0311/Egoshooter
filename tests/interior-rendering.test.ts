@@ -3,10 +3,35 @@ import assert from 'node:assert/strict';
 import * as T from 'three';
 import {createInteriorLighting} from '../client/interiorLighting';
 import {createInteriors} from '../client/interiors';
+import {bakeShopLights} from '../client/shopLighting';
 import {createWeaponScene} from '../client/weaponScene';
 import {instanceStaticModel,batchStaticMeshes} from '../client/scenery';
 import {getWorld} from '../shared/world';
 import {initialInteriors,interiorFixtures} from '../shared/interiors';
+
+test('baked shop lighting shares one atlas and leaves exterior paving alone',()=>{
+ const street=new T.Group(),original=new T.MeshStandardMaterial();
+ const tile=(x:number,z:number)=>{
+  const geometry=new T.PlaneGeometry(1,1,2,2).rotateX(-Math.PI/2);
+  const mesh=new T.Mesh(geometry,original);
+  mesh.position.set(x,.1,z);
+  street.add(mesh);
+  return mesh;
+ };
+ const diner=tile(60,-34.8),supply=tile(48,-11),road=tile(60,-23);
+ const dispose=bakeShopLights(street);
+ const atlas=diner.material.lightMap;
+ assert.ok(atlas&&atlas===supply.material.lightMap);
+ assert.notEqual(diner.material,original);
+ assert.equal(road.material,original);
+ assert.ok(diner.geometry.getAttribute('uv1').getX(4)>.25);
+ assert.equal(street.children.length,3);
+ dispose();
+ assert.equal(diner.material,original);
+ assert.equal(diner.geometry.hasAttribute('uv1'),false);
+ street.children.forEach(child=>(child as T.Mesh).geometry.dispose());
+ original.dispose();
+});
 
 test('opaque colour variants batch without losing surface colours or shadow flags',()=>{
  const root=new T.Group();

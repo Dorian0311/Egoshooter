@@ -148,6 +148,9 @@ with sync_playwright() as pw:
         page.locator('.city-map-'+map_id).click()
     page.get_by_role('button',name='Einzelspieler & Koop').click()
     page.get_by_label('Variante').select_option('battle')
+    condition=os.environ.get('HARBOUR_CONDITION')
+    if condition:
+        page.get_by_label('Einsatzbedingungen').select_option(condition)
     enemies = int(os.environ.get('HARBOUR_ENEMIES', '0'))
     if enemies:
         page.get_by_label('Gefecht',exact=True).select_option('alone')
@@ -273,7 +276,7 @@ with sync_playwright() as pw:
                 entry=read_profile(page,name+' entrance')
                 print('Entered',name,flush=True)
                 if os.environ.get('HARBOUR_SCREENSHOTS')=='1':
-                    page.screenshot(path=str(OUT/f'{width}x{height}-{name}.jpg'),type='jpeg',quality=90)
+                    page.screenshot(path=str(OUT/f'{width}x{height}-{condition or "standard"}-{name}.jpg'),type='jpeg',quality=90)
                     # Screenshots can synchronously read back the GPU. Discard that frame from the turn.
                     page.evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))')
                 result=measure(page,name)
@@ -302,5 +305,7 @@ with sync_playwright() as pw:
         page.keyboard.press('e')
         page.get_by_text('Für Ihre Sterbeurkunde',exact=False).wait_for(timeout=5000)
         print('Nachlassschalter: two successive decisions confirmed in game',flush=True)
-    (OUT/f'report-{bots}-bots-{width}x{height}.json').write_text(json.dumps(dict(bots=bots,width=width,height=height,results=results),indent=2))
+    suffix=f'-{condition}' if condition else ''
+    report=dict(bots=bots,width=width,height=height,condition=condition or 'standard',results=results)
+    (OUT/f'report-{bots}-bots-{width}x{height}{suffix}.json').write_text(json.dumps(report,indent=2))
     browser.close()

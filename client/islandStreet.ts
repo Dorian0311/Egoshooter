@@ -261,7 +261,26 @@ export function addIslandStreet(scene:T.Group){
       const windowX=s.x+direction*s.w*.285;
       cuboid(windowX,s.h*.192,edge+s.front*.11,s.w*.386,.10,.23,concrete);
       cuboid(windowX,s.h*.425,edge+s.front*.045,.058,s.h*.46,.10,trim);
+      // Profiled sills, stall risers and outer posts catch light at street level.
+      // The central doorway and the openings above each display stay clear.
+      const outerX=s.x+direction*(s.w/2-.20);
+      const frameWidth=s.w/2-1.30;
+      const frameX=s.x+direction*(1.16+frameWidth/2);
+      const frontZ=edge+s.front*.126;
+      cuboid(outerX,y/2,frontZ,.20,y,.18,wood);
+      cuboid(outerX,y/2,frontZ+s.front*.104,.040,y-.12,.034,accent);
+      cuboid(frameX,.18,frontZ,frameWidth,.17,.092,iron);
+      cuboid(frameX,.83,frontZ,frameWidth,.073,.095,wood);
+      for(let panel=0;panel<3;panel++){
+        const center=frameX+frameWidth*((panel+.5)/3-.5);
+        const panelWidth=frameWidth/3-.075;
+        cuboid(center,.477,frontZ+s.front*.03,panelWidth,.43,.085,wood);
+        cuboid(center,.48,frontZ+s.front*.081,panelWidth-.105,.32,.034,accent);
+        cuboid(center,.614,frontZ+s.front*.110,panelWidth-.155,.038,.024,trim);
+      }
     }
+    cuboid(s.x,s.h-.13,edge+s.front*.085,s.w+.16,.15,.24,iron);
+    cuboid(s.x,s.h-.21,edge+s.front*.085,s.w+.13,.055,.17,concrete);
     if(index===0){
       const blade=loader.load(base+'diner-sign.webp');blade.colorSpace=T.SRGBColorSpace;
       const face=new T.MeshStandardMaterial({map:blade,roughness:.65});

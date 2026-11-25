@@ -178,9 +178,10 @@ export function createHuman(data:HumanData|BonusCharacterData|CivilianCharacterD
   const bell=new T.Mesh(new T.ConeGeometry(.008,.018,12,1,true),hornMaterial);bell.position.set(.099,.012,-.166);bell.rotation.z=-.9;headgear.add(bell);
 
  }
+ const islandKit=!civilian&&uniformId.startsWith('task-');
  if(!civilian){
  part(0,.94,0,.34,.035,.24,'#4a3e2b');part(.085,1.15,-.135,.105,.13,.014,outfit.color);part(-.085,1.15,-.135,.105,.13,.014,outfit.color);
- if(!civilian&&uniformId.startsWith('task-')){
+ if(islandKit){
   const vest=uniformId==='task-olive'?'#39473b':'#706c53';
   // A bevelled plate carrier narrows at the clavicles and flares around the ribs.
   const carrier=new T.Shape();carrier.moveTo(-.15,-.12);carrier.lineTo(-.144,.055);carrier.lineTo(-.098,.15);
@@ -191,8 +192,31 @@ export function createHuman(data:HumanData|BonusCharacterData|CivilianCharacterD
    const plate=new T.Mesh(shell.clone(),detailMaterial(vest));plate.position.set(0,1.235,z);plate.castShadow=true;equipment.add(plate);
   }
   shell.dispose();
-  for(let n=0;n<3;n++)part((n-1)*.095,1.12,-.218,.08,.16,.055,vest);
-  for(let row=0;row<4;row++)part(0,1.22+row*.04,-.202,.29,.013,.012,'#92977b');
+  const binding=uniformId==='task-olive'?'#575c46':'#81775d';
+  const web=uniformId==='task-olive'?'#454d38':'#665e48';
+  const buckle='#333731';
+  // Rounded fabric volumes catch light across the flanks of the pack and pouches.
+  function padded(x:number,y:number,z:number,w:number,h:number,d:number,color:string){
+   const mesh=new T.Mesh(new T.SphereGeometry(1,8,4),detailMaterial(color));
+   mesh.position.set(x,y,z);mesh.scale.set(w/2,h/2,d/2);mesh.castShadow=true;equipment.add(mesh);return mesh;
+  }
+  for(let n=-1;n<=1;n++){
+   part(n*.09,1.12,-.218,.079,.138,.051,web).rotation.z=-n*.045;
+   padded(n*.09,1.17,-.24,.086,.068,.031,binding);
+   part(n*.09,1.15,-.252,.018,.039,.006,buckle);
+  }
+  for(let row=0;row<3;row++)part(0,1.235+row*.034,-.202,.242,.012,.009,binding);
+  // A short daypack sits above the belt. Its compression straps arc over the shell.
+  padded(0,1.24,.171,.30,.36,.186,vest);
+  padded(0,1.19,.234,.222,.168,.082,web);
+  for(const side of [-1,1]){
+   part(side*.074,1.216,.254,.026,.228,.012,binding).rotation.x=-.12;
+   part(side*.074,1.197,.269,.032,.028,.009,buckle);
+   const strap=part(side*.117,1.409,.003,.052,.019,.236,binding);strap.rotation.z=side*.17;
+   part(side*.127,1.351,-.127,.044,.146,.026,web).rotation.x=.40;
+   padded(side*.163,1.004,.028,.088,.126,.135,web);
+   part(side*.197,1.021,.026,.019,.027,.097,binding);
+  }
   part(.18,1.31,-.14,.06,.14,.05,'#26332d');part(.18,1.44,-.14,.009,.15,.009,'#1c2325');
   const rubber=detailMaterial('#34372f'),lens=detailMaterial('#47534c',.26);
   for(const side of [-1,1]){
@@ -208,7 +232,7 @@ export function createHuman(data:HumanData|BonusCharacterData|CivilianCharacterD
  const webColor=team==='de'?'#39342c':'#9b9576';
  function strap(points:T.Vector3[],radius:number,color:string){const mesh=new T.Mesh(new T.TubeGeometry(new T.CatmullRomCurve3(points),20,radius,6,false),detailMaterial(color,.95));mesh.castShadow=true;equipment.add(mesh);}
  for(const side of [-1,1]){
-   strap([new T.Vector3(side*.12,.97,-.17),new T.Vector3(side*.13,1.2,-.19),new T.Vector3(side*.15,1.43,-.07),new T.Vector3(side*.14,1.41,.12),new T.Vector3(side*.1,.98,.16)],.012,webColor);
+   if(!islandKit)strap([new T.Vector3(side*.12,.97,-.17),new T.Vector3(side*.13,1.2,-.19),new T.Vector3(side*.15,1.43,-.07),new T.Vector3(side*.14,1.41,.12),new T.Vector3(side*.1,.98,.16)],.012,webColor);
    for(let n=0;n<3;n++){part(side*(.07+n*.043),.99,-.173,.038,.075,.04,team==='de'?'#453b2d':'#8c8566');part(side*(.07+n*.043),1.032,-.182,.04,.012,.045,webColor);}
  }
  part(.18,1.02,.14,.13,.17,.055,webColor);part(.18,1.11,.145,.14,.025,.06,webColor);
@@ -218,7 +242,7 @@ export function createHuman(data:HumanData|BonusCharacterData|CivilianCharacterD
  if(uniformId==='de-field')for(const side of [-1,1]){part(side*.055,1.49,-.11,.035,.03,.007,'#353c34');for(const dx of [-.007,.007])part(side*.055+dx,1.49,-.116,.003,.022,.002,'#a4aaa0');}
  const collar=new T.Mesh(new T.CylinderGeometry(.086,.095,.07,32,1,true),uniform);collar.position.set(0,1.51,-.018);equipment.add(collar);
  const jacketColor=outfit.color;
- for(const side of [-1,1]){
+ if(!islandKit)for(const side of [-1,1]){
   part(side*.085,1.205,-.15,.11,.025,.012,jacketColor);
   part(side*.085,1.19,-.16,.009,.009,.007,'#656651');
   part(side*.14,1.43,-.025,.05,.006,.08,jacketColor);

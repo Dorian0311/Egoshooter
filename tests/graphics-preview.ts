@@ -40,12 +40,16 @@ function show() {
   scene?.dispose();
   if(simulation)clearInterval(simulation);
   const mapId = view.value === 'storm'||view.value==='combat' ? 'storm' : view.value === 'frontline' ? 'frontline' : view.value === 'alpine' ? 'alpine' : 'cologne';
-  const player = makePlayer('review', 'GrafikprÃ¼fung', 'de', 0, getWorld(mapId));
+  const player = makePlayer('review', 'Grafikprüfung', 'de', 0, getWorld(mapId));
   if(view.value==='storm')Object.assign(player,{x:-25,y:0,z:9,yaw:-1.18,pitch:-.04});
   if(view.value==='frontline')Object.assign(player,{x:-28,y:0,z:0,yaw:-.9,pitch:-.01});
   if(view.value==='frontline'&&params.get('focus')==='station'){
-    const station=getWorld(mapId).buildings.find(building=>building.name==='GÃœTERBAHNHOF')!;
+    const station=getWorld(mapId).buildings.find(building=>building.name==='GÜTERBAHNHOF')!;
     Object.assign(player,{x:station.x-10,y:0,z:station.z+21,yaw:-.47,pitch:.035});
+  }
+  if(view.value==='frontline'&&params.get('focus')==='cinema'){
+    const cinema=getWorld(mapId).buildings.find(building=>building.name==='UNION-LICHTSPIELE')!;
+    Object.assign(player,{x:cinema.x+3,y:0,z:cinema.z+23,yaw:.14,pitch:.14});
   }
   if(view.value==='interior')Object.assign(player,{x:-48,y:0,z:5,yaw:0,pitch:-.08});
   if(view.value==='upstairs')Object.assign(player,{x:-48,y:4.125,z:-29,yaw:0,pitch:-.08});
