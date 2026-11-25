@@ -230,12 +230,47 @@ export function createHuman(data:HumanData|BonusCharacterData|CivilianCharacterD
  }
 
  const webColor=team==='de'?'#39342c':'#9b9576';
- function strap(points:T.Vector3[],radius:number,color:string){const mesh=new T.Mesh(new T.TubeGeometry(new T.CatmullRomCurve3(points),20,radius,6,false),detailMaterial(color,.95));mesh.castShadow=true;equipment.add(mesh);}
+ // Flat leather or web braces follow the chest, shoulder and back in one strip.
+ function brace(side:number){
+  const width=team==='de'?.028:.042;
+  const points=[[.114,.967,-.181],[.132,1.19,-.175],[.145,1.37,-.12],[.139,1.447,-.037],[.134,1.432,.086],[.122,1.33,.143],[.08,.978,.154]];
+  const positions:number[]=[],uv:number[]=[],indices:number[]=[];
+  for(let i=0;i<points.length;i++){
+   const [x,y,z]=points[i],front=i<3?-1:i>3?1:0;
+   for(const edge of [-1,0,1]){
+    positions.push(side*x+edge*width*.5,y+(i===3&&edge===0?.003:0),z+(edge===0?front*.003:0));
+    uv.push((edge+1)*.5,i/(points.length-1));
+   }
+   if(i>0){const n=i*3;for(const offset of [0,1])indices.push(n-3+offset,n+offset,n-2+offset,n-2+offset,n+offset,n+1+offset);}
+  }
+  const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(positions,3));g.setAttribute('uv',new T.Float32BufferAttribute(uv,2));g.setIndex(indices);g.computeVertexNormals();
+  const mesh=new T.Mesh(g,detailMaterial(webColor));mesh.castShadow=true;equipment.add(mesh);
+  const keeper=part(side*.133,1.29,-.152,width+.007,.014,.01,'#55554b');keeper.rotation.x=.32;
+ }
  for(const side of [-1,1]){
-   if(!islandKit)strap([new T.Vector3(side*.12,.97,-.17),new T.Vector3(side*.13,1.2,-.19),new T.Vector3(side*.15,1.43,-.07),new T.Vector3(side*.14,1.41,.12),new T.Vector3(side*.1,.98,.16)],.012,webColor);
+   if(!islandKit)brace(side);
    for(let n=0;n<3;n++){part(side*(.07+n*.043),.99,-.173,.038,.075,.04,team==='de'?'#453b2d':'#8c8566');part(side*(.07+n*.043),1.032,-.182,.04,.012,.045,webColor);}
  }
- part(.18,1.02,.14,.13,.17,.055,webColor);part(.18,1.11,.145,.14,.025,.06,webColor);
+ if(islandKit){
+  part(.18,1.02,.14,.13,.17,.055,webColor);part(.18,1.11,.145,.14,.025,.06,webColor);
+ }else if(!data.coat){
+  const alpine=uniformId==='fr-alpine',crew=uniformId==='de-panzer';
+  const canvas=team==='de'?'#666650':alpine?'#48514c':'#78775d';
+  // A crewman's compact belt case and a field haversack have different profiles.
+  const bag=new T.Mesh(new T.SphereGeometry(1,8,5),detailMaterial(canvas));
+  bag.scale.set(crew?.065:.111,crew?.079:.118,crew?.042:.062);
+  bag.position.set(.14,1.005,.133);bag.rotation.z=-.19;bag.castShadow=true;equipment.add(bag);
+  part(.145,1.045,.172,crew?.09:.16,.040,.024,webColor).rotation.z=-.19;
+  part(.154,1.009,.184,.021,.067,.013,'#544d3e').rotation.z=-.19;
+  if(alpine){
+   const roll=new T.Mesh(new T.CylinderGeometry(.059,.061,.294,10),detailMaterial('#606257'));
+   roll.position.set(0,1.17,.188);roll.rotation.z=Math.PI/2;roll.castShadow=true;equipment.add(roll);
+   for(const x of [-.086,.086]){
+    const binding=new T.Mesh(new T.CylinderGeometry(.063,.063,.025,10,1,true),detailMaterial(webColor));
+    binding.rotation.z=Math.PI/2;binding.position.set(x,1.17,.188);binding.castShadow=true;equipment.add(binding);
+   }
+  }
+ }
  if(team==='fr'&&map==='alpine'){
    for(const side of [-1,1]){const patch=part(side*.055,1.49,-.11,.035,.03,.007,'#23334b');patch.rotation.z=side*.2;part(side*.055,1.49,-.115,.018,.003,.003,'#b9a35c');}
  }
@@ -247,7 +282,9 @@ export function createHuman(data:HumanData|BonusCharacterData|CivilianCharacterD
   part(side*.085,1.19,-.16,.009,.009,.007,'#656651');
   part(side*.14,1.43,-.025,.05,.006,.08,jacketColor);
   part(side*.139,1.436,-.045,.012,.007,.012,'#77786b');
-  for(let row=0;row<8;row++)part(side*.138,1.09+row*.014,-.148,.002,.006,.002,'#686b5e');
+  // The lower tunic pockets stand proud of the skirt below the belt.
+  if(!data.coat){const pocket=part(side*.105,.884,-.135,.094,.085,.021,jacketColor);pocket.rotation.y=-side*.22;
+   const flap=part(side*.105,.916,-.149,.098,.024,.012,jacketColor);flap.rotation.y=pocket.rotation.y;}
  }
  part(0,.94,-.13,.055,.038,.015,'#888a79');part(0,.94,-.14,.038,.023,.005,'#3b4038');
  }

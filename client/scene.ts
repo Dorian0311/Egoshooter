@@ -40,6 +40,7 @@ import {RoomEnvironment} from 'three/examples/jsm/environments/RoomEnvironment.j
 import {createGraphics} from './graphics.ts';
 import type {GraphicsQuality} from './graphicsSettings.ts';
 import {createRiver,addFacadeDetails,addAlpineBackdrop,batchStaticMeshes} from './scenery.ts';
+import {createCologneCathedral} from './cologneCathedral';
 import {createMaterials,projectBoxUVs} from './materials.ts';
 import {addArchitecture,facadeColor} from './architecture.ts';
 import {createRockGeometry} from './rockGeometry.ts';
@@ -141,10 +142,10 @@ export function createScene(
     for(const z of [-8.8,8.8])for(const start of [-30,-10,10]){const points=Array.from({length:25},(_,i)=>new T.Vector3(start+i*20/24,1+9*Math.sin(Math.PI*i/24),z));const arch=new T.Mesh(new T.TubeGeometry(new T.CatmullRomCurve3(points),32,.16,6,false),mat('#394c43'));arch.castShadow=true;scene.add(arch);for(let i=1;i<4;i++)cube(start+i*5,(1+9*Math.sin(Math.PI*i/4))/2,z,.16,1+9*Math.sin(Math.PI*i/4),.16,'#4b5b4f');}
     for(const z of [-5.5,-3,3,5.5])cube(0,.06,z,61,.12,.1,'#4b4d43');
     for(let x=-30;x<=30;x+=1)for(const z of [-4.25,4.25])cube(x,.025,z,.2,.05,3.3,'#594b37');
-    cube(-88,8,-45,25,16,23,'#726d61');for(const z of [-53,-37]){cube(-78,18,z,5,36,5,'#777365');const spire=new T.Mesh(new T.ConeGeometry(3.6,16,8),mat('#4c514a'));spire.position.set(-78,44,z);spire.castShadow=true;scene.add(spire);}
+    scene.add(createCologneCathedral(mat('#827866').map!));
   }else if(mapId==='alpine'){
-    renderer.setClearColor('#bac9d2');scene.fog=new T.Fog('#bac9d2',85,310);cube(0,-.2,0,150,.4,150,'#deded4');cube(0,-.01,0,140,.05,14,'#8b8a7d');
-    addAlpineBackdrop(scene);
+    renderer.setClearColor('#bac9d2');scene.fog=new T.Fog('#bac9d2',85,310);cube(0,-.2,0,177,.4,177,'#deded4');cube(0,-.01,0,140,.05,14,'#8b8a7d');
+    addAlpineBackdrop(scene,mat('#818783').map!,mat('#deded4').map!);
   }else if(mapId==='frontline'){
     scene.fog=new T.Fog('#b6a391',90,310);
   }else{

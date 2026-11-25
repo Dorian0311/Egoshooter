@@ -148,45 +148,4 @@ export function addFacadeDetails(scene: T.Scene, buildings: Building[],
   }
 }
 
-export function addAlpineBackdrop(scene: T.Scene) {
-  // One continuous ridge with deterministic erosion and snow, instead of isolated cones.
-  const segments = 192, rings = 24;
-  const positions: number[] = [], colors: number[] = [], indices: number[] = [];
-  const rock = new T.Color('#59666b'), snow = new T.Color('#e4edf0'), color = new T.Color();
-  for (let ring = 0; ring <= rings; ring++) {
-    const distance = 88 + ring * 6;
-    for (let i = 0; i <= segments; i++) {
-      const angle = i / segments * Math.PI * 2;
-      const ridge = 34 + 17 * Math.sin(angle * 7 + .4) + 12 * Math.sin(angle * 13) + 6 * Math.sin(angle * 23);
-      const envelope = Math.sin(Math.PI * ring / rings) ** .8;
-      const erosion = Math.sin(angle * 47 + ring * .55) * 2.3 + Math.cos(angle * 31 - ring * .8) * 1.8;
-      const y = Math.max(-2, (ridge + erosion) * envelope - 3);
-      positions.push(Math.cos(angle) * distance, y, Math.sin(angle) * distance);
-      const snowLine = T.MathUtils.smoothstep(y + erosion * 1.5, 19, 38);
-      color.copy(rock).lerp(snow, snowLine).multiplyScalar(.92 + .08 * Math.sin(angle * 47 + ring));
-      colors.push(color.r, color.g, color.b);
-      if (ring < rings && i < segments) {
-        const a = ring * (segments + 1) + i, b = a + segments + 1;
-        indices.push(a, a + 1, b, b, a + 1, b + 1);
-      }
-    }
-  }
-  const geometry = new T.BufferGeometry();
-  geometry.setAttribute('position', new T.Float32BufferAttribute(positions, 3));
-  geometry.setAttribute('color', new T.Float32BufferAttribute(colors, 3));
-  geometry.setIndex(indices); geometry.computeVertexNormals();
-  const terrain = new T.Mesh(geometry, new T.MeshStandardMaterial({ vertexColors: true, roughness: .94 }));
-  terrain.receiveShadow = true; scene.add(terrain);
-  const trees = new T.InstancedMesh(new T.ConeGeometry(1, 1, 10),
-    new T.MeshStandardMaterial({ color: '#2b443e', roughness: .94 }), 180);
-  const transform = new T.Object3D();
-  for (let i = 0; i < 60; i++) {
-    const angle = i * 2.39996, radius = 78 + (i % 5) * 1.7, height = 6 + (i % 7) * .6;
-    for (let layer = 0; layer < 3; layer++) {
-      transform.position.set(Math.cos(angle) * radius, height * (.3 + layer * .22), Math.sin(angle) * radius);
-      transform.scale.set(2.2 - layer * .5, height * .6, 2.2 - layer * .5);
-      transform.updateMatrix(); trees.setMatrixAt(i * 3 + layer, transform.matrix);
-    }
-  }
-  trees.castShadow = true; trees.receiveShadow = true; scene.add(trees);
-}
+export {addAlpineBackdrop} from './alpineBackdrop';

@@ -112,6 +112,7 @@ export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
     try{return renderer.compileAsync(object,weapon?weaponCamera:camera,weapon?viewmodel.scene:scene);}
     finally{renderer.setRenderTarget(previous);}
   }
+  const warmedShadowSources=new Set<string>();
   function warmupWorldDraw(actorRoots:readonly T.Group[]=[],actorsOnly=false){
     // compileAsync links colour programs. A tiny off-screen draw also
     // initializes vertex buffers, texture bindings and shadow depth programs.
@@ -131,16 +132,38 @@ export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
         for(const root of [actor.parent,actor])if(root&&!root.visible){root.visible=true;hidden.push(root);}
         if(actorsOnly)actor.traverseVisible(enableUpload);
       }
+      target.scissor.set(0,0,1,1);target.scissorTest=true;
+      renderer.setRenderTarget(target);
+      // These shadow casters may arrive after the first shadow map or start outside its frustum.
+      // Exercise one real mesh of each kind without unculling the entire map's shadows.
+      const sources=[
+        ['cover-crate-shadow-hulls','isInstancedMesh'],
+        ['civilian-rocketbox-male-adult-03','isSkinnedMesh'],
+      ] as const;
+      const prepared:string[]=[];
+      const restoreDepth:(()=>void)[]=[];
+      try{
+        for(const [name,property] of sources){
+          if(warmedShadowSources.has(name))continue;
+          const caster=scene.getObjectByName(name)?.getObjectByProperty(property,true);
+          if(!(caster instanceof T.Mesh))continue;
+          const culled=caster.frustumCulled,cast=caster.castShadow,mask=caster.layers.mask;
+          restoreDepth.push(()=>{caster.frustumCulled=culled;caster.castShadow=cast;caster.layers.mask=mask;});
+          caster.frustumCulled=false;caster.castShadow=true;caster.layers.mask|=camera.layers.mask;
+          for(let node:T.Object3D|null=caster;node;node=node.parent){
+            if(!node.visible){const hiddenNode=node;node.visible=true;restoreDepth.push(()=>{hiddenNode.visible=false;});}
+          }
+          prepared.push(name);
+        }
+        if(prepared.length||(!actorsOnly&&!sun.shadow.map)){
+          renderer.shadowMap.needsUpdate=true;
+          renderer.render(scene,camera);
+          prepared.forEach(name=>warmedShadowSources.add(name));
+        }
+      }finally{for(const restore of restoreDepth)restore();}
       if(actorsOnly){
         scene.traverseVisible(object=>{if(object instanceof T.Light)enableUpload(object);});
         camera.layers.set(uploadLayer);
-      }
-      target.scissor.set(0,0,1,1);target.scissorTest=true;
-      renderer.setRenderTarget(target);
-      // The colour scissor does not constrain shadow draws. Warm a still-missing shadow map with light culling intact.
-      if(!actorsOnly&&!sun.shadow.map){
-        renderer.shadowMap.needsUpdate=true;
-        renderer.render(scene,camera);
       }
       scene.traverseVisible(object=>{
         if(object instanceof T.Mesh&&object.layers.test(camera.layers)&&object.frustumCulled){uncull.push(object);object.frustumCulled=false;}
