@@ -11,9 +11,11 @@ export function createPeriodArchitecture(world:World){
   const translation=new T.Vector3(),scale=new T.Vector3(1,1,1),tint=new T.Color();
   for(const [number,b] of world.buildings.entries()){
     const broad:T.BufferGeometry[]=[],close:T.BufferGeometry[]=[];
+    let timetable:T.Mesh|undefined;
     const upper=b.upper?8:4,wallX=b.w/2,wallZ=b.d/2,gableZ=wallZ+.52;
     const alpine=world.id==='alpine',cinema=b.name==='UNION-LICHTSPIELE';
     const station=/BAHNHOF|KÖLN-DEUTZ/.test(b.name);
+    const deutz=world.id==='cologne'&&b.name==='DEUTZER BAHNHOF';
     const shed=/HALLE|WERKSHOF|DEPOT/.test(b.name)&&!alpine;
     const stone=['#a79d86','#ae9f85','#aba393'][number%3],shadow='#766e60';
     const brick=number%2?'#905e4c':'#985e48',iron='#454a42',timber='#665742';
@@ -61,7 +63,60 @@ export function createPeriodArchitecture(world:World){
         for(const [a,length] of hands)
           box(side*Math.sin(a)*length/2,cy+Math.cos(a)*length/2,face+side*.29,.055,length,.025,iron,0,-side*a);
         // Shallow wrought-iron canopy over the station entrance, with a fretwork valance.
-        if(world.id!=='frontline'||side<0){
+        if(deutz&&side===1){
+          // A shallow iron-and-wired-glass marquise over the main station frontage.
+          // Its brackets cantilever from the masonry; the entire approach stays open.
+          const green='#40534d',glazing=['#a2afa5','#aeb7ac','#94a399'];
+          const width=13.4,bays=8,panel=width/bays;
+          for(let i=0;i<bays;i++){
+            const x=(i+.5)*panel-width/2;
+            box(x,4.10,wallZ+1.79,panel-.045,.052,2.59,glazing[i%3],.085);
+          }
+          for(let i=0;i<=bays;i++){
+            const x=i*panel-width/2;
+            box(x,4.08,wallZ+1.79,.068,.12,2.73,green,.085);
+            if(i%2===0&&Math.abs(x)>2){
+              box(x,3.67,wallZ+.47,.12,.91,.17,green);
+              box(x,3.60,wallZ+1.44,.093,.10,2.23,green,-.35);
+              box(x,3.84,wallZ+1.45,.07,.38,.075,green,0,0,true);
+            }
+          }
+          box(0,3.97,wallZ+3.14,width+.16,.19,.14,green);
+          box(0,4.04,wallZ+3.18,width+.26,.06,.17,'#879185');
+          for(const x of [-7.65,7.65]){
+            const lampZ=wallZ+1.47;
+            box(x,3.12,wallZ+.40,.21,.46,.14,green);
+            box(x,3.26,wallZ+.94,.080,.11,1.12,green);
+            box(x,3.06,wallZ+.82,.065,.065,.93,green,-.37);
+            add(new T.CylinderGeometry(.06,.30,.16,6),x,3.15,lampZ,green);
+            add(new T.CylinderGeometry(.265,.18,.42,6),x,2.87,lampZ,'#d9ccb1');
+            add(new T.CylinderGeometry(.19,.09,.075,6),x,2.62,lampZ,green);
+          }
+          // Louvered attic openings flank the dial under its pitched stone pediment.
+          for(const x of [-3.35,3.35]){
+            box(x,upper+.84,face+.04,2.35,.69,.11,stone);
+            box(x,upper+.84,face+.12,2.12,.54,.08,'#4c5650');
+            for(let j=0;j<3;j++)box(x,upper+.66+j*.17,face+.19,2.08,.075,.09,green,-.25);
+          }
+          const boardX=-3.93,boardZ=wallZ+.57;
+          box(boardX,1.97,boardZ,2.38,1.84,.14,green);
+          box(boardX,2.94,boardZ+.055,2.49,.10,.24,iron);
+          box(boardX,1.02,boardZ+.06,2.48,.11,.24,stone);
+          const paper=new T.TextureLoader().load('/shooter/environment/deutz-abfahrt.webp');
+          paper.colorSpace=T.SRGBColorSpace;paper.anisotropy=4;
+          timetable=new T.Mesh(new T.PlaneGeometry(2.24,1.68),new T.MeshStandardMaterial({map:paper,roughness:.91}));
+          timetable.name='Deutzer Bahnhof – Abfahrtstafel';
+          timetable.position.set(boardX,1.97,boardZ+.075);
+          // Broad, flush joints define the forecourt pavement against the surrounding setts.
+          for(const dx of [-1,1]){
+            box(dx*6.45,.020,wallZ+3.18,.19,.04,5.78,'#a39984');
+            box(dx*4.16,.021,wallZ+6.02,4.74,.04,.18,'#aa9f88');
+            const grateX=dx*5.80,grateZ=wallZ+5.68;
+            box(grateX,.021,grateZ,.75,.043,.37,'#4a4c43',0,0,true);
+            for(let j=0;j<7;j++)box(grateX-.29+j*.097,.05,grateZ,.031,.021,.31,'#767568',0,0,true);
+            for(let j=0;j<4;j++)box(dx*(1.91+j*1.14),.017,wallZ+3.36,.035,.031,5.05,'#887f70',0,0,true);
+          }
+        }else if(world.id!=='frontline'||side<0){
           const canopyZ=side*(wallZ+1.17);
           box(0,3.90,canopyZ,6.25,.12,1.88,'#637166',side*.065);
           box(0,3.78,canopyZ+side*.94,6.30,.23,.09,iron);
@@ -106,6 +161,7 @@ export function createPeriodArchitecture(world:World){
       if(!geometry)continue;
       geometry.computeBoundingSphere();
       const mesh=new T.Mesh(geometry,material);mesh.receiveShadow=true;
+      if(details&&timetable)mesh.add(timetable);
       lod.addLevel(mesh,distance,.10);
     }
     for(const geometry of [...broad,...close])geometry.dispose();

@@ -7,7 +7,7 @@ errors=[]
 with sync_playwright() as p:
  browser=p.chromium.launch(headless=True,channel=os.getenv("PLAYWRIGHT_CHANNEL"))
  context=browser.new_context(viewport={'width':1366,'height':900})
- context.add_init_script("if(!localStorage.getItem('eiserne-front-changelog'))localStorage.setItem('eiserne-front-changelog','island-harbour-road-2026-11-25')")
+ context.add_init_script("if(!localStorage.getItem('eiserne-front-changelog'))localStorage.setItem('eiserne-front-changelog','island-zeitreise-grafik-2026-11-25')")
  page=context.new_page();page.on('pageerror',lambda error:errors.append(str(error)))
  page.goto('http://127.0.0.1:5173/',wait_until='networkidle')
  dialog=page.get_by_role('dialog',name='Neu in Eiserne Front',exact=True)
@@ -16,7 +16,7 @@ with sync_playwright() as p:
   expect(dialog.get_by_role('heading',name=heading,exact=True)).to_have_count(1)
  page.screenshot(path=str(output/'changelog-desktop.png'))
  page.get_by_role('button',name='Verstanden · zur App',exact=True).click();expect(dialog).to_have_count(0)
- assert page.evaluate("localStorage.getItem('eiserne-front-changelog')")=='island-zeitreise-grafik-2026-11-25'
+ assert page.evaluate("localStorage.getItem('eiserne-front-changelog')")=='island-zeitreise-grafik-2026-11-26'
  page.reload(wait_until='networkidle');expect(dialog).to_have_count(0)
  page.get_by_label('Benutzername',exact=True).fill('ChangelogQA'+str(int(time.time()))[-7:])
  page.get_by_label('Passwort',exact=True).fill('Local-only-Changelog-4921')

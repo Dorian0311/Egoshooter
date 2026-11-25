@@ -56,7 +56,32 @@ export function addIslandStreet(scene:T.Group){
     slabs.receiveShadow=true;street.add(slabs);
     for(let x=32;x<=94;x+=3.5)cuboid(x,.14,kerb+side*1.74,.022,.006,3.6,iron);
   }
-  for(let x=33;x<94;x+=6)cuboid(x,.064,-23,2.9,.012,.12,trim);
+  // Recesses and uneven paint make the carriageway read as a working street.
+  // All road details sit below step height and share the existing street batches.
+  const gutter=paint('#383b37'),grate=paint('#696861'),roadPaint=paint('#c4bba1');
+  const wear=paint('#a49c85');
+  for(const side of [-1,1]){
+    const z=-23+side*4.32;
+    cuboid(63,.058,z,63.5,.004,.14,gutter);
+    for(const x of [39,57,82]){
+      cuboid(x,.062,z,.76,.005,.43,gutter);
+      for(let i=0;i<8;i++)cuboid(x+(i-3.5)*.087,.067,z,.033,.007,.38,grate);
+    }
+  }
+  for(let x=33;x<94;x+=6)if(x!==69)cuboid(x,.064,-23,2.9,.012,.12,trim);
+  // The crossing sits between shop entrances, clear of the center dashes.
+  for(let i=0;i<9;i++){
+    const z=-23+(i-4)*.84;
+    const x=68.95+.04*Math.sin(i*4);
+    cuboid(x,.063,z,1.64,.004,.37,roadPaint);
+    cuboid(x+.49*Math.cos(i*3),.066,z+.085,.40,.003,.17,wear);
+  }
+  const manhole=new T.Mesh(new T.CylinderGeometry(.39,.39,.018,20),gutter);
+  manhole.position.set(57.2,.061,-24.85);manhole.receiveShadow=true;street.add(manhole);
+  for(let i=-3;i<=3;i++){
+    const halfWidth=Math.sqrt(.35**2-(i*.092)**2);
+    cuboid(57.2,.073,-24.85+i*.092,halfWidth*2,.005,.021,grate);
+  }
   const atlas=loader.load(base+'shops.webp');atlas.colorSpace=T.SRGBColorSpace;atlas.anisotropy=4;
   const facade=new T.MeshStandardMaterial({map:atlas,roughness:.93});
   const prints=loader.load(base+'interior-prints.webp');

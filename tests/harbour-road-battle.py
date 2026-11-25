@@ -85,6 +85,8 @@ def read_profile(page, name):
     for i in sorted(range(1,len(frames)),key=lambda i:frames[i]['frameMs'],reverse=True)[:3]:
         if frames[i]['frameMs']>45:
             result.setdefault('slowFrames',[]).append(dict(ms=frames[i]['frameMs'], previous=frames[i-1]))
+    if os.environ.get('BATTLE_SHADER_PROFILE')=='1':
+        result['slowShaders']=page.evaluate("()=>window.slowShaders.filter(s=>s.start>=window.turnStarted).map(({start,duration,path})=>({start,duration,path}))")
     result['longTasks']=page.evaluate("""()=> (window.harbourLongFrames??[])
         .filter(f=>f.startTime>=(window.turnStarted??Infinity)).sort((a,b)=>b.duration-a.duration).slice(0,4)""")
     return result
@@ -98,7 +100,7 @@ with sync_playwright() as pw:
     page.add_init_script("""if(PerformanceObserver.supportedEntryTypes.includes('long-animation-frame')){
         window.harbourLongFrames=[];
         new PerformanceObserver(list=>{for(const f of list.getEntries()){
-          const tasks=f.scripts.map(s=>({url:s.sourceURL?.split('/').pop()?.split('?')[0],fn:s.sourceFunctionName,ms:Math.round(s.duration)})).sort((a,b)=>b.ms-a.ms).slice(0,3);
+          const tasks=f.scripts.map(s=>({url:s.sourceURL?.split('/').pop()?.split('?')[0],fn:s.sourceFunctionName,invoker:s.invoker,type:s.invokerType,ms:Math.round(s.duration)})).sort((a,b)=>b.ms-a.ms).slice(0,3);
           harbourLongFrames.push({startTime:f.startTime,duration:Math.round(f.duration),tasks});
           if(harbourLongFrames.length>100)harbourLongFrames.shift();
         }}).observe({type:'long-animation-frame'});
@@ -128,6 +130,10 @@ with sync_playwright() as pw:
             return log;
           }""".replace("split('\n')","split('\\n')"))
     page.route(re.compile(r'/client/App\.tsx(\?|$)'), observe)
+    # Keep the measured game on the version it opened with, including during local Vite edits.
+    page.add_init_script("""window.WebSocket=class extends WebSocket {
+      constructor(url, protocols){super(url,protocols);if(protocols==='vite-hmr')this.addEventListener('message',event=>event.stopImmediatePropagation());}
+    }""")
     page.goto(BASE,wait_until='domcontentloaded')
     button = lambda name: page.get_by_role('button',name=name,exact=True)
     button('Verstanden · zur App').click()
@@ -230,7 +236,7 @@ with sync_playwright() as pw:
     if map_id != 'storm':
         # Short walk from the regular western team spawn, then look both ways in the street.
         sx,sz = page.evaluate('[harbourQA.player.x,harbourQA.player.z]')
-        page.evaluate('harbourQA.scene.profileFrames(3000)')
+        page.evaluate('window.turnStarted=performance.now();harbourQA.scene.profileFrames(3000)')
         walk(page,sx+4,sz)
         entry=read_profile(page,map_id+' approach')
         profiler=None
@@ -261,7 +267,7 @@ with sync_playwright() as pw:
         for attempt in range(3):
             try:
                 walk(page,x,-23)
-                page.evaluate('harbourQA.scene.profileFrames(3000)')
+                page.evaluate('window.turnStarted=performance.now();harbourQA.scene.profileFrames(3000)')
                 walk(page,x,door)
                 walk(page,x,inside)
                 entry=read_profile(page,name+' entrance')
@@ -271,7 +277,7 @@ with sync_playwright() as pw:
                     # Screenshots can synchronously read back the GPU. Discard that frame from the turn.
                     page.evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))')
                 result=measure(page,name)
-                page.evaluate('harbourQA.scene.profileFrames(3000)')
+                page.evaluate('window.turnStarted=performance.now();harbourQA.scene.profileFrames(3000)')
                 walk(page,x,door)
                 walk(page,x,-23)
                 results.append(dict(entry=entry,turn=result,exit=read_profile(page,name+' exit')))

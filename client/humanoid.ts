@@ -17,14 +17,13 @@ const coatTextureCache=new Map<string,{texture:T.Texture;refs:number}>();
 function acquireCoatTexture(file:string,color:boolean){let entry=coatTextureCache.get(file);if(!entry){const texture=new T.TextureLoader().load('/shooter/characters/greatcoat/'+file);if(color)texture.colorSpace=T.SRGBColorSpace;texture.anisotropy=4;entry={texture,refs:0};coatTextureCache.set(file,entry);}entry.refs++;return entry.texture;}
 function releaseCoatTexture(texture:T.Texture){for(const [file,entry]of coatTextureCache)if(entry.texture===texture){if(--entry.refs===0){texture.dispose();coatTextureCache.delete(file);}break;}}
 
-const clothImages=new Map<string,Promise<HTMLImageElement>>();
+const surfaceImages=new Map<string,Promise<HTMLImageElement>>();
 const surfaceTextures=new WeakMap<HTMLImageElement,{texture:T.Texture;users:number}>();
-function clothImage(tactical:boolean){
- const file=tactical?'island-cloth':'field-cloth';
- let pending=clothImages.get(file);
+function surfaceImage(file:string){
+ let pending=surfaceImages.get(file);
  if(!pending){
-  pending=new T.ImageLoader().loadAsync('/shooter/characters/'+file+'.webp').catch(error=>{clothImages.delete(file);throw error;});
-  clothImages.set(file,pending);
+  pending=new T.ImageLoader().loadAsync('/shooter/characters/'+file).catch(error=>{surfaceImages.delete(file);throw error;});
+  surfaceImages.set(file,pending);
  }
  return pending;
 }
@@ -80,11 +79,17 @@ function fitFieldUniform(data:HumanData){
  fieldFit.set(data.positions,fitted);return fitted;
 }
 let source:Promise<HumanData>|null=null;
-function loadBaseHuman(){return source??=fetch('/shooter/characters/humanoid.json').then(r=>{if(!r.ok)throw Error('Human model unavailable');return r.json() as Promise<HumanData>;}).then(async data=>{const [image,motion]=await Promise.all([new T.ImageLoader().loadAsync('/shooter/characters/skin.png'),loadMotionLibrary()]);data.skinImage=image;data.motion=motion;return data;}).catch(e=>{source=null;throw e;});}
+function loadBaseHuman(){return source??=fetch('/shooter/characters/humanoid.json').then(r=>{if(!r.ok)throw Error('Human model unavailable');return r.json() as Promise<HumanData>;}).then(async data=>{data.motion=await loadMotionLibrary();return data;}).catch(e=>{source=null;throw e;});}
 export async function loadHuman(uniformId?:UniformId,civilian=false){
  if(civilian)return loadCivilianCharacter();
  if(uniformId&&isBonusId(uniformId))return loadBonusCharacter(uniformId);
- const [data,cloth]=await Promise.all([loadBaseHuman(),uniformId==='de-greatcoat'?undefined:clothImage(!!uniformId?.startsWith('task-')).catch(()=>undefined)]);
+ const island=uniformId==='task-olive'||uniformId==='task-sand';
+ const [base,skinImage,cloth]=await Promise.all([
+  loadBaseHuman(),
+  island?surfaceImage(uniformId+'-skin.webp').catch(()=>surfaceImage('skin.png')):surfaceImage('skin.png'),
+  uniformId==='de-greatcoat'?undefined:surfaceImage(island?'island-cloth.webp':'field-cloth.webp').catch(()=>undefined),
+ ]);
+ const data={...base,skinImage};
  if(uniformId!=='de-greatcoat')return {...data,clothImage:cloth};
  coatSource??=fetch('/shooter/characters/greatcoat/rigged.json').then(r=>{if(!r.ok)throw Error('Mantelmodell konnte nicht geladen werden');return r.json() as Promise<CoatPiece[]>;}).catch(e=>{coatSource=null;throw e;});
  return {...data,coat:await coatSource};
