@@ -14,13 +14,13 @@ export function coastalHeadland(seed:number){
  const positions:number[]=[],colors:number[]=[],indices:number[]=[];
  const sections=sectors,stone=new T.Color(),rim=new T.Color();
  const rings=[
-  {radius:1.04,height:-.16,color:'#5e7777'},
-  {radius:1,height:.13,color:'#a98869'},
-  {radius:.91,height:.5,color:'#c99574'},
-  {radius:.88,height:.72,color:'#dec39a'},
-  {radius:.79,height:.79,color:'#659261'},
-  {radius:.59,height:.95,color:'#7da25c'},
-  {radius:.30,height:1,color:'#85a769'},
+  {radius:1.04,height:-.16,color:'#7f9b97'},
+  {radius:1,height:.13,color:'#bbc3bd'},
+  {radius:.91,height:.5,color:'#eee9df'},
+  {radius:.88,height:.72,color:'#f5ebd8'},
+  {radius:.79,height:.79,color:'#a0b48b'},
+  {radius:.59,height:.95,color:'#96b074'},
+  {radius:.30,height:1,color:'#96af7c'},
  ];
  for(const [row,ring] of rings.entries()){
   for(let i=0;i<sections;i++){
@@ -43,6 +43,30 @@ export function coastalHeadland(seed:number){
  g.setAttribute('position',new T.Float32BufferAttribute(positions,3));
  g.setAttribute('color',new T.Float32BufferAttribute(colors,3));
  g.setIndex(indices);g.computeVertexNormals();return g;
+}
+
+/** Unwrap each cliff around its folds in metres. Split the UV seam while retaining smooth normals. */
+export function texturedHeadland(index:number){
+ const [, , width,height,depth]=islandHeadlands[index];
+ const shell=coastalHeadland(index*1.7),surface=shell.toNonIndexed();
+ shell.dispose();
+ const p=surface.getAttribute('position'),uv=new Float32Array(p.count*2);
+ const period=11,turns=Math.max(1,Math.round(Math.PI*(width+depth)/period));
+ for(let i=0;i<p.count;i+=3){
+  const angles=[0,1,2].map(k=>Math.atan2(p.getZ(i+k),p.getX(i+k))/(2*Math.PI));
+  const seam=Math.max(...angles)-Math.min(...angles)>.5;
+  for(let k=0;k<3;k++){
+   const v=i+k,x=p.getX(v)*width,y=p.getY(v)*height,z=p.getZ(v)*depth;
+   if(i>=4*sectors*6){ // Project the sloping crown from above.
+    uv[2*v]=x/period;uv[2*v+1]=z/period;
+   }else{
+    uv[2*v]=(angles[k]+(seam&&angles[k]<0?1:0))*turns+index*.37;
+    uv[2*v+1]=(y-.2*Math.hypot(x,z))/period;
+   }
+  }
+ }
+ surface.setAttribute('uv',new T.BufferAttribute(uv,2));
+ return surface;
 }
 
 /** Drape the scan across the sea-facing terraces, retaining its local relief and baked UVs. */

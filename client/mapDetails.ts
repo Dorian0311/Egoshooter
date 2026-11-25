@@ -8,7 +8,7 @@ import {projectBoxUVs} from './materials';
 import {islandCourseRadius,islandRoute,islandUnderpass,nearIslandRoute} from '../shared/islandRoute';
 import {applySurfaceFinish} from './surfaceFinish';
 import {terrainHeight} from '../shared/terrain';
-import {coastalHeadland,islandHeadlands} from './coastalHeadland';
+import {texturedHeadland,islandHeadlands} from './coastalHeadland';
 import {addIslandStreet} from './islandStreet';
 import {inIslandStreet} from '../shared/islandStreet';
 import {createBattleTerrain} from './battleTerrain';
@@ -281,9 +281,9 @@ export function createMapDetails(scene:T.Scene,world:World,get:(color:string)=>T
           }
       }
     }
-    const cliffMaterial=material('#ffffff');cliffMaterial.vertexColors=true;
+    const cliffMaterial=get('#858a79');
     for(const [i,[x,z,width,height,depth]] of islandHeadlands.entries()){
-      const cliff=new T.Mesh(coastalHeadland(i*1.7),cliffMaterial);
+      const cliff=new T.Mesh(texturedHeadland(i),cliffMaterial);
       cliff.position.set(x,-4,z);cliff.scale.set(width,height,depth);
       cliff.rotation.y=i*.87;root.add(cliff);
     }
