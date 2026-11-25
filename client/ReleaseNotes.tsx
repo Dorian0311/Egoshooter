@@ -5,7 +5,7 @@ const release='themenwelten-und-lichtspiele-2026-11-25';
 const storageKey='eiserne-front-changelog';
 let acknowledgedInSession=false;
 const changes=[
- ['Zwei Themenwelten','Wähle in der Lobby zwischen Island und 2. Weltkrieg. Köln, die Alpen und Operation Abendrot bieten historische Ausrüstung. Bonusfiguren und Sprengrennwagen gehören zur Insel.'],
+ ['Zwei Themenwelten','Wähle in der Lobby zwischen Island und Zeitreise. Köln, die Alpen und Operation Abendrot bieten historische Ausrüstung. Bonusfiguren und Sprengrennwagen gehören zur Insel.'],
  ['Union-Lichtspiele','Im Güterviertel von Operation Abendrot steht am Platz der Alten Mühle ein begehbares Kino. Sechs historische Propagandaplakate hängen in den Schaukästen. Im Saal siehst du das Archivfoto von 1935.'],
  ['Gewehr 43 mit ZF4','Das neue Gewehr ergänzt den Karabiner 98k mit ZF39. Wähle es für einen deiner fünf Waffenplätze. Halte die rechte Maustaste für den vierfachen Zoom.'],
  ['Luftschutzzeichen und Auszeichnungen','In Köln und im Güterviertel findest du LSR- und NA-Markierungen. Nach historischen Gefechten zeigt die Ergebnisansicht verdiente Auszeichnungen.'],

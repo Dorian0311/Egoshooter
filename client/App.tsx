@@ -312,7 +312,7 @@ export default function App({
           </p>
           <div className="theme-picker" role="group" aria-label="Spielwelt">
             <button aria-pressed={selectedMap==='storm'} onClick={()=>setSelectedMap('storm')}>Island</button>
-            <button aria-pressed={selectedMap!=='storm'} onClick={()=>{if(selectedMap==='storm')setSelectedMap('frontline');}}>2. Weltkrieg</button>
+            <button aria-pressed={selectedMap!=='storm'} onClick={()=>{if(selectedMap==='storm')setSelectedMap('frontline');}}>Zeitreise</button>
           </div>
           <div className="city-map-picker">{mapIds.filter(id=>(id==='storm')===(selectedMap==='storm')).map(id=><button key={id} aria-pressed={selectedMap===id} className={`city-map-${id} ${selectedMap===id?"selected":""}`} onClick={()=>setSelectedMap(id)}><span className={`map-preview map-preview-${id}`} aria-hidden="true"/><span className="map-card-copy"><strong>{getWorld(id).name}</strong><small>{getWorld(id).subtitle}</small></span></button>)}</div>
           <OperationSetup island={selectedMap==='storm'} busy={!access||busy} onStart={operation=>setStartIntent({create:true,training:operation.kind==='solo',operation})}/>
