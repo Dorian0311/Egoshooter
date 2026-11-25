@@ -1,3 +1,4 @@
+import {createWindowPanes} from './windowPanes';
 import {eyePosition} from '../shared/injuries';
 import {batchStaticMeshes} from './scenery';
 import {createInteriorLighting,type InteriorLamp} from './interiorLighting';
@@ -19,16 +20,16 @@ export function createInteriors(scene:T.Scene,world:World){
   const c=document.createElement('canvas');c.width=512;c.height=128;const ctx=c.getContext('2d')!;ctx.fillStyle='#303a33';ctx.fillRect(0,0,512,128);ctx.strokeStyle='#b8b08d';ctx.lineWidth=6;ctx.strokeRect(8,8,496,112);ctx.fillStyle='#dfd5b3';ctx.font='bold 40px serif';ctx.textAlign='center';ctx.fillText(text,256,80,470);
   const t=new T.CanvasTexture(c);t.colorSpace=T.SRGBColorSpace;textures.push(t);const m=new T.MeshStandardMaterial({map:t,roughness:1});materials.push(m);const plane=new T.Mesh(new T.PlaneGeometry(width,width/4),m);plane.position.set(x,y,z);creationTarget.add(plane);
  }
- const doors=new Map<string,T.Mesh>(),panes=new Map<string,T.Mesh>();
+ const doors=new Map<string,T.Mesh>();
  const lampMaterials:T.MeshStandardMaterial[]=[],lamps:InteriorLamp[]=[];
  const fixtures=interiorFixtures(world);let state=initialInteriors(world);
  const glass=new T.MeshPhysicalMaterial({color:0xa5c5ba,transparent:true,opacity:.24,roughness:.12,metalness:.1,side:T.DoubleSide,depthWrite:false});materials.push(glass);
  // A pane is a thin surface, not a double-sided box. One pass avoids both
  // redundant transparency layers and per-pane shader-side toggling in Three.
  glass.forceSinglePass=true;
+ const panes=createWindowPanes(root,fixtures,glass);
  for(const f of fixtures){
   if(f.type==='door'){const o=mesh(doorBox(f,false),wood);doors.set(f.id,o);const handle=new T.Mesh(new T.BoxGeometry(.18,.05,.08),metal);handle.position.set(1.4,0,.13);o.add(handle);}
-  if(f.type==='glass'){const o=new T.Mesh(new T.PlaneGeometry(f.box.d,f.box.h),glass);o.rotation.y=Math.PI/2;o.position.set(f.box.x,f.box.y,f.box.z);o.receiveShadow=true;root.add(o);panes.set(f.id,o);}
   if(f.type==='light'){mesh(f.box,paper);box(f.box.x,f.box.y,f.box.z+.07,.06,.12,.03,metal);}
  }
  const floors=new Map<number,T.MeshStandardMaterial>();
@@ -66,8 +67,15 @@ export function createInteriors(scene:T.Scene,world:World){
  creationTarget=root;
  // Bound each room independently so a batch behind the camera does not keep
  // furniture from every building in the world/shadow render lists.
- for(const room of rooms){batchStaticMeshes(room,new Set());freezeStaticTransforms(room);}
- batchStaticMeshes(root,new Set<T.Object3D>([...doors.values(),...panes.values()]));
+ const roomPaint=new Set([wood,metal,fabric,paper,plaster,dark]);
+ for(const room of rooms){
+  batchStaticMeshes(room,new Set(),Infinity,roomPaint);
+  for(const child of room.children){
+   if(child instanceof T.Mesh&&child.material instanceof T.MeshStandardMaterial&&child.material.vertexColors)materials.push(child.material);
+  }
+  freezeStaticTransforms(room);
+ }
+ batchStaticMeshes(root,new Set<T.Object3D>(doors.values()));
  const lighting=createInteriorLighting(root,lamps),origin={x:0,y:0,z:0};
  const dustGeometry=new T.BufferGeometry(),dustPositions=new Float32Array(72*3);dustGeometry.setAttribute('position',new T.BufferAttribute(dustPositions,3));
  const dustMaterial=new T.PointsMaterial({color:0xf1dfb7,size:.018,transparent:true,opacity:.23,depthWrite:false});materials.push(dustMaterial);const dust=new T.Points(dustGeometry,dustMaterial);root.add(dust);
@@ -88,8 +96,9 @@ export function createInteriors(scene:T.Scene,world:World){
     const box=doorBox(fixture,open),mesh=doors.get(fixture.id)!;
     mesh.position.set(box.x,box.y,box.z);mesh.rotation.y=open?Math.PI/2:0;
     mesh.updateMatrix();mesh.matrixAutoUpdate=false;
-   }else if(fixture.type==='glass')panes.get(fixture.id)!.visible=!state.broken.includes(fixture.id);
+   }
   }
+  panes.sync(state.broken);
   lampMaterials.forEach((material,n)=>material.emissiveIntensity=state.lights[`light-${n}`]===false?0:1.1);
  }
  sync(state);
@@ -104,5 +113,5 @@ export function createInteriors(scene:T.Scene,world:World){
    const room=p?insideBuilding(world,p.x,p.z):-1;dust.visible=room>=0&&state.lights[`light-${room}`]!==false;
    if(room>=0){const b=world.buildings[room],floor=(p?.y??0)>=3.8?4:0;for(let n=0;n<72;n++){dustPositions[n*3]=b.x+Math.sin(n*12.3+time*.00007)*5;dustPositions[n*3+1]=floor+.3+((n*.173+time*.00004)%3);dustPositions[n*3+2]=b.z+Math.cos(n*8.7+time*.0001)*5;}dustGeometry.attributes.position.needsUpdate=true;dustGeometry.boundingSphere!.center.set(b.x,floor+1.8,b.z);}
    for(let n=shards.length-1;n>=0;n--){const s=shards[n];s.life-=dt;if(s.life<=0){s.mesh.removeFromParent();shards.splice(n,1);continue;}s.velocity.y-=9.8*dt;s.mesh.position.addScaledVector(s.velocity,dt);s.mesh.rotation.x+=dt*3;}
-  },dispose(){lighting.dispose();root.traverse(o=>{if(o instanceof T.Mesh||o instanceof T.Points)o.geometry.dispose();});materials.forEach(m=>m.dispose());textures.forEach(t=>t.dispose());shardGeometry.dispose();marks.dispose();root.removeFromParent();}};
+  },dispose(){lighting.dispose();panes.dispose();root.traverse(o=>{if(o instanceof T.Mesh||o instanceof T.Points)o.geometry.dispose();});materials.forEach(m=>m.dispose());textures.forEach(t=>t.dispose());shardGeometry.dispose();marks.dispose();root.removeFromParent();}};
 }

@@ -1,11 +1,15 @@
 import * as T from 'three';
 import {GLTFLoader} from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type {World} from '../shared/world';
-import {nearIslandRoute} from '../shared/islandRoute';
+import {islandRoute,islandUnderpass,nearIslandRoute} from '../shared/islandRoute';
 import {inIslandStreet} from '../shared/islandStreet';
 import {terrainHeight} from '../shared/terrain';
 import {instanceStaticModel} from './scenery';
 import type {GraphicsQuality} from './graphicsSettings';
+import {scannedCliffFaces} from './coastalHeadland';
+import {createPeriodQuarter} from './periodQuarter';
+import {createPeriodArchitecture} from './periodArchitecture';
+import {createCoastalArchitecture} from './coastalArchitecture';
 import {applySurfaceFinish} from './surfaceFinish';
 
 function disposeSource(root:T.Object3D){
@@ -19,6 +23,9 @@ function disposeSource(root:T.Object3D){
  * Entrances, side firing windows, doors, stairs and their collision stay open. */
 export function loadEnvironmentUpgrade(scene:T.Scene,world:World,renderer:T.WebGLRenderer){
  const loader=new GLTFLoader(),sources:T.Group[]=[],root=new T.Group();root.name='imported-environment';root.matrixAutoUpdate=false;scene.add(root);let disposed=false;
+ const architecture=world.id==='storm'?createCoastalArchitecture(world.buildings):createPeriodArchitecture(world);
+ if(world.id==='cologne'||world.id==='frontline')architecture.add(createPeriodQuarter(world.id));
+ root.add(architecture);sources.push(architecture);
  const distantDetails:T.InstancedMesh[]=[];
  const markDetails=(from:number)=>{
   if(world.id!=='storm')return;
@@ -35,6 +42,17 @@ export function loadEnvironmentUpgrade(scene:T.Scene,world:World,renderer:T.WebG
   if(foliage&&material.transparent){material.transparent=false;material.alphaTest=.4;material.depthWrite=true;material.needsUpdate=true;}
  }});
  const loading:Promise<unknown>[]=[];
+ if(world.id==='storm'){
+  loading.push(loader.loadAsync('/shooter/environment/coastal-cliff.glb').then(({scene:model})=>{
+   if(disposed){disposeSource(model);return;}
+   const face=model.getObjectByProperty('isMesh',true) as T.Mesh|undefined;
+   if(!face){disposeSource(model);return;}
+   sources.push(model);const scan=face.geometry;
+   face.geometry=scannedCliffFaces(scan);scan.dispose();
+   face.name='Photogrammetric coastal cliff faces';face.castShadow=false;face.receiveShadow=false;
+   root.add(model);
+  }).catch(error=>console.warn('Coastal cliff scan unavailable:',error)));
+ }
  const packs=world.id==='storm'?['modular_factory_facade']:world.id==='frontline'?['modular_factory_facade','modular_urban_apartments_facade']:['modular_urban_apartments_facade'];
  for(const pack of packs){
   loading.push(loader.loadAsync('/shooter/models/'+pack+'/runtime.gltf').then(({scene:model})=>{
@@ -77,6 +95,27 @@ export function loadEnvironmentUpgrade(scene:T.Scene,world:World,renderer:T.WebG
     if(world.id==='frontline'&&name==='rock_moss_set_01')continue;
     const placement=new T.Object3D(),scale=height/Math.max(.01,size.y);placement.scale.setScalar(scale);placement.rotation.y=n*2.39996;
     placement.position.set(x,terrainHeight(x,z,world),z);placement.updateMatrix();placements.push(placement.matrix.clone());
+   }
+   if(name==='wild_rooibos_bush'&&world.id==='storm'){
+    // The road verge uses the smallest actual scanned mesh, spatially instanced.
+    const shrub=model.getObjectByName('wild_rooibos_bush_e')??part,low=shrub.clone();
+    shrub.matrixWorld.decompose(low.position,low.quaternion,low.scale);
+    const plant=new T.Group();plant.add(low);plant.updateMatrixWorld(true);
+    const bounds=new T.Box3().setFromObject(plant),dimensions=bounds.getSize(new T.Vector3());
+    plant.position.set(-(bounds.min.x+bounds.max.x)/2,-bounds.min.y,-(bounds.min.z+bounds.max.z)/2);
+    const road=new T.CatmullRomCurve3(islandRoute.map(([x,z])=>new T.Vector3(x,0,z)));
+    const verge:T.Matrix4[]=[],pose=new T.Object3D();
+    for(let i=0;i<30;i++){
+      const t=(i+.35)/30,point=road.getPointAt(t),direction=road.getTangentAt(t);
+      for(const side of [-1,1]){
+        const offset=side*(3.45+(i%4)*.43),x=point.x+direction.z*offset,z=point.z-direction.x*offset;
+        if(inIslandStreet(x,z)||Math.abs(z-islandUnderpass.z)<4)continue;
+        pose.scale.setScalar((.56+((i*7+side+1)%9)*.065)/Math.max(.01,dimensions.y));
+        pose.rotation.y=i*2.4+side;pose.position.set(x,terrainHeight(x,z,world)-.05,z);
+        pose.updateMatrix();verge.push(pose.matrix.clone());
+      }
+    }
+    const first=root.children.length;instanceStaticModel(root,plant,verge,false,24);markDetails(first);
    }
    if(placements.length){
     const first=root.children.length;

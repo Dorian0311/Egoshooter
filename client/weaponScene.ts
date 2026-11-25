@@ -25,7 +25,7 @@ export function createWeaponScene(world:T.Scene,camera:T.PerspectiveCamera,weapo
  bounce.target.position.set(0,-.27,-.75);
  camera.add(bounce,bounce.target);
  function sync(){
-  scene.environment=world.environment;scene.environmentIntensity=world.environmentIntensity;
+  scene.environment=world.environment;scene.environmentIntensity=world.environmentIntensity;scene.environmentRotation.copy(world.environmentRotation);
   bounce.intensity=sky?.visible?Math.min(.62,.67*sky.intensity):0;
   for(const {source,copy}of lights){
    source.updateWorldMatrix(true,false);copy.matrix.copy(source.matrixWorld);

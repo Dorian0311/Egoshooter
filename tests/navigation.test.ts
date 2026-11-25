@@ -2,7 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {createNavigation} from '../server/navigation';
 import {Game,makePlayer} from '../shared/game';
-import {getWorld,mapIds} from '../shared/world';
+import {getWorld,ground,mapIds} from '../shared/world';
 import {initialInteriors} from '../shared/interiors';
 import {safeNear,initialPickups} from '../shared/operations';
 import {Bots} from '../server/bots';
@@ -13,6 +13,11 @@ for(const map of mapIds)test(`Recast ${map}: spawn routes, goals, pickups and do
   const route=nav.path(a,b);assert.ok(route.length>1,`${map}: no path between spawns`);
   assert.ok(nav.reachable(safeNear(world,24,12)),`${map}: mission target unreachable`);
   for(const pickup of initialPickups(world))assert.ok(nav.reachable(pickup),`${map}: pickup ${pickup.id} off navmesh`);
+  if(map==='storm'){
+   assert.ok(nav.reachable({x:-61,y:ground(-61,67,world),z:67}),'ground on the northwest hill must be on the dynamic navmesh');
+   const boulder=world.boxes.find(b=>b.kind==='rock')!;
+   assert.equal(nav.reachable({x:boulder.x,y:0,z:boulder.z}),false,'a bot must not route inside a coastal boulder');
+  }
   if(map==='storm')for(const side of [-1,1])assert.ok(nav.path({x:side*18,y:0,z:0},{x:0,y:3,z:0}).some(p=>p.y>2.8),'radio platform stair connection missing');
   const interiors=initialInteriors(world),door=Object.keys(interiors.doors)[0];interiors.doors[door]=false;nav.sync(interiors);interiors.doors[door]=true;nav.sync(interiors);assert.ok(nav.path(a,b).length>1);
  }finally{nav.dispose();}

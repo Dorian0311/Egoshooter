@@ -16,7 +16,27 @@ export async function createNavigation(mapId:MapId){
   for(let x=-extent;x<extent;x+=step)for(let z=-extent;z<extent;z+=step){if(!withinPlayArea(x+1,z+1,world))continue;const p=(a:number,b:number)=>[a,world.id==='cologne'&&Math.abs(a)<30&&Math.abs(b)>10?-7:terrainHeight(a,b,world),b];triangle(p(x,z),p(x,z+step),p(x+step,z));triangle(p(x+step,z),p(x,z+step),p(x+step,z+step));}
   for(const b of world.boxes){
    if(b.kind==='stair')continue;
-   if(b.kind==='rock'){const hull=rockHull(b);for(const face of hull.faces)for(let n=1;n+1<face.length;n++)triangle(hull.vertices[face[0]],hull.vertices[face[n]],hull.vertices[face[n+1]]);continue;}
+   if(b.kind==='rock'){
+    const hull=rockHull(b),vertices=hull.vertices.map(([x,y,z])=>[b.x+x,b.y+y,b.z+z]);
+    for(const face of hull.faces)for(let n=1;n+1<face.length;n++)triangle(vertices[face[0]],vertices[face[n]],vertices[face[n+1]]);
+    // Recast rasterises triangles, not solid volumes. Over the terrain a tall
+    // closed shell alone leaves a second navigable floor inside the boulder.
+    // Downward-facing sections fill that cavity without changing the outer surface.
+    for(let y=b.y-b.h/2+.75;y<b.y+b.h/2;y+=1.25){
+     const section:number[][]=[];
+     for(const face of hull.faces)for(let i=0;i<face.length;i++){
+      const from=vertices[face[i]],to=vertices[face[(i+1)%face.length]];
+      if(from[1]>y||to[1]<=y)continue;
+      const t=(y-from[1])/(to[1]-from[1]);
+      section.push([from[0]+(to[0]-from[0])*t,y,from[2]+(to[2]-from[2])*t]);
+     }
+     if(section.length<3)continue;
+     const cx=section.reduce((sum,v)=>sum+v[0],0)/section.length,cz=section.reduce((sum,v)=>sum+v[2],0)/section.length;
+     section.sort((a,c)=>Math.atan2(a[2]-cz,a[0]-cx)-Math.atan2(c[2]-cz,c[0]-cx));
+     for(let i=1;i+1<section.length;i++)triangle(section[0],section[i],section[i+1]);
+    }
+    continue;
+   }
    const v=Array.from({length:8},(_,n)=>[b.x+(n&1?1:-1)*b.w/2,b.y+(n&2?1:-1)*b.h/2,b.z+(n&4?1:-1)*b.d/2]);
    for(const f of [[0,4,6,2],[1,3,7,5],[0,1,5,4],[2,6,7,3],[0,2,3,1],[4,5,7,6]]){triangle(v[f[0]],v[f[1]],v[f[2]]);triangle(v[f[0]],v[f[2]],v[f[3]]);}
   }
@@ -33,7 +53,10 @@ export async function createNavigation(mapId:MapId){
    triangle(v[top[0]],v[top[1]],v[top[2]]);triangle(v[top[0]],v[top[2]],v[top[3]]);
    for(const f of [[0,2,4],[1,5,3],[2,3,5],[2,5,4],[0,1,3],[0,3,2]])triangle(v[f[0]],v[f[1]],v[f[2]]);
   }
-  const generated=generateTileCache(positions,indices,{cs:.2,ch:.05,walkableHeight:35,walkableClimb:7,walkableRadius:2,walkableSlopeAngle:40,tileSize:64,maxObstacles:128,expectedLayersPerTile:4});
+  // The dynamic tile mesh approximates height between its polygon boundaries.
+  // Shorter spans preserve the Island hill crests within the query's vertical tolerance.
+  const tileSize=world.id==='storm'?32:64;
+  const generated=generateTileCache(positions,indices,{cs:.2,ch:.05,walkableHeight:35,walkableClimb:7,walkableRadius:2,walkableSlopeAngle:40,tileSize,maxObstacles:128,expectedLayersPerTile:4});
   if(!generated.success)throw Error(`Navigation ${mapId}: ${generated.error}`);
   // Heightfield layers can split a narrow stair connection inside a tile. Keep a full
   // watershed mesh for those routes; live movement and door interaction still gate entry.

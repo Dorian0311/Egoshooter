@@ -100,10 +100,21 @@ test('furniture batches stay inside their own buildings; doors, glass and light 
   const pane=interiorFixtures(world).find(f=>f.type==='glass')!;
   state.broken.push(pane.id);state.lights['light-0']=false;interiors.sync(state);
   assert.notEqual(door.rotation.y,oldRotation);
-  const paneMesh=root.children.find(o=>o instanceof T.Mesh&&Math.abs(o.position.x-pane.box.x)<.01&&Math.abs(o.position.z-pane.box.z)<.01&&Math.abs(o.position.y-pane.box.y)<.01)!;
-  assert.equal(paneMesh.visible,false);
-  assert.ok(paneMesh instanceof T.Mesh);assert.equal(paneMesh.geometry.index?.count,6);
-  assert.equal((paneMesh.material as T.Material).forceSinglePass,true);
+  const facades=root.children.filter((o):o is T.InstancedMesh=>o instanceof T.InstancedMesh&&o.name.startsWith('glass-facade-'));
+  assert.equal(facades.length,world.buildings.length*2);
+  const hasPane=()=>{
+   const matrix=new T.Matrix4(),point=new T.Vector3();
+   for(const facade of facades)for(let i=0;i<facade.count;i++){
+    facade.getMatrixAt(i,matrix);point.setFromMatrixPosition(matrix).add(facade.position);
+    if(point.distanceTo(new T.Vector3(pane.box.x,pane.box.y,pane.box.z))<.001)return true;
+   }
+   return false;
+  };
+  assert.equal(hasPane(),false);
+  assert.equal(facades.reduce((sum,f)=>sum+f.count,0),interiorFixtures(world).filter(f=>f.type==='glass').length-state.broken.length);
+  state.broken.splice(state.broken.indexOf(pane.id),1);interiors.sync(state);assert.ok(hasPane());
+  assert.equal(facades[0].geometry.index?.count,6);
+  assert.equal((facades[0].material as T.Material).forceSinglePass,true);
   interiors.dispose();assert.equal(scene.children.length,0);
  }finally{
   if(previous)Object.defineProperty(globalThis,'document',previous);else Reflect.deleteProperty(globalThis,'document');

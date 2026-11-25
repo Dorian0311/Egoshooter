@@ -1,5 +1,6 @@
 import * as T from 'three';
 import {ConvexGeometry} from 'three/examples/jsm/geometries/ConvexGeometry.js';
+import {crateColorLod,type CrateIndexAsset} from './crateColorLod';
 import {instanceStaticModel} from './scenery';
 
 /** The closed crate body, lid and latch each retain their own outer hull.
@@ -29,6 +30,7 @@ function createCrateShadowSource(source:T.Object3D){
 /** Three checks the world camera's layers for shadow casters. A separate
  * visibility scope keeps the proxy meshes out of the ordinary color pass. */
 export function createCrateShadows(renderer:T.WebGLRenderer,world:T.Scene,compact:boolean){
+ const lod=crateColorLod();
  const color=new T.Group(),depth=new T.Group();
  color.name='cover-crates';depth.name='cover-crate-shadow-hulls';
  color.matrixAutoUpdate=depth.matrixAutoUpdate=false;
@@ -56,7 +58,7 @@ export function createCrateShadows(renderer:T.WebGLRenderer,world:T.Scene,compac
  };
  shadowMap.render=renderWithCrates;
  function setCompact(value:boolean){
-  compact=value;
+  compact=value;if(!compact)lod.restore();
   setDetailedCastShadow(!compact||!proxySource);
  }
  return {
@@ -66,11 +68,24 @@ export function createCrateShadows(renderer:T.WebGLRenderer,world:T.Scene,compac
     const hulls=createCrateShadowSource(source);
     proxySource=hulls;
    }catch{/* The full original shadow caster is available if hull generation fails. */}
-   instanceStaticModel(color,source,placements,!compact||!proxySource,32);
+   // Keep one visible color mesh per original part and spatial cell. A cell
+   // swaps only its index buffers; it cannot draw or cast both color LODs.
+   const cells=new Map<string,T.Matrix4[]>();
+   for(const placement of placements){
+    const {elements:e}=placement,key=Math.floor(e[12]/32)+','+Math.floor(e[14]/32);
+    const cell=cells.get(key);if(cell)cell.push(placement);else cells.set(key,[placement]);
+   }
+   for(const cell of cells.values()){
+    const first=color.children.length;instanceStaticModel(color,source,cell,!compact||!proxySource);
+    lod.register(color.children.slice(first));
+   }
    if(proxySource)instanceStaticModel(depth,proxySource,placements,true,32);
   },
   setCompact,
+  setColorLod:(source:T.Object3D,asset:CrateIndexAsset)=>lod.load(source,asset),
+  updateColor:(camera:T.Camera,aimed:boolean)=>lod.update(camera,compact,aimed),
   dispose(){
+   lod.dispose();
    if(shadowMap.render===renderWithCrates)shadowMap.render=render;
    for(const group of [color,depth])for(const mesh of group.children)if(mesh instanceof T.InstancedMesh)mesh.dispose();
    const materials=new Set<T.Material>();

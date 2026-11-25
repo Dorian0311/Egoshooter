@@ -48,7 +48,7 @@ export class ResolutionGovernor {
     else this.stable=0;
     this.clearWindow();return this.scale;
   }
-  reset(){this.scale=1;this.clearWindow();this.stable=0;this.warmup=3;this.recoveryDelay=0;}
+  reset(initialScale=1){this.scale=initialScale;this.clearWindow();this.stable=0;this.warmup=3;this.recoveryDelay=0;}
 }
 // Bound total pixels as well as DPR: a 4K monitor must not allocate 8K render targets.
 export function renderPixelRatio(quality: GraphicsQuality, dpr: number, width: number, height: number) {

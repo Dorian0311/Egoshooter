@@ -33,5 +33,11 @@
       "sha256": "7a3471b4d110fe9927f4a200191eae86fa3c0a08f8e8e797d22e94a1703322e1",
       "bytes": 1236928
     }
-  ]
+  ],
+  "foliageOpacity": {
+    "file": "textures/foliage.webp",
+    "alphaSource": "https://dl.polyhaven.org/file/ph-assets/Models/png/1k/wild_rooibos_bush/wild_rooibos_bush_alpha_1k.png",
+    "colorSource": "textures/wild_rooibos_bush_diff_1k.jpg",
+    "license": "CC0-1.0"
+  }
 }

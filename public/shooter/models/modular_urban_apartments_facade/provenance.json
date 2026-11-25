@@ -89,8 +89,8 @@
     }
   ],
   "runtime": {
-    "geometryBytes": 384316,
-    "sha256": "f98aa5d3e4434bb9559a3ef6de4db25287891d18d57319f842c9b1087e1372c5",
-    "modifications": "Three selected facade modules, recentered; original geometry and PBR maps retained."
+    "geometryBytes": 124040,
+    "sha256": "5e3436f11f18d2303a0d1b6122120c3247052655e82bf1145f8643b4bf910657",
+    "modifications": "Three selected and recentered facade modules. Planar wall grids retessellated along their original outlines and openings; original UV mapping and window detail retained."
   }
 }

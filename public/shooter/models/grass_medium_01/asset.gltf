@@ -444,7 +444,12 @@
     },
     {
       "sampler": 0,
-      "source": 1
+      "source": 1,
+      "extensions": {
+        "EXT_texture_webp": {
+          "source": 3
+        }
+      }
     },
     {
       "sampler": 0,
@@ -466,6 +471,10 @@
       "mimeType": "image/jpeg",
       "name": "grass_medium_01_rough",
       "uri": "textures/grass_medium_01_arm_1k.jpg"
+    },
+    {
+      "uri": "textures/foliage.webp",
+      "mimeType": "image/webp"
     }
   ],
   "accessors": [
@@ -1469,5 +1478,8 @@
       "byteLength": 1006632,
       "uri": "grass_medium_01.bin"
     }
+  ],
+  "extensionsUsed": [
+    "EXT_texture_webp"
   ]
 }

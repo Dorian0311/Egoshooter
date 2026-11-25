@@ -1,12 +1,13 @@
 import {weaponSlot,fallbackSidearm,SNIPER_ID,G43_SCOPE_ID,ROCKET_ID} from '../shared/weapons';
 import {createCatSilencer} from './catSilencer';
+import {createHarbourClaims} from './harbourClaims';
 import {islandShops} from '../shared/islandStreet';
 import {nearbyBoxes} from '../shared/boxIndex';
 import {createBattleAudio,advanceFootstep,footstepMaterial,type StepState} from './battleAudio';
 import {createAnatomy} from './anatomy';
 import {createGore} from './gore';
 import {createRemainsScene} from './remainsScene';
-import {retainWorldWeaponSession,worldWeaponStats} from './worldWeapons';
+import {acquireWorldWeapon,retainWorldWeaponSession,worldWeaponStats} from './worldWeapons';
 import {createOperationScene,createThrowingStarGeometry} from './operationScene';
 import {isCrawling,shotStability,eyeHeight as actorEyeHeight,eyePosition as actorEyePosition,armCount,hasLost} from '../shared/injuries';
 import {createInteriors} from './interiors';
@@ -15,6 +16,7 @@ import {createChainsaw} from './chainsaw';
 import {createWanderers} from './wanderers';
 import {createMapDetails,detailedPropKinds} from './mapDetails';
 import {CameraMotion} from './cameraMotion';
+import {actorBehindWall} from './actorOcclusion';
 import {createActorDetails} from './actorDetails';
 import {RemoteMotion} from './remoteMotion';
 import {terrainHeight} from '../shared/terrain';
@@ -100,14 +102,14 @@ export function createScene(
       new T.Vector3(shop.x-shop.w/2,0,front-.30),
       new T.Vector3(shop.x+shop.w/2,shop.h,front+.30))};
   }):[];
-  const daylight=island?.92:.64;
-  const skyLight=new T.HemisphereLight(island?'#c3e9ff':'#cfdaeb',island?'#96a477':'#827662',daylight);
+  const daylight=island?.70:.64;
+  const skyLight=new T.HemisphereLight(island?'#c2d8f2':'#cfdaeb',island?'#9b8f77':'#827662',daylight);
   skyLight.layers.enable(1);scene.add(skyLight);
   const sun = new T.DirectionalLight("#fff0e0", 2.8);
-  if(mapId==='storm'){sun.color.set('#fff2d0');sun.intensity=3.1;}
+  if(mapId==='storm'){sun.color.set('#fff0db');sun.intensity=2.9;}
   if(mapId==='frontline'){sun.color.set('#ffd6a3');sun.intensity=2.7;}
   sun.layers.enable(1);
-  sun.position.set(-35, 28, 25);
+  sun.position.set(-70,island?99.5:80,55);
   sun.castShadow = true;
   scene.add(sun);
   const materialLibrary=createMaterials(renderer);
@@ -150,7 +152,7 @@ export function createScene(
   const coverVisuals:{box:(typeof boxes)[number];mesh:T.Mesh}[]=[];
   for (const b of boxes){
     if(b.kind==='interior'||detailedPropKinds.has(b.kind??''))continue;
-    if(b.kind==='rock'){const rock=new T.Mesh(createRockGeometry(b,island),mat('#818783'));rock.position.set(b.x,b.y,b.z);rock.castShadow=true;rock.receiveShadow=true;scene.add(rock);continue;}
+    if(b.kind==='rock'){const rock=new T.Mesh(createRockGeometry(b,island),mat(island?'#858a79':'#818783'));rock.position.set(b.x,b.y,b.z);rock.castShadow=true;rock.receiveShadow=true;scene.add(rock);continue;}
     const buildingIndex=buildings.findIndex(item=>Math.abs(b.x-item.x)<=item.w/2+.1&&Math.abs(b.z-item.z)<=item.d/2+.1);
     const visual=cube(
       b.x,
@@ -173,6 +175,8 @@ export function createScene(
     );
     if(b.kind==='cover')coverVisuals.push({box:b,mesh:visual});
   }
+  const daylightFog=scene.fog,daylightClear=renderer.getClearColor(new T.Color());
+  const daylightSun=sun.color.clone(),daylightStrength=sun.intensity;
   const sceneAssets=loadSceneAssets(scene,renderer,coverVisuals,graphicsQuality,island);
   for (const b of buildings) {
     if(mapId!=='storm'){
@@ -285,6 +289,7 @@ export function createScene(
   const disposeMilitaryRoofs=mapId==='storm'?addMilitaryRoofs(scene,buildings,mat):undefined;
   const environmentUpgrade=loadEnvironmentUpgrade(scene,world,renderer);
   const mapDetails=createMapDetails(scene,world,mat,camera);
+  const claims=island?createHarbourClaims(scene):undefined;
   for (const x of [-34, 34])
     for (const z of [-12, 12]) {
       cube(x, 2.6, z, 0.12, 5.2, 0.12, "#343d38");
@@ -292,7 +297,7 @@ export function createScene(
       bulb.position.set(x, 5.2, z);
       scene.add(bulb);
     }
-  batchStaticMeshes(scene,new Set(coverVisuals.map(cover=>cover.mesh)),island?64:32);
+  batchStaticMeshes(scene,new Set(coverVisuals.map(cover=>cover.mesh)),world.id==='frontline'?32:64);
   const interiors=createInteriors(scene,world);
   const interactionHint=document.createElement('div');interactionHint.style.cssText='position:absolute;bottom:23%;left:50%;transform:translateX(-50%);background:#15221ee6;color:#eef2df;padding:10px 18px;border:1px solid #cbd9a955;border-radius:6px;font:13px system-ui;pointer-events:none;z-index:4;display:none';canvas.parentElement?.append(interactionHint);
   const ammoReadout=document.createElement('div');ammoReadout.className='weapon-ammo';ammoReadout.setAttribute('aria-label','Munition an der Waffe');
@@ -378,19 +383,50 @@ export function createScene(
   const muzzleEffects=createMuzzleEffects(scene);
   const avatars = new Map<string, T.Group>();
   const contactShadows=createContactShadows(scene,buildings);
+  const opaqueWalls=world.boxes.filter(box=>box.kind==='wall');
   const actorFrustum=new T.Frustum(),actorProjection=new T.Matrix4(),actorBounds=new T.Sphere(new T.Vector3(),3.5);
   const residentVoice=createResidentVoice();
   const wanderers=inspectionView?createWanderers(scene,mapId):{update(_time:number,_dt:number){},dispose(){}};
+  const pendingActors=new Set<Promise<void>>(),preparedActors=new Set<T.Group>();
+  let nextActorBuild=Promise.resolve(),worldWarmed=false,actorUpload:Promise<void>|undefined;
+  // A shared GLTF may resolve a whole squad in one microtask. Give each CPU rig build its own frame.
+  function buildActor<T>(work:()=>T):Promise<T>{
+    const result=nextActorBuild.then(()=>new Promise<T>((resolve,reject)=>requestAnimationFrame(()=>{
+      try{resolve(work());}catch(error){reject(error);}
+    })));
+    nextActorBuild=result.then(()=>{},()=>{});
+    return result;
+  }
+  function queueActorUpload(group:T.Group){
+    preparedActors.add(group);
+    if(!worldWarmed)return;
+    if(!actorUpload)actorUpload=new Promise<void>((resolve,reject)=>requestAnimationFrame(()=>{
+      const roots=[...preparedActors].filter(actor=>actor.parent?.parent===scene);
+      preparedActors.clear();actorUpload=undefined;
+      try{if(!stopped&&roots.length)graphics.warmupWorldDraw(roots,true);resolve();}catch(error){reject(error);}
+    }));
+    return actorUpload;
+  }
   function avatar(p:Player){
     const g=new T.Group();g.position.set(p.x,p.y,p.z);g.userData.team=p.team;g.userData.uniform=p.uniform;g.userData.civilian=p.kind==='resident';scene.add(g);avatars.set(p.id,g);
     const nameplate=createPlayerNameplate(canvas.parentElement!,p.name,p.team===local?.team,p.kind==='resident'?residentProfile(p.id).biography:undefined);g.add(nameplate.anchor);g.userData.nameplate=nameplate;
-    void loadHuman(p.uniform,p.kind==='resident').then(async data=>{
+    const task=loadHuman(p.uniform,p.kind==='resident').then(data=>buildActor(()=>{
       if(stopped||avatars.get(p.id)!==g)return;
       const human=createHuman(data,p.team,mapId,mat(p.team==='de'?'#232629':mapId==='cologne'?'#6c7250':'#7a795e'),p.uniform,p.kind==='resident',p.id);
+      return human;
+    })).then(async human=>{
+      if(!human)return;
       try{await graphics.warmup(human.group);}catch(error){console.warn('Character shader warmup unavailable',error);}
-      if(stopped||avatars.get(p.id)!==g){human.dispose();return;}
-      g.add(human.group);g.userData.human=human;g.userData.details=createActorDetails(human.group);g.userData.anatomy=createAnatomy(human.group);g.userData.anatomy.setLost((g.userData.target as Player)?.injuries.lost??0);
+      const added=await buildActor(()=>{
+        if(stopped||avatars.get(p.id)!==g){human.dispose();return false;}
+        g.add(human.group);g.userData.human=human;g.userData.details=createActorDetails(human.group);
+        g.userData.anatomy=createAnatomy(human.group);
+        g.userData.anatomy.setLost((g.userData.target as Player)?.injuries.lost??0);
+        return true;
+      });
+      if(added)await queueActorUpload(human.group);
     }).catch(e=>console.warn('Human asset unavailable',String(e)));
+    pendingActors.add(task);void task.then(()=>pendingActors.delete(task));
     return g;
   }
   let snapshot: Snapshot | null = null,
@@ -456,7 +492,7 @@ export function createScene(
       return;
     }
     if(e.code===settings.bindings.sprint&&!e.repeat&&settings.sprintMode==='toggle')sprintToggled=!sprintToggled;
-    if(e.code===settings.bindings.interact&&!e.repeat&&local?.hp){const target=remainsScene.interaction(local,yaw)??operationScene.interaction(local,yaw)??interiors.interaction(local,yaw);if(target){const alternate='alternateId' in target&&typeof target.alternateId==='string'?target.alternateId:undefined;onInteract((e.shiftKey||pressed('sprint'))&&alternate?alternate:target.id);}}
+    if(e.code===settings.bindings.interact&&!e.repeat&&local?.hp){const target=remainsScene.interaction(local,yaw)??operationScene.interaction(local,yaw)??interiors.interaction(local,yaw)??claims?.interaction(local,yaw);if(target?.id==='harbour-claims'){claims?.use(performance.now());return;}if(target){const alternate='alternateId' in target&&typeof target.alternateId==='string'?target.alternateId:undefined;onInteract((e.shiftKey||pressed('sprint'))&&alternate?alternate:target.id);}}
     if(e.code===settings.bindings.throwStar&&!e.repeat&&local?.hp)onInteract('throw');
     if(e.code===settings.bindings.rocket&&!e.repeat&&local?.hp)onInteract('rocket');
     if(e.code===settings.bindings.bandage&&!e.repeat&&local?.hp)onInteract('bandage');
@@ -514,7 +550,18 @@ export function createScene(
     if(oldPhase&&oldPhase!==s.phase){battleAudio.clear();stepPositions.clear();}
     if(snapshot?.interiors&&s.interiors&&local){for(const f of interiorFixtures(world)){if(f.type==='door'&&snapshot.interiors.doors[f.id]!==s.interiors.doors[f.id]&&Math.hypot(f.box.x-local.x,f.box.z-local.z)<12){roomSound(new T.Vector3(f.box.x,f.box.y,f.box.z));break;}}}
     snapshot = s;interiors.sync(s.interiors);operationScene.sync(s);remainsScene.sync(s);
-    if(condition!==s.operation.condition){condition=s.operation.condition;if(condition==='fog'){scene.fog=new T.Fog('#a8b3b0',4,42);scene.background=scene.fog.color;}else if(condition==='night'){scene.fog=new T.Fog('#07101a',20,100);scene.background=scene.fog.color;sun.intensity=.18;renderer.setClearColor('#07101a');}}collisionWorld=interiorWorld(world,s.interiors);
+    if(condition!==s.operation.condition){
+      condition=s.operation.condition;
+      const night=condition==='night',fog=condition==='fog';
+      const weatherFog=night?new T.Fog('#131d2c',20,100):fog?new T.Fog('#a8b3b0',4,42):null;
+      scene.fog=weatherFog??daylightFog;
+      sceneAssets.setWeatherBackground(weatherFog?.color??null);
+      renderer.setClearColor(weatherFog?.color??daylightClear);
+      sun.color.copy(daylightSun);
+      if(night)sun.color.set('#abc8ee');
+      sun.intensity=night?.24:fog?daylightStrength*.35:daylightStrength;
+    }
+    collisionWorld=interiorWorld(world,s.interiors);
     myId = id;
     const own = s.players.find((p) => p.id === id);
     const movingActors=[...s.players,...s.npcs];
@@ -661,11 +708,26 @@ export function createScene(
   renderer.initTexture(muzzleEffects.texture);
   const worldPrepared=Promise.all([environmentUpgrade.ready,sceneAssets.ready]).then(async()=>{
     if(stopped)return;
-    await graphics.warmup(scene);
-    if(stopped)return;
-    environmentUpgrade.update(camera.position,'high');
-    try{graphics.warmupWorldDraw();}
-    finally{environmentUpgrade.update(camera.position,quality);}
+    // Bot equipment can resolve after actor preparation. Use the actual shared materials and buffers
+    // before a turn first exposes a distant bot and forces the driver to link its weapon program.
+    const names=['kar98k','luger','mp40','g36'] as const;
+    const assets=readOnly?[]:await Promise.all(names.map(name=>acquireWorldWeapon(name).catch(()=>null)));
+    const equipment=new T.Group();
+    try{
+      if(stopped)return;
+      for(const asset of assets)if(asset)equipment.add(asset.object);
+      await Promise.all([graphics.warmup(scene),graphics.warmup(equipment),...pendingActors]);
+      if(stopped)return;
+      worldWarmed=true;
+      const roots=[...preparedActors].filter(actor=>actor.parent?.parent===scene);preparedActors.clear();
+      scene.add(equipment);
+      environmentUpgrade.update(camera.position,'high');
+      try{graphics.warmupWorldDraw(roots);}
+      finally{environmentUpgrade.update(camera.position,quality);}
+    }finally{
+      equipment.removeFromParent();
+      for(const asset of assets)asset?.release();
+    }
   }).catch(error=>console.warn('World shader warmup unavailable',error));
   void Promise.all([graphics.warmup(muzzleEffects.group),graphics.warmup(operationScene.blastGroup)])
     .catch(error=>console.warn('Combat effects shader warmup unavailable',error));
@@ -753,10 +815,10 @@ export function createScene(
     camera.updateMatrixWorld();
     actorFrustum.setFromProjectionMatrix(actorProjection.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse));
     // A shop has one open facade. Solid walls and ceiling hide the island when that facade leaves the view.
+    const eye=camera.position;
+    const room=island?streetRooms.find(({shop:s})=>eye.y>.12&&eye.y<s.h-.3&&
+      Math.abs(eye.x-s.x)<s.w/2-.4&&Math.abs(eye.z-s.z)<s.d/2-.4):undefined;
     if(island){
-      const eye=camera.position;
-      const room=streetRooms.find(({shop:s})=>eye.y>.12&&eye.y<s.h-.3&&
-        Math.abs(eye.x-s.x)<s.w/2-.4&&Math.abs(eye.z-s.z)<s.d/2-.4);
       // The short far plane still spans the entire room, including its facade on the next turn.
       const far=room&&!actorFrustum.intersectsBox(room.opening)?24:350;
       if(camera.far!==far){
@@ -776,7 +838,9 @@ export function createScene(
       g.rotation.set(0,g.userData.renderYaw,0);
       const actorDistance=g.position.distanceTo(camera.position);
       actorBounds.center.copy(g.position);actorBounds.center.y+=1;
-      const drawActor=actorDistance<6||actorFrustum.intersectsSphere(actorBounds);
+      const inView=actorDistance<6||actorFrustum.intersectsSphere(actorBounds);
+      const compact=quality==='auto'||quality==='performance';
+      const drawActor=inView&&(!compact||!p.hp||!actorBehindWall(camera.position,g.position,opaqueWalls));
       if(g.userData.human)g.userData.human.group.visible=drawActor;
       if(drawActor)detailDrawsSkipped+=g.userData.details?.update(actorDistance,viewport.height,camera.fov)??0;
       if(drawActor&&p.hp>0&&p.grounded)contactShadows.actor(remote.x,remote.y,remote.z,p.crouching||isCrawling(p));
@@ -808,7 +872,7 @@ export function createScene(
     battleAudio.listener();
     const underpass=island&&Math.abs(camera.position.x-islandUnderpass.x)<islandUnderpass.width/2
       &&Math.abs(camera.position.z-islandUnderpass.z)<islandUnderpass.depth/2;
-    const covered=underpass||insideBuilding(world,camera.position.x,camera.position.z)>=0
+    const covered=!!room||underpass||insideBuilding(world,camera.position.x,camera.position.z)>=0
       ||mapId==='frontline'&&Math.abs(camera.position.x-46)<9.3&&camera.position.z>-27&&camera.position.z<-24.4;
     if(island&&t-(lastAmbienceAt??-1000)>120){
       const {x,z}=camera.position;
@@ -886,7 +950,7 @@ export function createScene(
     if(!snapshot?.npcs)wanderers.update((snapshot?.now??0)+t-receivedAt,dt);
     const lightingPosition=carPose&&local?{...local,x:carPose.position.x,y:carPose.position.y,z:carPose.position.z}:local;
     interiors.update(lightingPosition??undefined,t,dt);
-    const target=!car&&local?.hp&&locked()?(remainsScene.interaction(local,yaw)??operationScene.interaction(local,yaw)??interiors.interaction(local,yaw)):undefined;
+    const target=!car&&local?.hp&&locked()?(remainsScene.interaction(local,yaw)??operationScene.interaction(local,yaw)??interiors.interaction(local,yaw)??claims?.interaction(local,yaw)):undefined;
     let hint=target?`[${settings.bindings.interact.replace('Key','')}] ${('label' in target?target.label:interiors.label(target.id))}${'alternateLabel' in target&&target.alternateLabel?` · [${settings.bindings.sprint.replace('Left','').replace('Right','')}+${settings.bindings.interact.replace('Key','')}] ${target.alternateLabel}`:''}`:'';
     canvas.classList.toggle('city-driving',!!car);
     if(car){
@@ -910,15 +974,22 @@ export function createScene(
         if(building)hint=`Rennwagen-Parcours · Küstenstart · ${distance} m`;
       }
     }
+    if(target?.id==='harbour-claims')hint=claims?.label(t)||hint;
     const hintDisplay=hint?'block':'none';
     if(interactionHint.style.display!==hintDisplay)interactionHint.style.display=hintDisplay;
     if(hint&&interactionHint.textContent!==hint)interactionHint.textContent=hint;
-    const indoors=lightingPosition&&insideBuilding(world,lightingPosition.x,lightingPosition.z)>=0;
-    const ambient=condition==='night'?.10:indoors?.24:daylight;
-    skyLight.intensity+=(ambient-skyLight.intensity)*Math.min(1,dt*4);
+    const shop=room?.shop;
+    const shopDepth=shop?shop.d/2-(eye.z-shop.z)*shop.front:0;
+    const skyAccess=shop?1-.56*T.MathUtils.smoothstep(shopDepth,0,shop.d):covered?.38:1;
+    const ambient=condition==='night'?.15:condition==='fog'?.90:daylight;
+    const reflection=condition==='night'?.055:condition==='fog'?.32:island?.55:.48;
+    const adapt=Math.min(1,dt*4);
+    skyLight.intensity+=(ambient*skyAccess-skyLight.intensity)*adapt;
+    scene.environmentIntensity+=(reflection*skyAccess-scene.environmentIntensity)*adapt;
     river?.update(t/1000);
     mapDetails.update(t/1000);
     environmentUpgrade.update(camera.position,quality);
+    sceneAssets.updateCrates(camera,aimBlend>.04);
     graphics.render(dt,pose?.aimBlend??0,!menu,cpuTimes.at(-1),frameMs/1000,viewport,weapon.visible);
     const cpuMs=performance.now()-cpuStarted;
     cpuTimes.push(cpuMs);if(cpuTimes.length>180)cpuTimes.shift();
@@ -933,7 +1004,9 @@ export function createScene(
     setSettings(value:GameSettings){settings=value;if(!value.volume)residentVoice.stop();if(audioOutput)audioOutput.gain.value=value.volume===0?0:1;release();},
     setEnabled(value:boolean){enabled=value;if(!value){residentVoice.stop();release();dragLook=false;if(document.pointerLockElement===canvas)document.exitPointerLock();}},
     startAudio,
-    worldPrepared,
+    get worldPrepared(){
+      return pendingActors.size?Promise.all([worldPrepared,...pendingActors]).then(()=>{}):worldPrepared;
+    },
     setResolutionScaling:graphics.setResolutionScaling,
     capture(callback?:()=>void){captureFrame=callback;},
     profileFrames(limit=1200){frameProfile.length=0;profileLimit=Math.max(0,Math.min(3600,Math.floor(limit)));},
@@ -952,7 +1025,7 @@ export function createScene(
       residentVoice.dispose();
       hudResize.disconnect();wanderers.dispose();interiors.dispose();interactionHint.remove();
       ammoReadout.remove();scope.remove();
-      mapDetails.dispose();disposeMilitaryRoofs?.();environmentUpgrade.dispose();
+      claims?.dispose();mapDetails.dispose();disposeMilitaryRoofs?.();environmentUpgrade.dispose();
       hitEffects.dispose();gore.dispose();operationScene.dispose();remainsScene.dispose();muzzleEffects.dispose();
       cancelAnimationFrame(raf);
       listeners.forEach((f) => f());

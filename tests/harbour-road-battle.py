@@ -1,5 +1,6 @@
-"""Walk the normal Island battle client through Harbour Road using keyboard and mouse input."""
+"""Profile real local battles with keyboard movement and verified 180-degree mouse turns."""
 import json
+import heapq
 import math
 import os
 import re
@@ -25,6 +26,7 @@ def observe(route):
 def walk(page, x, z):
     deadline = time.monotonic() + 45
     previous = None
+    last_turn = 0
     try:
         while time.monotonic() < deadline:
             px, pz, yaw, hp = page.evaluate('()=>{const p=harbourQA.player;return [p.x,p.z,p.yaw,p.hp]}')
@@ -33,10 +35,13 @@ def walk(page, x, z):
             if distance < .60:
                 return
             target = math.atan2(px-x, pz-z)
-            if previous is None or abs(math.remainder(target-previous, math.tau)) > .02:
-                delta = math.remainder(target-(yaw if previous is None else previous), math.tau)
+            # Reconcile after a server snapshot has caught up with our last mouse turn.
+            reference = yaw if previous is None or time.monotonic()-last_turn>.36 else previous
+            if previous is None or abs(math.remainder(target-reference, math.tau)) > .025:
+                delta = math.remainder(target-reference, math.tau)
                 mouse(page, -round(delta/.002))
                 previous = target
+                last_turn = time.monotonic()
             if hp<65:
                 page.keyboard.press('h')
             if distance>4:
@@ -57,7 +62,7 @@ def mouse(page, dx):
 
 
 def measure(page, name):
-    page.evaluate('harbourQA.scene.profileFrames(3000)')
+    page.evaluate('window.turnStarted=performance.now();harbourQA.scene.profileFrames(3000)')
     start = page.evaluate('harbourQA.player.yaw')
     for n in range(12):
         for _ in range(6):
@@ -74,16 +79,54 @@ def read_profile(page, name):
     frames = page.evaluate('harbourQA.scene.frameProfile()')
     ms = sorted(f['frameMs'] for f in frames)
     result = dict(site=name, frames=len(ms), fps=round(1000*len(ms)/sum(ms),1),
-                  p95=ms[math.ceil(len(ms)*.95)-1], worst=max(ms),
+                  p95=ms[math.ceil(len(ms)*.95)-1], p99=ms[math.ceil(len(ms)*.99)-1], worst=max(ms),
                   over33=sum(t>33 for t in ms), cpuMs=round(sum(f['cpuMs'] for f in frames)/len(ms),1), calls=round(sum(f['calls'] for f in frames)/len(ms)),scale=frames[-1]['pixelRatio'],gpuMs=frames[-1].get('gpuMs'))
     print(result, flush=True)
+    for i in sorted(range(1,len(frames)),key=lambda i:frames[i]['frameMs'],reverse=True)[:3]:
+        if frames[i]['frameMs']>45:
+            result.setdefault('slowFrames',[]).append(dict(ms=frames[i]['frameMs'], previous=frames[i-1]))
+    result['longTasks']=page.evaluate("""()=> (window.harbourLongFrames??[])
+        .filter(f=>f.startTime>=(window.turnStarted??Infinity)).sort((a,b)=>b.duration-a.duration).slice(0,4)""")
     return result
 
 
 with sync_playwright() as pw:
     browser = pw.chromium.launch(channel='chrome', headless=os.environ.get('HARBOUR_HEADED')!='1', args=['--enable-webgl','--ignore-gpu-blocklist'])
-    page = browser.new_page(viewport=dict(width=1280,height=720), device_scale_factor=1)
+    width,height = map(int,os.environ.get('HARBOUR_VIEWPORT','1280x720').split('x'))
+    page = browser.new_page(viewport=dict(width=width,height=height), device_scale_factor=1)
     page.add_init_script("localStorage.setItem('altstadt.graphics.v3','performance')")
+    page.add_init_script("""if(PerformanceObserver.supportedEntryTypes.includes('long-animation-frame')){
+        window.harbourLongFrames=[];
+        new PerformanceObserver(list=>{for(const f of list.getEntries()){
+          const tasks=f.scripts.map(s=>({url:s.sourceURL?.split('/').pop()?.split('?')[0],fn:s.sourceFunctionName,ms:Math.round(s.duration)})).sort((a,b)=>b.ms-a.ms).slice(0,3);
+          harbourLongFrames.push({startTime:f.startTime,duration:Math.round(f.duration),tasks});
+          if(harbourLongFrames.length>100)harbourLongFrames.shift();
+        }}).observe({type:'long-animation-frame'});
+    }""")
+    page.on('response',lambda r: print('HTTP',r.status,r.url.split('?')[0],flush=True) if r.status>=400 else None)
+    page.on('pageerror',lambda error: print('Browserfehler:',str(error)[:350],flush=True))
+    page.on('console',lambda msg: print('Konsole:',msg.text[:350],flush=True) if msg.type=='error' else None)
+    if os.environ.get('BATTLE_SHADER_PROFILE')=='1':
+        def tag_draw(route):
+            response=route.fetch()
+            source=response.text()
+            hook='this.renderBufferDirect = function(camera, scene, geometry, material, object, group) {'
+            if hook in source:
+                source=source.replace(hook,hook+'window.roadDrawObject=object;window.roadDrawMaterial=material;',1)
+            route.fulfill(response=response, body=source)
+        page.route(re.compile(r'/node_modules/\.vite/deps/chunk-[^/?]+\.js(?:\?|$)'),tag_draw)
+        page.add_init_script("""window.slowShaders=[];
+          const gl=WebGL2RenderingContext.prototype,info=gl.getProgramInfoLog;
+          gl.getProgramInfoLog=function(program){
+            const start=performance.now(),log=info.call(this,program),duration=performance.now()-start;
+            if(duration>15){
+              const m=window.roadDrawMaterial,o=window.roadDrawObject;
+              const path=[];for(let a=o;a;a=a.parent){path.push(a.name||a.type)}
+              const settings=this.getAttachedShaders(program).flatMap(s=>(this.getShaderSource(s)||'').split('\n').filter(x=>/^#define (USE_|SHADER_NAME|NUM_)/.test(x)));
+              slowShaders.push({start,duration,material:m?.type,name:m?.name,map:m?.map?.image?.src,path,settings:[...new Set(settings)]});
+            }
+            return log;
+          }""".replace("split('\n')","split('\\n')"))
     page.route(re.compile(r'/client/App\.tsx(\?|$)'), observe)
     page.goto(BASE,wait_until='domcontentloaded')
     button = lambda name: page.get_by_role('button',name=name,exact=True)
@@ -91,7 +134,12 @@ with sync_playwright() as pw:
     page.get_by_label('Benutzername',exact=True).fill('RoadQA'+str(int(time.time()))[-8:])
     page.get_by_label('Passwort',exact=True).fill('Local-Road-QA-4821')
     button('Profil anlegen & zur Lobby').click()
-    button('Island').click()
+    map_id = os.environ.get('BATTLE_MAP','storm')
+    if map_id == 'storm':
+        button('Island').click()
+    else:
+        button('Zeitreise').click()
+        page.locator('.city-map-'+map_id).click()
     page.get_by_role('button',name='Einzelspieler & Koop').click()
     page.get_by_label('Variante').select_option('battle')
     enemies = int(os.environ.get('HARBOUR_ENEMIES', '0'))
@@ -109,18 +157,69 @@ with sync_playwright() as pw:
             break
         page.locator('.weapon-catalog button[aria-pressed=false]:enabled').first.click()
     start.click()
-    page.wait_for_function("window.harbourQA?.state.phase==='playing' && harbourQA.scene?.worldPrepared",timeout=150000)
-    page.evaluate('harbourQA.scene.worldPrepared')
+    print(map_id,'loadout submitted',flush=True)
+    try:
+        page.wait_for_function("window.harbourQA?.state.phase==='playing' && harbourQA.scene?.worldPrepared",timeout=90000)
+    except Exception:
+        print('Startdiagnose:',page.locator('body').inner_text()[-1000:],flush=True)
+        raise
+    page.evaluate('''Promise.race([harbourQA.scene.worldPrepared,new Promise((_,reject)=>setTimeout(()=>reject(Error("Scene warmup timeout")),90000))])''')
     print(page.evaluate("()=>{const gl=document.querySelector('canvas').getContext('webgl2');return gl.getParameter(gl.getExtension('WEBGL_debug_renderer_info').UNMASKED_RENDERER_WEBGL)}"),flush=True)
     bots = page.evaluate("harbourQA.state.players.filter(p=>p.kind==='bot').length")
     assert bots == (enemies or 7), bots
     page.locator('canvas').last.click(force=True)
     page.wait_for_timeout(300)
-    print('Island battle started with',bots,'bots',flush=True)
+    assert page.evaluate('harbourQA.state.mapId') == map_id
+    print(map_id,'battle started with',bots,'bots',flush=True)
     def approach():
+        # Plan around the actual map colliders, including closed doors at this spawn.
+        # All movement still goes through the mouse and keyboard.
+        def find_route():
+            start, boxes = page.evaluate("""async()=>{
+              const {getWorld}=await import('/shared/world.ts');
+              const {interiorWorld}=await import('/shared/interiors.ts');
+              const w=interiorWorld(getWorld('storm'),harbourQA.state.interiors);
+              return [[harbourQA.player.x,harbourQA.player.z],w.boxes
+                .filter(b=>b.y-b.h/2<1.75 && b.y+b.h/2>.29)
+                .map(b=>[b.x,b.z,b.w,b.d])];
+            }""")
+            occupied=set()
+            for bx,bz,bw,bd in boxes:
+                for ix in range(math.ceil(bx-bw/2-1),math.floor(bx+bw/2+1)+1):
+                    for iz in range(math.ceil(bz-bd/2-1),math.floor(bz+bd/2+1)+1):
+                        occupied.add((ix,iz))
+            origin=tuple(round(v) for v in start)
+            goal=(51,-23)
+            opened=[(0,0,origin)]
+            parent={origin:None}
+            cost={origin:0}
+            while opened:
+                _,steps,point=heapq.heappop(opened)
+                if point==goal:
+                    break
+                if steps!=cost[point]:
+                    continue
+                px,pz=point
+                for dx,dz in ((1,0),(-1,0),(0,-1),(0,1)):
+                    dest=(px+dx,pz+dz)
+                    if dest in occupied or math.hypot(*dest)>119 or cost.get(dest,math.inf)<=steps+1:
+                        continue
+                    cost[dest]=steps+1
+                    parent[dest]=point
+                    priority=steps+1+abs(dest[0]-goal[0])+abs(dest[1]-goal[1])
+                    heapq.heappush(opened,(priority,steps+1,dest))
+            assert goal in parent, ('No walkable route',start)
+            path=[goal]
+            while path[-1]!=origin:
+                path.append(parent[path[-1]])
+            path.reverse()
+            # Follow straight corridors as a single continuous key press.
+            return [b for a,b,c in zip(path,path[1:],path[2:]) if a[0]!=c[0] and a[1]!=c[1]]+[goal]
         for attempt in range(4):
             try:
-                for x,z in [(-65,-26),(45,-26),(51,-23)]:
+                route=find_route()
+                print('Street approach',route,flush=True)
+                for x,z in route:
                     walk(page,x,z)
                 return
             except AssertionError:
@@ -128,6 +227,34 @@ with sync_playwright() as pw:
                     raise
                 page.wait_for_function('harbourQA.player.hp>0',timeout=20000)
                 page.locator('.city-canvas').click(force=True)
+    if map_id != 'storm':
+        # Short walk from the regular western team spawn, then look both ways in the street.
+        sx,sz = page.evaluate('[harbourQA.player.x,harbourQA.player.z]')
+        page.evaluate('harbourQA.scene.profileFrames(3000)')
+        walk(page,sx+4,sz)
+        entry=read_profile(page,map_id+' approach')
+        profiler=None
+        if os.environ.get('BATTLE_CPU_PROFILE')=='1':
+            profiler=page.context.new_cdp_session(page)
+            profiler.send('Profiler.enable')
+            profiler.send('Profiler.setSamplingInterval',{'interval':2000})
+            profiler.send('Profiler.start')
+            profile_start=page.evaluate('performance.now()')
+        turn=measure(page,map_id)
+        if profiler:
+            profile=profiler.send('Profiler.stop')['profile']
+            (OUT/f'{map_id}-first-turn.cpuprofile').write_text(json.dumps(profile))
+            (OUT/f'{map_id}-profile-timing.json').write_text(json.dumps(dict(start=profile_start,tasks=turn['longTasks'])))
+            profiler.detach()
+        warm=measure(page,map_id+' repeat')
+        result=dict(bots=bots,width=width,height=height,entry=entry,turn=turn,warm=warm)
+        page.screenshot(path=str(OUT/f'{map_id}-live-{width}x{height}.jpg'),type='jpeg',quality=88)
+        if os.environ.get('BATTLE_SHADER_PROFILE')=='1':
+            (OUT/f'{map_id}-slow-shaders.json').write_text(json.dumps(page.evaluate('window.slowShaders'),indent=2))
+        (OUT/f'{map_id}-{bots}-bots-{width}x{height}.json').write_text(json.dumps(result,indent=2))
+        browser.close()
+        raise SystemExit(0)
+
     approach()
     results = []
     for name,x,inside,door in [('Harbour Supply',51,-9,-18),('Diner',63,-36,-28),('Coast Records',75,-9,-18)]:
@@ -139,6 +266,10 @@ with sync_playwright() as pw:
                 walk(page,x,inside)
                 entry=read_profile(page,name+' entrance')
                 print('Entered',name,flush=True)
+                if os.environ.get('HARBOUR_SCREENSHOTS')=='1':
+                    page.screenshot(path=str(OUT/f'{width}x{height}-{name}.jpg'),type='jpeg',quality=90)
+                    # Screenshots can synchronously read back the GPU. Discard that frame from the turn.
+                    page.evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))')
                 result=measure(page,name)
                 page.evaluate('harbourQA.scene.profileFrames(3000)')
                 walk(page,x,door)
@@ -152,5 +283,18 @@ with sync_playwright() as pw:
                 page.locator('.city-canvas').click(force=True)
                 approach()
         print('Exited',name,flush=True)
-    (OUT/f'report-{bots}-bots.json').write_text(json.dumps(dict(bots=bots,results=results),indent=2))
+    page.screenshot(path=str(OUT/f'island-live-{width}x{height}.jpg'),type='jpeg',quality=88)
+    if os.environ.get('HARBOUR_CLAIMS')=='1':
+        walk(page,71.6,-23)
+        walk(page,71.6,-32.6)
+        yaw=page.evaluate('harbourQA.player.yaw')
+        mouse(page,-round(math.remainder(math.pi/2-yaw,math.tau)/.002))
+        page.get_by_text('Nachlass regeln',exact=False).wait_for(timeout=5000)
+        page.keyboard.press('e')
+        page.get_by_text('Ihr Antrag auf Weiterleben',exact=False).wait_for(timeout=5000)
+        page.wait_for_timeout(550)
+        page.keyboard.press('e')
+        page.get_by_text('Für Ihre Sterbeurkunde',exact=False).wait_for(timeout=5000)
+        print('Nachlassschalter: two successive decisions confirmed in game',flush=True)
+    (OUT/f'report-{bots}-bots-{width}x{height}.json').write_text(json.dumps(dict(bots=bots,width=width,height=height,results=results),indent=2))
     browser.close()

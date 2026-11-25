@@ -17,13 +17,75 @@ const coatTextureCache=new Map<string,{texture:T.Texture;refs:number}>();
 function acquireCoatTexture(file:string,color:boolean){let entry=coatTextureCache.get(file);if(!entry){const texture=new T.TextureLoader().load('/shooter/characters/greatcoat/'+file);if(color)texture.colorSpace=T.SRGBColorSpace;texture.anisotropy=4;entry={texture,refs:0};coatTextureCache.set(file,entry);}entry.refs++;return entry.texture;}
 function releaseCoatTexture(texture:T.Texture){for(const [file,entry]of coatTextureCache)if(entry.texture===texture){if(--entry.refs===0){texture.dispose();coatTextureCache.delete(file);}break;}}
 
-type HumanData={coat?:CoatPiece[];positions:number[];uv:number[];indices:number[];skinIndex:number[];skinWeight:number[];categories:number[];bones:Joint[];skinImage?:HTMLImageElement;motion?:MotionLibrary};
+const clothImages=new Map<string,Promise<HTMLImageElement>>();
+const surfaceTextures=new WeakMap<HTMLImageElement,{texture:T.Texture;users:number}>();
+function clothImage(tactical:boolean){
+ const file=tactical?'island-cloth':'field-cloth';
+ let pending=clothImages.get(file);
+ if(!pending){
+  pending=new T.ImageLoader().loadAsync('/shooter/characters/'+file+'.webp').catch(error=>{clothImages.delete(file);throw error;});
+  clothImages.set(file,pending);
+ }
+ return pending;
+}
+function acquireSurface(image:HTMLImageElement|undefined){
+ if(!image)return undefined;
+ let entry=surfaceTextures.get(image);
+ if(!entry){
+  const texture=new T.Texture(image);texture.colorSpace=T.SRGBColorSpace;texture.anisotropy=4;texture.needsUpdate=true;
+  entry={texture,users:0};surfaceTextures.set(image,entry);
+ }
+ entry.users++;
+ return entry.texture;
+}
+function releaseSurface(image:HTMLImageElement|undefined){
+ if(!image)return;
+ const entry=surfaceTextures.get(image);
+ if(entry&&--entry.users===0){entry.texture.dispose();surfaceTextures.delete(image);}
+}
+
+type HumanData={coat?:CoatPiece[];positions:number[];uv:number[];indices:number[];skinIndex:number[];skinWeight:number[];categories:number[];bones:Joint[];skinImage?:HTMLImageElement;clothImage?:HTMLImageElement;motion?:MotionLibrary};
+const fieldFit=new WeakMap<number[],number[]>();
+function fitFieldUniform(data:HumanData){
+ const existing=fieldFit.get(data.positions);
+ if(existing)return existing;
+ const fitted=data.positions.slice();
+ const joints=new Map(data.bones.map(b=>[b.name,new T.Vector3(...b.head as [number,number,number])]));
+ const limbs=['R','L'].map(side=>{
+  function line(a:string,b:string){return new T.Line3(joints.get(a+'.'+side)!,joints.get(b+'.'+side)!);}
+  return {arms:[line('upperarm01','lowerarm01'),line('lowerarm01','wrist')],
+   legs:[line('upperleg01','lowerleg01'),line('lowerleg01','foot')]};
+ });
+ const point=new T.Vector3(),centre=new T.Vector3(),other=new T.Vector3();
+ for(let i=0;i<data.categories.length;i++){
+  if(data.categories[i]!==0)continue;
+  point.fromArray(data.positions,i*3);
+  const {x,y,z}=point,ax=Math.abs(x);
+  const side=limbs[x<0?1:0],sleeve=y>1.03&&ax>.19,trousers=y>.215&&y<.93;
+  if(sleeve||trousers){
+   const [upper,lower]=sleeve?side.arms:side.legs;
+   upper.closestPointToPoint(point,true,centre);lower.closestPointToPoint(point,true,other);
+   if(other.distanceToSquared(point)<centre.distanceToSquared(point))centre.copy(other);
+   const foldZone=sleeve?Math.exp(-Math.pow((ax-.36)/.074,2)):Math.exp(-Math.pow((y-.50)/.11,2));
+   const fade=sleeve?T.MathUtils.smoothstep(ax,.19,.27)*(1-T.MathUtils.smoothstep(ax,.43,.49)):
+    T.MathUtils.smoothstep(y,.215,.30)*(1-T.MathUtils.smoothstep(y,.80,.93));
+   const padding=(sleeve?.013:.019)+foldZone*(.004+.006*Math.sin(y*123+z*20+Math.sin(x*21)*1.6));
+   point.addScaledVector(other.subVectors(point,centre).normalize(),padding*fade);
+  }else if(y>.88&&y<1.43&&ax<.23){
+   const ease=Math.sin((y-.88)/.55*Math.PI);
+   point.x*=1+.075*ease;point.z*=1+.12*ease;
+  }
+  point.toArray(fitted,i*3);
+ }
+ fieldFit.set(data.positions,fitted);return fitted;
+}
 let source:Promise<HumanData>|null=null;
 function loadBaseHuman(){return source??=fetch('/shooter/characters/humanoid.json').then(r=>{if(!r.ok)throw Error('Human model unavailable');return r.json() as Promise<HumanData>;}).then(async data=>{const [image,motion]=await Promise.all([new T.ImageLoader().loadAsync('/shooter/characters/skin.png'),loadMotionLibrary()]);data.skinImage=image;data.motion=motion;return data;}).catch(e=>{source=null;throw e;});}
 export async function loadHuman(uniformId?:UniformId,civilian=false){
  if(civilian)return loadCivilianCharacter();
  if(uniformId&&isBonusId(uniformId))return loadBonusCharacter(uniformId);
- const data=await loadBaseHuman();if(uniformId!=='de-greatcoat')return data;
+ const [data,cloth]=await Promise.all([loadBaseHuman(),uniformId==='de-greatcoat'?undefined:clothImage(!!uniformId?.startsWith('task-')).catch(()=>undefined)]);
+ if(uniformId!=='de-greatcoat')return {...data,clothImage:cloth};
  coatSource??=fetch('/shooter/characters/greatcoat/rigged.json').then(r=>{if(!r.ok)throw Error('Mantelmodell konnte nicht geladen werden');return r.json() as Promise<CoatPiece[]>;}).catch(e=>{coatSource=null;throw e;});
  return {...data,coat:await coatSource};
 }
@@ -33,12 +95,15 @@ export function createHuman(data:HumanData|BonusCharacterData|CivilianCharacterD
  const civilianLook=civilian?createCivilianAppearance():undefined;uniform=civilianLook?.cloth??uniform.clone();const outfit=uniforms[uniformId];if(!civilian)uniform.color.set(outfit.color);
  let isDisposed=false;
  const group=new T.Group(),geometry=new T.BufferGeometry();
- const tailored=data.positions.slice();if(civilian)tailorCivilian(tailored,data.categories,data.bones);
- for(let i=0;!civilian&&i<data.categories.length;i++){if(data.categories[i]!==0)continue;const x=tailored[i*3],y=tailored[i*3+1],z=tailored[i*3+2];if(y>.88&&y<1.43&&Math.abs(x)<.23){const ease=Math.sin((y-.88)/.55*Math.PI);tailored[i*3]=x*(1+.075*ease);tailored[i*3+2]=z*(1+.12*ease);}}
+ const tailored=civilian?data.positions.slice():fitFieldUniform(data);
+ if(civilian)tailorCivilian(tailored,data.categories,data.bones);
  geometry.setAttribute('position',new T.Float32BufferAttribute(tailored,3));geometry.setAttribute('uv',new T.Float32BufferAttribute(data.uv,2));
  geometry.setAttribute('skinIndex',new T.Uint16BufferAttribute(data.skinIndex,4));geometry.setAttribute('skinWeight',new T.Float32BufferAttribute(data.skinWeight,4));
- const skin=new T.Texture(data.skinImage);skin.colorSpace=T.SRGBColorSpace;skin.anisotropy=4;skin.needsUpdate=true;
- const materials=[uniform,new T.MeshStandardMaterial({color:'#ffffff',map:skin,roughness:.82,envMapIntensity:.35}),civilianLook?.boots??new T.MeshStandardMaterial({color:'#272723',roughness:.85}),...(civilianLook?[civilianLook.cloth]:[])];
+ const {skinImage,clothImage:garmentImage}=data;
+ const skin=acquireSurface(skinImage);
+ const cloth=!civilian?acquireSurface(garmentImage):undefined;
+ if(cloth){uniform.map=cloth;uniform.roughness=.94;}
+ const materials=[uniform,new T.MeshStandardMaterial({color:'#ffffff',map:skin??null,roughness:.82,envMapIntensity:.35}),civilianLook?.boots??new T.MeshStandardMaterial({color:'#272723',roughness:.85}),...(civilianLook?[civilianLook.cloth]:[])];
  const ordered:number[][]=civilian?[[],[],[],[]]:[[],[],[]];for(let i=0;i<data.indices.length;i+=3){if(data.coat&&!data.indices.slice(i,i+3).every(v=>data.positions[v*3+1]>1.40&&(data.positions[v*3+1]>1.62||Math.abs(data.positions[v*3])<.085)))continue;const tri=data.indices.slice(i,i+3),labels=tri.map(v=>data.categories[v]);let category=data.coat?1:labels.filter(v=>v===1).length>=2?1:labels.filter(v=>v===2).length>=2?2:0;if(civilian&&category===2&&tri.every(v=>data.positions[v*3+1]<.09))continue;if(civilian&&category===0&&tri.reduce((sum,v)=>sum+data.positions[v*3+1],0)/3<.965)category=3;ordered[category].push(...tri);}
  if(!civilian)ordered[2]=[];geometry.setIndex(ordered.flat());let start=0;ordered.forEach((indices,index)=>{geometry.addGroup(start,indices.length,index);start+=indices.length;});geometry.computeVertexNormals();civilianLook?.tintGeometry(geometry);
  const bones=data.bones.map(j=>{const b=new T.Bone();b.name=j.name;return b;});
@@ -57,6 +122,22 @@ export function createHuman(data:HumanData|BonusCharacterData|CivilianCharacterD
  const ownMaterials:T.Material[]=[uniform,materials[1],materials[2],...(civilianLook?civilianLook.materials.filter(m=>m!==uniform&&m!==materials[2]):[])];
  const detailMaterials=new Map<string,T.MeshStandardMaterial>();
  function detailMaterial(color:string,roughness=.85){const key=`${color}:${roughness}`;let material=detailMaterials.get(key);if(!material){material=new T.MeshStandardMaterial({color,roughness});detailMaterials.set(key,material);ownMaterials.push(material);}return material;}
+ // Only our plain, untextured detail materials enter this palette. Their linear
+ // RGB moves to vertices, allowing identical surface finishes to share a draw.
+ const finishes=new Map<number,T.MeshStandardMaterial>();
+ function batchDetails(branch:T.Group){
+  const tints=new Set(detailMaterials.values());
+  branch.traverse(object=>{
+   if(!(object instanceof T.Mesh)||!tints.has(object.material))return;
+   const original=object.material as T.MeshStandardMaterial;
+   let finish=finishes.get(original.roughness);
+   if(!finish){finish=new T.MeshStandardMaterial({vertexColors:true,roughness:original.roughness});finishes.set(original.roughness,finish);ownMaterials.push(finish);}
+   const count=object.geometry.getAttribute('position').count,colors=new Float32Array(count*3);
+   for(let i=0;i<count;i++)original.color.toArray(colors,i*3);
+   object.geometry.setAttribute('color',new T.BufferAttribute(colors,3));object.material=finish;
+  });
+  batchWeaponMeshes(branch);
+ }
  const equipment=new T.Group();group.add(equipment);if(data.coat||civilian){equipment.visible=false;equipment.userData.nonAnatomic=true;}
  function part(x:number,y:number,z:number,w:number,h:number,d:number,color:string,parent:T.Object3D=equipment){const m=new T.Mesh(new T.BoxGeometry(w,h,d),detailMaterial(color));m.position.set(x,y,z);m.castShadow=true;parent.add(m);return m;}
  const headBone=named.get('head')!;const headOrigin=data.bones.find(j=>j.name==='head')!.head;
@@ -96,11 +177,27 @@ export function createHuman(data:HumanData|BonusCharacterData|CivilianCharacterD
  part(0,.94,0,.34,.035,.24,'#4a3e2b');part(.085,1.15,-.135,.105,.13,.014,outfit.color);part(-.085,1.15,-.135,.105,.13,.014,outfit.color);
  if(!civilian&&uniformId.startsWith('task-')){
   const vest=uniformId==='task-olive'?'#39473b':'#706c53';
-  part(0,1.23,-.145,.31,.33,.10,vest);part(0,1.23,.125,.30,.31,.09,vest);
+  // A bevelled plate carrier narrows at the clavicles and flares around the ribs.
+  const carrier=new T.Shape();carrier.moveTo(-.15,-.12);carrier.lineTo(-.144,.055);carrier.lineTo(-.098,.15);
+  carrier.lineTo(-.056,.164);carrier.quadraticCurveTo(0,.132,.056,.164);carrier.lineTo(.098,.15);
+  carrier.lineTo(.144,.055);carrier.lineTo(.15,-.12);carrier.quadraticCurveTo(0,-.163,-.15,-.12);
+  const shell=new T.ExtrudeGeometry(carrier,{depth:.042,bevelEnabled:true,bevelSize:.009,bevelThickness:.009,bevelSegments:1,curveSegments:4});
+  for(const z of [-.192,.113]){
+   const plate=new T.Mesh(shell.clone(),detailMaterial(vest));plate.position.set(0,1.235,z);plate.castShadow=true;equipment.add(plate);
+  }
+  shell.dispose();
   for(let n=0;n<3;n++)part((n-1)*.095,1.12,-.218,.08,.16,.055,vest);
   for(let row=0;row<4;row++)part(0,1.22+row*.04,-.202,.29,.013,.012,'#92977b');
   part(.18,1.31,-.14,.06,.14,.05,'#26332d');part(.18,1.44,-.14,.009,.15,.009,'#1c2325');
-  const goggles=new T.Mesh(new T.BoxGeometry(.17,.055,.04),detailMaterial('#243b43',.2));goggles.position.set(0,-.025,-.13);headgear.add(goggles);
+  const rubber=detailMaterial('#34372f'),lens=detailMaterial('#47534c',.26);
+  for(const side of [-1,1]){
+   const socket=new T.Mesh(new T.SphereGeometry(1,12,8),rubber);socket.scale.set(.057,.033,.019);
+   socket.position.set(side*.049,-.026,-.122);socket.rotation.y=-side*.28;headgear.add(socket);
+   const glass=new T.Mesh(new T.SphereGeometry(1,12,8),lens);glass.scale.set(.048,.024,.012);
+   glass.position.set(side*.048,-.026,-.134);glass.rotation.y=socket.rotation.y;headgear.add(glass);
+   part(side*.113,-.025,-.032,.012,.021,.14,'#34372f',headgear).rotation.y=-side*.18;
+  }
+  part(0,-.022,-.135,.033,.013,.012,'#34372f',headgear);
  }
 
  const webColor=team==='de'?'#39342c':'#9b9576';
@@ -126,7 +223,16 @@ export function createHuman(data:HumanData|BonusCharacterData|CivilianCharacterD
  part(0,.94,-.13,.055,.038,.015,'#888a79');part(0,.94,-.14,.038,.023,.005,'#3b4038');
  }
  // Eyeballs sit in the anatomical sockets, rather than painting a face on a primitive.
- for(const side of ['L','R']){const j=data.bones.find(j=>j.name===`eye.${side}`);if(!j)continue;const material=new T.MeshStandardMaterial({color:'#a5a399',roughness:.48});ownMaterials.push(material);const eye=new T.Mesh(new T.SphereGeometry(.0105,10,8),material);eye.position.set(j.head[0]-headOrigin[0],j.head[1]-headOrigin[1],j.head[2]-headOrigin[2]);headBone.add(eye);for(const [radius,color,depth] of [[.005,'#54432c',-.009],[.0023,'#101010',-.012]] as const){const m=new T.MeshStandardMaterial({color,roughness:.35});ownMaterials.push(m);const detail=new T.Mesh(new T.SphereGeometry(radius,12,8),m);detail.position.z=depth;eye.add(detail);}}
+ const eyes=new T.Group();headBone.add(eyes);
+ for(const side of ['L','R']){
+  const joint=data.bones.find(j=>j.name===`eye.${side}`);if(!joint)continue;
+  const origin=new T.Vector3(joint.head[0]-headOrigin[0],joint.head[1]-headOrigin[1],joint.head[2]-headOrigin[2]);
+  for(const [radius,color,depth,segments,roughness] of [[.0105,'#a5a399',0,10,.48],[.005,'#54432c',-.009,12,.35],[.0023,'#101010',-.012,12,.35]] as const){
+   const piece=new T.Mesh(new T.SphereGeometry(radius,segments,8),detailMaterial(color,roughness));
+   piece.position.copy(origin);piece.position.z+=depth;eyes.add(piece);
+  }
+ }
+ batchDetails(eyes);
  for(const side of ['L','R']){
   if(data.coat||civilian)continue;
   const foot=named.get(`foot.${side}`),joint=data.bones.find(j=>j.name===`foot.${side}`);if(!foot||!joint)continue;
@@ -136,12 +242,12 @@ export function createHuman(data:HumanData|BonusCharacterData|CivilianCharacterD
   const shoeGeometry=new T.ExtrudeGeometry(shape,{depth:.022,bevelEnabled:true,bevelThickness:.005,bevelSize:.005,bevelSegments:3});shoeGeometry.rotateX(-Math.PI/2);shoeGeometry.translate(0,.006,0);const shoe=new T.Mesh(shoeGeometry,leather);shoe.castShadow=true;boot.add(shoe);const upper=new T.Mesh(new T.SphereGeometry(1,16,12),leather);upper.scale.set(.068,.052,.15);upper.position.set(0,.062,-.105);boot.add(upper);
   const shaft=new T.Mesh(new T.CylinderGeometry(.06,.063,.16,16),leather);shaft.position.set(0,.14,-.025);shaft.castShadow=true;boot.add(shaft);
   for(let i=0;i<4;i++){const lace=part(0,.095+i*.012,-.08-i*.018,.08,.006,.007,'#41413b',boot);lace.rotation.z=i%2?.12:-.12;}
-  batchWeaponMeshes(boot);
+  batchDetails(boot);
  }
  if(civilianLook)civilianLook.addDetails(group,named,data.bones,mesh);
  // Held weapons have their own hand targets instead of being baked into the torso.
  // Each branch is rigid in its own bone space. Never merge across animated bones.
- batchWeaponMeshes(equipment);batchWeaponMeshes(headgear);
+ batchDetails(equipment);batchDetails(headgear);
  if(!civilian){group.updateMatrixWorld(true);named.get('spine01')?.attach(equipment);}
  const motion=data.motion&&!civilian?createCharacterMotion(group,named,data.motion,false):undefined;
  group.userData.limbRoots={head:'head',armL:'upperarm01.L',armR:'upperarm01.R',legL:'upperleg01.L',legR:'upperleg01.R'};
@@ -172,6 +278,6 @@ export function createHuman(data:HumanData|BonusCharacterData|CivilianCharacterD
   for(const [name,bone]of named)if(name.startsWith('finger'))bone.rotation.set(0,0,name.startsWith('finger1-1')?0:(name.endsWith('.L')?1:-1)*.38);
   applyActionPose(group,player,time,now);held.update(player,time,now);
  }
- function dispose(){if(isDisposed)return;isDisposed=true;held.dispose();motion?.dispose();for(const garment of coatMeshes)(garment.material as T.Material).dispose();for(const texture of coatTextures)releaseCoatTexture(texture);skin.dispose();skeleton.dispose();ownMaterials.forEach(m=>m.dispose());group.traverse(o=>{if(o instanceof T.Mesh){o.geometry.dispose();o.userData.ownedTexture?.dispose();}});group.clear();}
+ function dispose(){if(isDisposed)return;isDisposed=true;held.dispose();motion?.dispose();for(const garment of coatMeshes)(garment.material as T.Material).dispose();for(const texture of coatTextures)releaseCoatTexture(texture);releaseSurface(skinImage);if(cloth)releaseSurface(garmentImage);skeleton.dispose();ownMaterials.forEach(m=>m.dispose());group.traverse(o=>{if(o instanceof T.Mesh){o.geometry.dispose();o.userData.ownedTexture?.dispose();}});group.clear();}
  return {group,update,dispose,setHeadVisible:(visible:boolean)=>{headBone.scale.setScalar(visible?1:.001);}};
 }

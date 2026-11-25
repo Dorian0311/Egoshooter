@@ -46,18 +46,25 @@ export function createCivilianCharacter(data:CivilianCharacterData,residentId='r
   const across=index.getWorldPosition(new T.Vector3()).sub(pinky.getWorldPosition(new T.Vector3())).normalize();
   group.traverse(bone=>{const match=bone.name.match(new RegExp(`^Bip01_${side}_Finger([0-4])([12]?)$`));if(!match)return;fingers.push({bone,rest:bone.quaternion.clone(),axis:across.clone().applyQuaternion(bone.getWorldQuaternion(q).invert()).normalize(),side:side==='L'?'armL':'armR',digit:Number(match[1]),joint:Number(match[2]||0)});});
  }
+ function handJoints(suffix:'L'|'R'){
+  const finger=(index:string)=>group.getObjectByName(`Bip01_${suffix}_Finger${index}`);
+  const middle=finger('2'),next=finger('21');
+  return {middle,next,index:finger('1'),pinky:finger('4'),straighten:[middle,next].map(bone=>({bone,child:bone?.children.find(o=>o instanceof T.Bone)}))};
+ }
+ const fingerJoints={armL:handJoints('L'),armR:handJoints('R')};
+ const fingerTip=new T.Vector3(),fingerBase=new T.Vector3();
  function align(bone:T.Object3D,current:T.Vector3,desired:T.Vector3){if(current.lengthSq()<1e-9||desired.lengthSq()<1e-9)return;rotation.setFromUnitVectors(current.normalize(),desired.normalize());bone.getWorldQuaternion(world);bone.parent!.getWorldQuaternion(parent).invert();bone.quaternion.copy(parent.multiply(rotation).multiply(world));bone.updateWorldMatrix(false,true);}
  function gesture(side:'armL'|'armR'){
-  const arm=arms[side];if(!arm)return;const suffix=side==='armL'?'L':'R',middle=group.getObjectByName(`Bip01_${suffix}_Finger2`),next=group.getObjectByName(`Bip01_${suffix}_Finger21`),index=group.getObjectByName(`Bip01_${suffix}_Finger1`),pinky=group.getObjectByName(`Bip01_${suffix}_Finger4`);if(!middle||!next||!index||!pinky)return;
+  const arm=arms[side];if(!arm)return;const {middle,next,index,pinky,straighten}=fingerJoints[side];if(!middle||!next||!index||!pinky)return;
   const up=new T.Vector3(0,1,0).applyQuaternion(group.getWorldQuaternion(q)),forward=new T.Vector3(0,0,-1).applyQuaternion(q);
-  from.copy(next.getWorldPosition(new T.Vector3())).sub(middle.getWorldPosition(new T.Vector3()));align(arm.hand,from,to.copy(up));
+  from.copy(next.getWorldPosition(fingerTip)).sub(middle.getWorldPosition(fingerBase));align(arm.hand,from,to.copy(up));
   const across=index.getWorldPosition(new T.Vector3()).sub(pinky.getWorldPosition(new T.Vector3())),normal=across.cross(up).normalize();
   if(side==='armR')normal.negate();const angle=Math.atan2(up.dot(normal.clone().cross(forward)),normal.dot(forward));rotation.setFromAxisAngle(up,angle);arm.hand.getWorldQuaternion(world);arm.hand.parent!.getWorldQuaternion(parent).invert();arm.hand.quaternion.copy(parent.multiply(rotation).multiply(world));arm.hand.updateWorldMatrix(false,true);
-  for(const name of [`Bip01_${suffix}_Finger2`,`Bip01_${suffix}_Finger21`]){const bone=group.getObjectByName(name),child=bone?.children.find(o=>o instanceof T.Bone);if(bone&&child){from.copy(child.getWorldPosition(new T.Vector3())).sub(bone.getWorldPosition(new T.Vector3()));align(bone,from,to.copy(up));}}
+  for(const {bone,child} of straighten){if(bone&&child){from.copy(child.getWorldPosition(fingerTip)).sub(bone.getWorldPosition(fingerBase));align(bone,from,to.copy(up));}}
  }
  function relaxedHand(side:'armL'|'armR'){
-  const arm=arms[side];if(!arm)return;const suffix=side==='armL'?'L':'R',middle=group.getObjectByName(`Bip01_${suffix}_Finger2`),next=group.getObjectByName(`Bip01_${suffix}_Finger21`);if(!middle||!next)return;
-  from.copy(next.getWorldPosition(new T.Vector3())).sub(middle.getWorldPosition(new T.Vector3()));to.set(0,-1,0).applyQuaternion(group.getWorldQuaternion(q));align(arm.hand,from,to);
+  const arm=arms[side];if(!arm)return;const {middle,next}=fingerJoints[side];if(!middle||!next)return;
+  from.copy(next.getWorldPosition(fingerTip)).sub(middle.getWorldPosition(fingerBase));to.set(0,-1,0).applyQuaternion(group.getWorldQuaternion(q));align(arm.hand,from,to);
  }
  const skinMeshes:{mesh:T.SkinnedMesh;weights:Float32Array;clothes:Uint8Array;head:boolean}[]=[];
  body.traverse(o=>{

@@ -4,6 +4,8 @@ import {rockHull,type RockBounds} from '../shared/rocks.ts';
 export function createRockGeometry(bounds:RockBounds,smoothEdges=false) {
   const hull=rockHull(bounds),positions:number[]=[],uvs:number[]=[],colors:number[]=[];
   const color=new T.Color(),vertexIds:number[]=[];
+  const stone=new T.Color('#a1a5a1'),frost=new T.Color('#f4f5f0');
+  const salt=new T.Color('#f6f2e8'),damp=new T.Color('#a0a99c');
   const average=smoothEdges?hull.vertices.map(()=>new T.Vector3()):undefined;
   for(const face of hull.faces){
     const a=new T.Vector3(...hull.vertices[face[0]]),b=new T.Vector3(...hull.vertices[face[1]]),c=new T.Vector3(...hull.vertices[face[2]]);
@@ -12,9 +14,16 @@ export function createRockGeometry(bounds:RockBounds,smoothEdges=false) {
     const axis=Math.abs(normal.y)>.6?'top':Math.abs(normal.x)>Math.abs(normal.z)?'side':'front';
     for(let i=1;i<face.length-1;i++)for(const index of [face[0],face[i],face[i+1]]){
       const [x,y,z]=hull.vertices[index];positions.push(x,y,z);vertexIds.push(index);
-      uvs.push((axis==='side'?z:x)/2.8,(axis==='top'?z:y)/2.8);
+      if(smoothEdges){
+        // Preserve gravity on bedding planes. Scan the side along the local tangent
+        // so diagonal facets keep the same grain scale as the flat faces.
+        const top=axis==='top',horizontal=Math.hypot(normal.x,normal.z);
+        const u=top?x:(normal.z*x-normal.x*z)/horizontal;
+        uvs.push(u/4.8+bounds.x*.31,(top?z:y)/4.8+bounds.z*.27);
+      }else uvs.push((axis==='side'?z:x)/2.8,(axis==='top'?z:y)/2.8);
       const snow=T.MathUtils.smoothstep(normal.y,.45,.85)*T.MathUtils.smoothstep(y/bounds.h,-.05,.3);
-      color.set('#a1a5a1').lerp(new T.Color('#f4f5f0'),snow);
+      if(smoothEdges)color.copy(damp).lerp(salt,T.MathUtils.smoothstep(y/bounds.h,-.45,.22));
+      else color.copy(stone).lerp(frost,snow);
       colors.push(color.r,color.g,color.b);
     }
   }
@@ -27,7 +36,7 @@ export function createRockGeometry(bounds:RockBounds,smoothEdges=false) {
     const normals=geometry.getAttribute('normal'),blended=new T.Vector3();
     average.forEach(normal=>normal.normalize());
     for(let i=0;i<vertexIds.length;i++){
-      blended.fromBufferAttribute(normals,i).lerp(average[vertexIds[i]],.65).normalize();
+      blended.fromBufferAttribute(normals,i).lerp(average[vertexIds[i]],.42).normalize();
       normals.setXYZ(i,blended.x,blended.y,blended.z);
     }
   }

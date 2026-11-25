@@ -1,14 +1,14 @@
 import * as T from 'three';
 import {applySurfaceFinish} from './surfaceFinish';
-type Surface='paving'|'plaster'|'facade'|'stone'|'wood'|'metal'|'snow'|'rock'|'cloth'|'roof'|'grass'|'sand';
-const names:Record<Exclude<Surface,'cloth'>,string>={paving:'cobblestone_floor_02',plaster:'damaged_plaster',facade:'plastered_wall_02',stone:'sandstone_blocks_04',wood:'wood_planks_dirt',metal:'rusty_metal_02',snow:'snow_02',rock:'rock_01',roof:'roof_slates_02',grass:'aerial_grass_rock',sand:'sand_01'};
+type Surface='paving'|'plaster'|'facade'|'stone'|'wood'|'metal'|'snow'|'rock'|'coastalRock'|'cloth'|'roof'|'grass'|'sand';
+const names:Record<Exclude<Surface,'cloth'>,string>={paving:'cobblestone_floor_02',plaster:'damaged_plaster',facade:'plastered_wall_02',stone:'sandstone_blocks_04',wood:'wood_planks_dirt',metal:'rusty_metal_02',snow:'snow_02',rock:'rock_01',coastalRock:'aerial_rocks_02',roof:'roof_slates_02',grass:'aerial_grass_rock',sand:'sand_01'};
 const surfaces:Record<string,Surface>={
  '#77766b':'paving','#8d8776':'paving','#8b8a7d':'paving','#c1b59a':'plaster','#a99c85':'wood',
  '#42594d':'metal','#394c43':'metal','#4b5b4f':'metal','#4b4d43':'metal',
  '#67513d':'wood','#674b32':'wood','#6c4c35':'wood','#82603c':'wood','#594b37':'wood',
  '#38413e':'metal','#303936':'metal','#414b46':'metal','#242b28':'metal',
  '#68534a':'stone','#765247':'stone','#9d8b75':'stone','#726d61':'stone','#777365':'stone',
- '#5f6557':'wood','#827866':'stone','#818783':'rock','#deded4':'snow',
+ '#5f6557':'wood','#827866':'stone','#818783':'rock','#858a79':'coastalRock','#deded4':'snow',
  '#232629':'cloth','#202326':'cloth','#6c7250':'cloth','#7a795e':'cloth'
  ,'#cec1a5':'facade','#a9b1ad':'facade','#bdaa96':'facade','#d2cfbf':'facade','#718a48':'grass','#d0b37c':'sand'
 };
@@ -42,7 +42,7 @@ export function createMaterials(renderer:T.WebGLRenderer){
   roof,
   get(color:string){if(cache.has(color))return cache.get(color)!;const surface=surfaces[color];const result=new T.MeshStandardMaterial({color,roughness:.83,metalness:0});
    if(surface==='cloth'){result.map=cloth;result.bumpMap=cloth;result.bumpScale=.0012;result.roughness=.96;}
-   else if(surface){result.map=texture(surface,'albedo');result.normalMap=texture(surface,'normal');result.roughnessMap=texture(surface,'roughness');result.normalScale.set(.55,.55);result.color.set(surface==='facade'?color:surface==='metal'?'#8b938b':surface==='wood'?'#b8a58c':'#e0ddd4');result.roughness=surface==='paving'?.75:.95;result.metalness=surface==='metal'?.65:0;if(surface==='rock'){result.vertexColors=true;result.normalScale.set(.85,.85);}}
+   else if(surface){result.map=texture(surface,'albedo');result.normalMap=texture(surface,'normal');result.roughnessMap=texture(surface,'roughness');result.normalScale.set(.55,.55);result.color.set(surface==='facade'?color:surface==='metal'?'#8b938b':surface==='wood'?'#b8a58c':'#e0ddd4');result.roughness=surface==='paving'?.75:.95;result.metalness=surface==='metal'?.65:0;if(surface==='rock'||surface==='coastalRock'){result.vertexColors=true;result.normalScale.setScalar(surface==='coastalRock'?1.05:.85);if(surface==='coastalRock')result.color.set('#f4f1e9');}}
    if(color==='#7b8a82'){result.color.set('#2e444a');result.metalness=.75;result.roughness=.18;result.envMapIntensity=1.4;}
    if(surface==='facade'||surface==='paving'||surface==='grass'||surface==='sand')result.aoMap=texture(surface,'ao');
    if(surface==='grass'){result.color.set('#b6ca8e');result.normalScale.set(.7,.7);}

@@ -284,7 +284,12 @@
     },
     {
       "sampler": 0,
-      "source": 1
+      "source": 1,
+      "extensions": {
+        "EXT_texture_webp": {
+          "source": 5
+        }
+      }
     },
     {
       "sampler": 0,
@@ -296,7 +301,12 @@
     },
     {
       "sampler": 0,
-      "source": 3
+      "source": 3,
+      "extensions": {
+        "EXT_texture_webp": {
+          "source": 5
+        }
+      }
     },
     {
       "sampler": 0,
@@ -340,6 +350,10 @@
       "mimeType": "image/jpeg",
       "name": "wild_rooibos_bush_diff",
       "uri": "textures/wild_rooibos_bush_diff_1k.jpg"
+    },
+    {
+      "uri": "textures/foliage.webp",
+      "mimeType": "image/webp"
     }
   ],
   "accessors": [
@@ -1227,5 +1241,8 @@
       "byteLength": 1236928,
       "uri": "wild_rooibos_bush.bin"
     }
+  ],
+  "extensionsUsed": [
+    "EXT_texture_webp"
   ]
 }

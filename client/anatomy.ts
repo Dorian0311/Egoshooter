@@ -20,7 +20,12 @@ export function createAnatomy(root:T.Group){
   if(v.y>1.53)return 'head';if(Math.abs(v.x)>.25&&v.y>.65)return v.x<0?'armL':'armR';if(v.y<.86&&Math.abs(v.x)>.025)return v.x<0?'legL':'legR';return 'body';
  };
  root.traverse(o=>{if(!(o instanceof T.Mesh)||!o.geometry.getAttribute('position'))return;for(let parent:T.Object3D|null=o;parent&&parent!==root;parent=parent.parent)if(parent.userData.nonAnatomic)return;const geometry=o.geometry,source=geometry.index?.array??Array.from({length:geometry.getAttribute('position').count},(_,n)=>n),indices=Uint32Array.from(source),parts:BodyPart[]=[];
-  for(let n=0;n<indices.length;n+=3){const labels=[0,1,2].map(i=>classify(o,indices[n+i]));parts.push(labels.find(part=>labels.filter(p=>p===part).length>=2)??'body');}
+  for(let n=0;n<indices.length;n+=3){
+   const a=classify(o,indices[n]),b=classify(o,indices[n+1]);
+   if(a===b){parts.push(a);continue;}
+   const c=classify(o,indices[n+2]);
+   parts.push(c===a||c===b?c:'body');
+  }
   partitions.push({mesh:o,indices,parts,groups:geometry.groups.length?geometry.groups.map((g:{start:number;count:number;materialIndex?:number})=>({start:g.start,count:g.count,materialIndex:g.materialIndex??0})):[{start:0,count:indices.length,materialIndex:0}]});
  });
  const woundMaterial=createWoundMaterial(),capGeometries:T.BufferGeometry[]=[];
@@ -31,7 +36,15 @@ export function createAnatomy(root:T.Group){
   radii.sort((a,b)=>a-b);const radius=radii.length>=5?T.MathUtils.clamp(radii[Math.floor(radii.length*.9)],nominal*.8,nominal*(part==='head'?1.3:1.65)):nominal,geometry=createWoundGeometry(part,radius);cap.userData.radius=radius;capGeometries.push(geometry);const flesh=new T.Mesh(geometry,woundMaterial);flesh.name=`tissue-${part}`;flesh.castShadow=true;cap.add(flesh);cap.visible=false;root.add(cap);if(joint){root.updateWorldMatrix(true,true);joint.attach(cap);}caps.set(part,cap);}
  let mask=-1;
  return {
-  setLost(next:number){if(next===mask)return;mask=next;for(const p of partitions){const kept:number[]=[];p.mesh.geometry.clearGroups();for(const group of p.groups){const start=kept.length;for(let n=group.start;n<group.start+group.count;n+=3)if(!(next&limbBits[p.parts[n/3]]))kept.push(p.indices[n],p.indices[n+1],p.indices[n+2]);p.mesh.geometry.addGroup(start,kept.length-start,group.materialIndex);}if(!p.mesh.geometry.index)p.mesh.geometry.setIndex(new T.BufferAttribute(p.indices.slice(),1));p.mesh.geometry.index!.array.set(kept);p.mesh.geometry.index!.needsUpdate=true;p.mesh.geometry.setDrawRange(0,kept.length);}for(const [part,cap]of caps)cap.visible=!!(next&limbBits[part]);},
+  setLost(next:number){if(next===mask)return;const firstIntact=mask===-1&&next===0;mask=next;for(const p of partitions){
+    const geometry=p.mesh.geometry;
+    // The usual intact primitive is already laid out in draw order. Keep its GPU index buffer clean.
+    if(firstIntact&&p.groups.length===1&&p.groups[0].start===0&&p.groups[0].count===p.indices.length){
+     if(!geometry.index)geometry.setIndex(new T.BufferAttribute(p.indices.slice(),1));
+     if(!geometry.groups.length)geometry.addGroup(0,p.indices.length,p.groups[0].materialIndex);
+     geometry.setDrawRange(0,p.indices.length);continue;
+    }
+    const kept:number[]=[];p.mesh.geometry.clearGroups();for(const group of p.groups){const start=kept.length;for(let n=group.start;n<group.start+group.count;n+=3)if(!(next&limbBits[p.parts[n/3]]))kept.push(p.indices[n],p.indices[n+1],p.indices[n+2]);p.mesh.geometry.addGroup(start,kept.length-start,group.materialIndex);}if(!p.mesh.geometry.index)p.mesh.geometry.setIndex(new T.BufferAttribute(p.indices.slice(),1));p.mesh.geometry.index!.array.set(kept);p.mesh.geometry.index!.needsUpdate=true;p.mesh.geometry.setDrawRange(0,kept.length);}for(const [part,cap]of caps)cap.visible=!!(next&limbBits[part]);},
   detach(part:BodyPart){
    root.updateWorldMatrix(true,true);const result=new T.Group(),center=new T.Vector3();let vertexCount=0;
    for(const p of partitions){if(!p.parts.includes(part))continue;const position:number[]=[],uv:number[]=[],normals:number[]=[],colors:number[]=[],groups:{start:number;count:number;materialIndex:number}[]=[];const color=p.mesh.geometry.getAttribute('color'),tex=p.mesh.geometry.getAttribute('uv'),normal=p.mesh.geometry.getAttribute('normal'),rest=p.mesh.geometry.getAttribute('position'),normalMatrix=new T.Matrix3().getNormalMatrix(p.mesh.matrixWorld),posedNormal=new T.Vector3(),posed=new T.Vector3(),restNormal=new T.Vector3(),cachedPosition=new Float32Array(rest.count*3),cachedNormal=new Float32Array(rest.count*3),cached=new Uint8Array(rest.count);if(p.mesh instanceof T.SkinnedMesh)p.mesh.skeleton.update();

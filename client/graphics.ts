@@ -44,9 +44,11 @@ export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
   fxaa.setSize=(w:number,h:number)=>{fxaa.uniforms.resolution.value.set(1/Math.max(1,w),1/Math.max(1,h));};
   const output = new OutputPass();
   // Stay in linear HDR until OutputPass performs the single tone/color conversion.
-  for (const pass of [render, ao, weaponPass, bloom, fxaa, smaa, output]) composer.addPass(pass);
+  const pipeline=[render,ao,weaponPass,bloom,fxaa,smaa,output];
+  // The composer receives physical pixels; changing viewport and DPR together must resize its targets only once.
+  composer.setPixelRatio(1);
   let quality = initialQuality, width = 0, height = 0, ratio = 0;
-  let resolutionScaling=true;
+  let resolutionScaling=true,resetScale=true;
   // Contact shading is low-frequency; its normal/depth buffers need fewer pixels
   // than the crisp full-resolution color/SMAA buffers.
   const resizeOcclusion = ao.setSize.bind(ao);
@@ -55,7 +57,7 @@ export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
     resizeOcclusion(Math.max(1, Math.floor(w * scale)), Math.max(1, Math.floor(h * scale)));
   };
   let shadowExtent = 52;
-  const sunOffset = new T.Vector3(-70, 80, 55);
+  const sunOffset = sun.position.clone().sub(sun.target.position);
   const lightRotation = new T.Matrix4().lookAt(sunOffset, new T.Vector3(), T.Object3D.DEFAULT_UP);
   const inverseRotation = lightRotation.clone().invert();
   const shadowCenter = new T.Vector3();
@@ -75,7 +77,7 @@ export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
 
   function setQuality(value: GraphicsQuality) {
     quality = value;
-    governor.reset();gpuTiming.reset();timingFrame=0;shadowCadence.reset();frameCpuAverage=0;
+    resetScale=true;gpuTiming.reset();timingFrame=0;shadowCadence.reset();frameCpuAverage=0;
     const preset = graphicsPresets[quality];
     // Spend the automatic/performance shadow budget near the player. Spatial
     // world batches let the smaller light frustum actually reject distant work.
@@ -92,7 +94,13 @@ export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
     bloom.enabled = preset.bloom;
     fxaa.enabled=preset.antialias==='fxaa';smaa.enabled=preset.antialias==='smaa';
     output.enabled=!fxaa.enabled;
-    ratio = 0;
+    // EffectComposer.setSize also touches disabled passes. Only the active preset owns full-size buffers.
+    for(const pass of composer.passes){
+      if(pass!==weaponPass&&!pass.enabled)pass.setSize(1,1);
+    }
+    composer.passes=pipeline.filter(pass=>pass===weaponPass||pass.enabled);
+    ratio=0;
+
   }
   setQuality(quality);
   function warmup(object:T.Object3D,weapon=false){
@@ -104,22 +112,45 @@ export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
     try{return renderer.compileAsync(object,weapon?weaponCamera:camera,weapon?viewmodel.scene:scene);}
     finally{renderer.setRenderTarget(previous);}
   }
-  function warmupWorldDraw(){
+  function warmupWorldDraw(actorRoots:readonly T.Group[]=[],actorsOnly=false){
     // compileAsync links colour programs. A tiny off-screen draw also
     // initializes vertex buffers, texture bindings and shadow depth programs.
     const target=composer.readBuffer,previous=renderer.getRenderTarget();
     const scissor=target.scissor.clone(),scissorTest=target.scissorTest;
     const shadowUpdate=renderer.shadowMap.needsUpdate;
-    const uncull:T.Object3D[]=[];
-    scene.traverseVisible(object=>{
-      if(object instanceof T.Mesh&&object.frustumCulled){uncull.push(object);object.frustumCulled=false;}
-    });
+    const uncull:T.Object3D[]=[],hidden:T.Object3D[]=[],extraLayer:T.Object3D[]=[];
+    const cameraLayers=camera.layers.mask,uploadLayer=30;
+    function enableUpload(object:T.Object3D){
+      if(object.layers.test(camera.layers)&&!object.layers.isEnabled(uploadLayer)){
+        object.layers.enable(uploadLayer);extraLayer.push(object);
+      }
+    }
     try{
+      // The first spawn camera can face away from completed avatars. Upload their real skinned buffers now.
+      for(const actor of actorRoots){
+        for(const root of [actor.parent,actor])if(root&&!root.visible){root.visible=true;hidden.push(root);}
+        if(actorsOnly)actor.traverseVisible(enableUpload);
+      }
+      if(actorsOnly){
+        scene.traverseVisible(object=>{if(object instanceof T.Light)enableUpload(object);});
+        camera.layers.set(uploadLayer);
+      }
       target.scissor.set(0,0,1,1);target.scissorTest=true;
       renderer.setRenderTarget(target);
-      renderer.shadowMap.needsUpdate=true;
+      // The colour scissor does not constrain shadow draws. Warm a still-missing shadow map with light culling intact.
+      if(!actorsOnly&&!sun.shadow.map){
+        renderer.shadowMap.needsUpdate=true;
+        renderer.render(scene,camera);
+      }
+      scene.traverseVisible(object=>{
+        if(object instanceof T.Mesh&&object.layers.test(camera.layers)&&object.frustumCulled){uncull.push(object);object.frustumCulled=false;}
+      });
+      renderer.shadowMap.needsUpdate=false;
       renderer.render(scene,camera);
     }finally{
+      camera.layers.mask=cameraLayers;
+      for(const object of extraLayer)object.layers.disable(uploadLayer);
+      for(const object of hidden)object.visible=false;
       for(const object of uncull)object.frustumCulled=true;
       target.scissor.copy(scissor);target.scissorTest=scissorTest;
       renderer.setRenderTarget(previous);
@@ -128,7 +159,7 @@ export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
   }
   return {
     setQuality,
-    setResolutionScaling(value:boolean){resolutionScaling=value;governor.reset();},
+    setResolutionScaling(value:boolean){resolutionScaling=value;resetScale=true;},
     setTimingEnabled(value:boolean){timingEnabled=value;gpuTiming.reset();timingFrame=0;},
     frameState,
     warmup,warmupWorldDraw,
@@ -143,20 +174,33 @@ export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
       if(timingEnabled&&currentTimingFrame%4===0)gpuTiming.poll();
       frameState.gpuMs=gpuTiming.state.ms;
       const adaptiveQuality=quality==='auto'||quality==='performance';
+      const baseRatio=renderPixelRatio(quality,window.devicePixelRatio,w,h);
+      if(resetScale||w!==width||h!==height){
+        // Start live performance mode at a 900p pixel budget. Headroom measured by the governor restores full detail.
+        const initialScale=quality==='performance'?Math.min(1,Math.sqrt(1_440_000/(w*h))/baseRatio):1;
+        governor.reset(initialScale);resetScale=false;
+      }
       const scale=adaptiveQuality&&resolutionScaling?governor.update(frameSeconds,!document.hidden&&adaptive,gpuTiming.state.ms,cpuMs):1;
-      const baseRatio=renderPixelRatio(quality, window.devicePixelRatio, w, h);
       // Keep the image legible without cancelling adaptive scaling in
       // smaller windows. The HUD is still drawn at native resolution.
       const nextRatio = Math.max(Math.min(baseRatio*.8,540/h),baseRatio*scale);
       frameState.resized=w!==width||h!==height||ratio!==nextRatio;frameState.pixelRatio=nextRatio;
       if (w !== width || h !== height || ratio !== nextRatio) {
-        const resized=w!==width||h!==height,ratioChanged=ratio!==nextRatio;
-        width = w; height = h; ratio = nextRatio;
+        width=w;height=h;ratio=nextRatio;
         renderer.setDrawingBufferSize(w,h,ratio);
-        if(ratioChanged)composer.setPixelRatio(ratio);
-        if(resized)composer.setSize(w,h);
-        camera.aspect = w / h;
+        camera.aspect=w/h;
         camera.updateProjectionMatrix();
+        composer.setSize(renderer.domElement.width,renderer.domElement.height);
+      }
+      if(ao.enabled){
+        // SSAOPass r170 caches projection on resize; scoped FOV and indoor far clipping change it independently.
+        const uniforms=ao.ssaoMaterial.uniforms;
+        if(!uniforms.cameraProjectionMatrix.value.equals(camera.projectionMatrix)){
+          uniforms.cameraProjectionMatrix.value.copy(camera.projectionMatrix);
+          uniforms.cameraInverseProjectionMatrix.value.copy(camera.projectionMatrixInverse);
+        }
+        uniforms.cameraNear.value=ao.depthRenderMaterial.uniforms.cameraNear.value=camera.near;
+        uniforms.cameraFar.value=ao.depthRenderMaterial.uniforms.cameraFar.value=camera.far;
       }
       // Snap in LIGHT space, not world space, so shadows remain stable while moving.
       if(cpuMs!==undefined&&Number.isFinite(cpuMs))frameCpuAverage+=(Math.min(50,cpuMs)-frameCpuAverage)*.1;

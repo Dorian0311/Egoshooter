@@ -1,12 +1,14 @@
 import * as T from 'three';
 import {RoundedBoxGeometry} from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import type {Box,World} from '../shared/world';
-import {batchStaticMeshes,createRiver} from './scenery';
+import {batchStaticMeshes} from './scenery';
+import {createIslandQuay} from './islandQuay';
+import {createCoastalWater} from './coastalWater';
 import {projectBoxUVs} from './materials';
 import {islandCourseRadius,islandRoute,islandUnderpass,nearIslandRoute} from '../shared/islandRoute';
 import {applySurfaceFinish} from './surfaceFinish';
 import {terrainHeight} from '../shared/terrain';
-import {coastalHeadland} from './coastalHeadland';
+import {coastalHeadland,islandHeadlands} from './coastalHeadland';
 import {addIslandStreet} from './islandStreet';
 import {inIslandStreet} from '../shared/islandStreet';
 import {createBattleTerrain} from './battleTerrain';
@@ -182,21 +184,53 @@ export function createMapDetails(scene:T.Scene,world:World,get:(color:string)=>T
       for(const x of [-4.8,4.8])box(b.x+x,b.y,b.z+b.d/2+.05,.1,b.h,.08,steel);
     }
   }
-  let ocean:ReturnType<typeof createRiver>|undefined;
+  let ocean:ReturnType<typeof createCoastalWater>|undefined;
   const terrain=island||war?createBattleTerrain(world,get(island?'#718a48':'#77766b'),get('#d0b37c')):undefined;
   if(terrain)root.add(terrain.mesh);
+  const roadTextures:T.Texture[]=[];
+  let roadSurface:T.MeshStandardMaterial|undefined;
   const disposeStreet=island?addIslandStreet(root):undefined;
   if(island){
-    ocean=createRiver(scene,1000,1000,-3.4,'#238f9d',[40,48],false);
+    root.add(createIslandQuay());
+    ocean=createCoastalWater(scene,world);
     const route=new T.CatmullRomCurve3(islandRoute.map(([x,z])=>new T.Vector3(x,0,z)));
-    const asphalt=material('#70695b',.04,.98),verge=material('#a7926d'),marking=material('#edd8a3');
-    const center=new T.Vector3(),tangent=new T.Vector3(),roadColor=new T.Color();
+    const loader=new T.TextureLoader();
+    const roadMap=loader.load('/shooter/island-street/asphalt-color.webp');
+    const roadNormal=loader.load('/shooter/island-street/asphalt-normalgl.webp');
+    roadMap.colorSpace=T.SRGBColorSpace;
+    for(const tex of [roadMap,roadNormal]){
+      tex.wrapS=tex.wrapT=T.RepeatWrapping;tex.anisotropy=4;roadTextures.push(tex);
+    }
+    const road=new T.MeshStandardMaterial({map:roadMap,normalMap:roadNormal,vertexColors:true,roughness:.95});
+    roadSurface=road;road.normalScale.set(.48,.48);
+    const asphalt=new T.Color('#f1eee5'),verge=new T.Color('#ccae83'),marking=material('#edd8a3');
+    const center=new T.Vector3(),tangent=new T.Vector3(),roadColor=new T.Color(),routeLength=route.getLength();
+    // Weld the verge to the surrounding ground with opaque gravel and broken paving.
+    // Coverage is evaluated in road metres, so the edge stays fixed as the camera turns.
+    const shoulder=get('#d0b37c');
+    road.onBeforeCompile=shader=>{
+      shader.uniforms.vergeSand={value:shoulder.map};
+      shader.uniforms.roadLength={value:routeLength};
+      shader.vertexShader=shader.vertexShader.replace('#include <common>','#include <common>\nvarying vec3 vRoadPoint;')
+        .replace('#include <begin_vertex>','#include <begin_vertex>\nvRoadPoint=(modelMatrix*vec4(transformed,1.0)).xyz;');
+      shader.fragmentShader=shader.fragmentShader.replace('#include <common>',
+        '#include <common>\nvarying vec3 vRoadPoint; uniform sampler2D vergeSand; uniform float roadLength;')
+        .replace('#include <map_fragment>',`#include <map_fragment>
+          vec2 roadMetres=vMapUv*3.2;
+          float edgeDistance=min(2.65-abs(roadMetres.x),min(roadMetres.y,roadLength-roadMetres.y)*.28);
+          vec3 sandSample=texture2D(vergeSand,vRoadPoint.xz/6.0).rgb;
+          float grain=clamp(dot(sandSample,vec3(.31,.50,.19))*2.2,0.,1.);
+          float edge=smoothstep(.02,.7,edgeDistance+(grain-.5)*.9+
+            .10*sin(roadMetres.y*3.8)+.05*sin(roadMetres.y*11.1));
+          diffuseColor.rgb=mix(sandSample*vec3(1.02,.97,.87),diffuseColor.rgb,edge);`);
+    };
+    road.customProgramCacheKey=()=>'coastal-road-verge-v1';
     // Tyre wear is part of the road mesh, so even the sweeping bend needs
     // just one material and no stacked transparent decals.
     const offsets=[-2.65,-1.83,-.99,-.76,-.52,.52,.76,.99,1.83,2.65];
     // Short terrain-following ribbons batch by cell and keep the path free of obstacles.
     for(let section=0;section<12;section++){
-      const positions:number[]=[],indices:number[]=[],colors:number[]=[];
+      const positions:number[]=[],indices:number[]=[],colors:number[]=[],uv:number[]=[];
 
       for(let i=0;i<=8;i++){
         const progress=(section+i/8)/12;
@@ -204,10 +238,11 @@ export function createMapDetails(scene:T.Scene,world:World,get:(color:string)=>T
         for(const [col,offset] of offsets.entries()){
           const x=center.x+tangent.z*offset,z=center.z-tangent.x*offset;
           positions.push(x,terrainHeight(x,z,world)+.043,z);
+          uv.push(offset/3.2,progress*routeLength/3.2);
           const edge=col===0||col===offsets.length-1;
           const wear=(col===3||col===6)?(.11+.10*Math.sin(progress*93)**2):0;
           const mix=(1-wear)*(.96+.07*Math.sin(progress*119+offset*1.7)*Math.cos(progress*73+col*.61));
-          roadColor.copy(edge?verge.color:asphalt.color).multiplyScalar(mix).toArray(colors,colors.length);
+          roadColor.copy(edge?verge:asphalt).multiplyScalar(mix).toArray(colors,colors.length);
         }
         if(i)for(let col=0;col<offsets.length-1;col++){
           const a=(i-1)*offsets.length+col,b=a+offsets.length;
@@ -218,10 +253,10 @@ export function createMapDetails(scene:T.Scene,world:World,get:(color:string)=>T
       surface.setAttribute('position',new T.Float32BufferAttribute(positions,3));
       surface.setAttribute('color',new T.Float32BufferAttribute(colors,3));
       surface.setIndex(indices);surface.computeVertexNormals();
-      const road=material('#ffffff',.03,1);road.vertexColors=true;road.side=T.DoubleSide;applySurfaceFinish(road,false);
+      surface.setAttribute('uv',new T.Float32BufferAttribute(uv,2));
       const strip=new T.Mesh(surface,road);strip.receiveShadow=true;root.add(strip);
     }
-    for(let i=0;i<=32;i++){
+    for(let i=1;i<32;i++){
       const progress=i/32;
       route.getPointAt(progress,center);route.getTangentAt(progress,tangent);
       const stripe=box(center.x,terrainHeight(center.x,center.z,world)+.07,center.z,.09,.018,.95,marking);
@@ -246,28 +281,8 @@ export function createMapDetails(scene:T.Scene,world:World,get:(color:string)=>T
           }
       }
     }
-    // Low vegetation in pockets along the path leaves the sightline down to
-    // the radar and the clearance of the vehicle route intact.
-    for(let i=0;i<25;i++){
-      route.getPointAt((i+.5)/25,center);route.getTangentAt((i+.5)/25,tangent);
-      for(const side of [-1,1]){
-        const offset=side*(3.4+(i%3)*.52),x=center.x+tangent.z*offset,z=center.z-tangent.x*offset;
-        if(Math.abs(z-islandUnderpass.z)<4)continue;
-        const inBend=z>32&&z<55;
-        const bush=new T.Mesh(new T.IcosahedronGeometry(.55+(i%4)*.10,1),material(i%2?'#496c42':'#63814b'));
-        const height=inBend?.63+(i%4)*.25:.62;
-        bush.position.set(x,terrainHeight(x,z,world)+height*.38,z);
-        bush.rotation.y=i*2.4;bush.scale.set(1,height,1.27);
-        root.add(bush);
-      }
-    }
     const cliffMaterial=material('#ffffff');cliffMaterial.vertexColors=true;
-    const headlands=[
-      [176,-70,36,34,21], [153,-109,24,23,16], [123,-145,18,15,13],
-      [-151,-109,33,28,18], [-183,-64,39,44,24], [-165,54,26,19,18],
-      [-85,163,33,32,25], [133,146,32,39,23], [163,112,19,18,14],
-    ];
-    for(const [i,[x,z,width,height,depth]] of headlands.entries()){
+    for(const [i,[x,z,width,height,depth]] of islandHeadlands.entries()){
       const cliff=new T.Mesh(coastalHeadland(i*1.7),cliffMaterial);
       cliff.position.set(x,-4,z);cliff.scale.set(width,height,depth);
       cliff.rotation.y=i*.87;root.add(cliff);
@@ -305,11 +320,7 @@ export function createMapDetails(scene:T.Scene,world:World,get:(color:string)=>T
       grass.setMatrixAt(count,pose.matrix);grass.setColorAt(count++,tint.set(n%3?'#719448':'#a3ae59'));
     }
     grass.count=count;grass.receiveShadow=true;root.add(grass);
-    for(let i=0;i<80;i++){
-      const x=Math.sin(i*29.13)*69,z=Math.cos(i*17.71)*69;
-      if(inIslandStreet(x,z)||Math.abs(x)<9||Math.abs(z)<7||world.boxes.some(b=>Math.abs(x-b.x)<b.w/2+2&&Math.abs(z-b.z)<b.d/2+2))continue;
-      const bush=new T.Mesh(new T.IcosahedronGeometry(.45+(i%3)*.17,1),material(i%2?'#497c39':'#718d3c'));bush.position.set(x,.3,z);bush.scale.set(1,.7,1.2);bush.castShadow=true;root.add(bush);
-    }
+
   }
   if(war){
     // Workers' terraces and pitched roofs extend the freight yard
@@ -406,6 +417,9 @@ export function createMapDetails(scene:T.Scene,world:World,get:(color:string)=>T
   }
   // Low kerbs establish street edges without introducing invisible collisions.
   if(!island)for(const b of world.buildings)for(const side of [-1,1])box(b.x,.055,b.z+side*(b.d/2+1.6),b.w+1,.11,.35,get('#9d8b75'));
-  batchStaticMeshes(root,new Set(),64,island?new Set(colors.values()):undefined);
-  return {update(seconds:number){ocean?.update(seconds);if(radarRotor)radarRotor.rotation.y=seconds*.25;},dispose(){disposeStreet?.();terrain?.dispose();colors.forEach(m=>m.dispose());}};
+  // Only plain uniform colours can share vertex tint. Patinated station masonry has its own shader.
+  const tintable=new Set([...colors.values()].filter(m=>m.onBeforeCompile===T.Material.prototype.onBeforeCompile&&
+    !Object.values(m).some(value=>value instanceof T.Texture)));
+  batchStaticMeshes(root,new Set(),64,tintable);
+  return {update(seconds:number){ocean?.update(seconds);if(radarRotor)radarRotor.rotation.y=seconds*.25;},dispose(){ocean?.dispose();disposeStreet?.();roadSurface?.dispose();roadTextures.forEach(texture=>texture.dispose());terrain?.dispose();colors.forEach(m=>m.dispose());}};
 }

@@ -15,11 +15,25 @@ export function rockHull(b: RockBounds): RockHull {
   const plane=(normal:Vec3,offset:number)=>{const length=Math.hypot(...normal);planes.push({normal:unit(normal),offset:offset/length});};
   plane([0,-1,0],b.h/2); plane([0,1,0],b.h*.46);
   for(const side of [-1,1]){plane([side,0,0],b.w/2);plane([0,0,side],b.d/2);}
-  for(let i=0;i<12;i++){
-    const angle=(i+.13)*Math.PI/6,x=Math.cos(angle),z=Math.sin(angle);
-    const variation=Math.sin(b.x*1.73+b.z*.63+i*7.1)*.045;
-    plane([x/b.w,(.16+variation*2)/b.h,z/b.d],.43+variation);
-    plane([x*.7/b.w,1/b.h,z*.7/b.d],.39+variation);
+  if(b.y>b.h/2+.1){
+    // The elevated rock shelf has a designed driving clearance beneath it.
+    for(let i=0;i<12;i++){
+      const angle=(i+.13)*Math.PI/6,x=Math.cos(angle),z=Math.sin(angle);
+      const variation=Math.sin(b.x*1.73+b.z*.63+i*7.1)*.045;
+      plane([x/b.w,(.16+variation*2)/b.h,z/b.d],.43+variation);
+      plane([x*.7/b.w,1/b.h,z*.7/b.d],.39+variation);
+    }
+  }else{
+    // Broken basal edge, shoulders and crown. Offset the successive rings so no
+    // horizontal band of vertices wraps round the boulder at one elevation.
+    const seed=b.x*1.73+b.z*.63;
+    const rings=[[.41,-.15],[.42,.30],[.49,.85],[.83,1.85]] as const;
+    for(const [ring,[radius,slope]] of rings.entries())for(let i=0;i<8;i++){
+      const theta=seed+(i+ring*.39)*Math.PI/4,dx=Math.cos(theta),dz=Math.sin(theta);
+      const split=Math.sin(theta*2+.35*seed)*.037+Math.cos(theta*3+ring*.75)*.022;
+      const tilt=.18*Math.cos(theta-seed)+.09*Math.sin(i*1.75+ring);
+      plane([dx/b.w,(slope+tilt)/b.h,dz/b.d],radius+split);
+    }
   }
   const vertices:Vec3[]=[];
   for(let i=0;i<planes.length;i++)for(let j=i+1;j<planes.length;j++)for(let k=j+1;k<planes.length;k++){

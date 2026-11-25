@@ -33,5 +33,11 @@
       "sha256": "f4587cabdb96a2e96d8be644923dc954a248edfaaa717a0ff224cacb898bee1f",
       "bytes": 1006632
     }
-  ]
+  ],
+  "foliageOpacity": {
+    "file": "textures/foliage.webp",
+    "alphaSource": "https://dl.polyhaven.org/file/ph-assets/Models/png/1k/grass_medium_01/grass_medium_01_alpha_1k.png",
+    "colorSource": "textures/grass_medium_01_diff_1k.jpg",
+    "license": "CC0-1.0"
+  }
 }

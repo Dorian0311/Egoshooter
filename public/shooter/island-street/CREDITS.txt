@@ -10,3 +10,9 @@ texture from Poly Haven: https://polyhaven.com/a/damaged_plaster
 
 Wood Floor Worn by Dimitrios Savva (CC0): https://polyhaven.com/a/wood_floor_worn
 Distressed Painted Planks by Rob Tuytel (CC0): https://polyhaven.com/a/distressed_painted_planks
+
+Original Harbour Road artwork: shop-goods.webp (product packaging and record sleeves),
+diner-linoleum.webp (speckled tile), interior-prints.webp (wall prints).
+
+Outer Island headlands: Coastal Cliff 01 by Rob Tuytel and Rico Cilliers, Poly Haven (CC0).
+A simplified scan retains the source colour and normal maps. https://polyhaven.com/a/coastal_cliff_01

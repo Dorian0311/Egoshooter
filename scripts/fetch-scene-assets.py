@@ -32,9 +32,9 @@ for name in ["wooden_military_crate", "barrel_03"]:
         files.append(save(folder, relative, info))
     records.append({"name": name, "license": "CC0-1.0",
                     "source": f"https://polyhaven.com/a/{name}", "files": files})
-name = "kloppenheim_06_puresky"
-metadata = json.loads(fetch(f"https://api.polyhaven.com/files/{name}"))
-files = [save(ROOT / "public/shooter/environment", "sky.hdr", metadata["hdri"]["1k"]["hdr"])]
-records.append({"name": name, "license": "CC0-1.0", "source": f"https://polyhaven.com/a/{name}", "files": files})
+for name, filename in [("kloppenheim_06_puresky", "sky.hdr"), ("kloofendal_48d_partly_cloudy_puresky", "island-daylight.hdr")]:
+    metadata = json.loads(fetch(f"https://api.polyhaven.com/files/{name}"))
+    files = [save(ROOT / "public/shooter/environment", filename, metadata["hdri"]["1k"]["hdr"])]
+    records.append({"name": name, "license": "CC0-1.0", "source": f"https://polyhaven.com/a/{name}", "files": files})
 (ROOT / "public/shooter/scene-assets.json").write_text(json.dumps(records, indent=2)+"\n", encoding="utf-8")
 print(f"Verified {len(records)} CC0 scene assets, {sum(len(r['files']) for r in records)} files")

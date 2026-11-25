@@ -75,6 +75,10 @@ function show() {
   if(mapId==='storm'&&!routeReview&&params.get('focus')==='island-street'){
     Object.assign(player,{x:40,y:ground(40,-21,routeWorld),z:-21,yaw:-1.34,pitch:.015});
   }
+  const notice=islandShops.find(shop=>params.get('focus')==='notice-'+shop.id);
+  if(mapId==='storm'&&notice)Object.assign(player,{x:notice.x-2.43,y:0,z:notice.z-notice.front*(notice.d/2-2.4),yaw:notice.front===1?0:Math.PI,pitch:.11});
+  if(mapId==='storm'&&params.get('focus')==='water')Object.assign(player,{x:8,z:117,y:ground(8,117,routeWorld),yaw:Math.PI-.48,pitch:-.05});
+  if(mapId==='cologne'&&params.get('focus')==='station-front')Object.assign(player,{x:50,z:-11,y:0,yaw:.10,pitch:.19});
   if(mapId==='storm'&&params.get('focus')==='passage')Object.assign(player,{x:-21,y:0,z:72,yaw:.08,pitch:.03});
   if(mapId==='storm'&&params.get('focus')==='coast')Object.assign(player,{x:-20,y:ground(-20,107,routeWorld),z:107,yaw:.55,pitch:-.03});
   if(params.has('supplies'))snapshot.pickups=[{id:'review-medkit',kind:'bandage',x:player.x-.8,y:player.y,z:player.z-2.6,taken:false}];
