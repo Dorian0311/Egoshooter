@@ -4,7 +4,7 @@ import {residentProfile,type ResidentLook} from '../shared/residentProfiles';
 const looks:Record<ResidentLook,{build:[number,number,number];face:[number,number,number];jacket:string;trousers:string;boots:string}>={
  bruiser:{build:[1.23,1.04,1.17],face:[1.12,.95,1.06],jacket:'#bf6929',trousers:'#263643',boots:'#29241e'},
  veteran:{build:[1.02,.94,1.05],face:[.94,1.03,.99],jacket:'#879254',trousers:'#514433',boots:'#332b25'},
- officer:{build:[.89,1.10,.95],face:[.95,1.08,.97],jacket:'#33668f',trousers:'#233244',boots:'#202126'},
+ officer:{build:[.89,1.10,.95],face:[.95,1.08,.97],jacket:'#445d70',trousers:'#233244',boots:'#202126'},
  showman:{build:[1.14,.98,1.13],face:[1.05,.96,1.08],jacket:'#a74576',trousers:'#62304c',boots:'#e2d4b2'},
 };
 
@@ -30,8 +30,31 @@ export function createResidentAppearance(root:T.Group,body:T.Object3D,id:string)
   }
   box(aviator?gold:dark,0,1.698,-.124,.028,.004,.006,'head');
  }
- const neckline=new T.Shape();neckline.moveTo(-.065,.11);neckline.lineTo(.065,.11);neckline.lineTo(.032,-.12);neckline.lineTo(-.032,-.12);neckline.closePath();
- const shirt=mesh(new T.ShapeGeometry(neckline),material(profile.look==='showman'?'#e6d6ab':'#c9bda1'),0,1.34,-.153,'body');shirt.rotation.y=Math.PI;shirt.scale.set(w,h,1);
+ if(profile.look==='officer'){
+  // Shape the visible shirt into the jacket opening, with folded collar tips
+  // and a narrow tied front. All pieces share one coloured garment draw.
+  const positions:number[]=[],colors:number[]=[];
+  type Point=[number,number,number];
+  function panel(color:string,a:Point,b:Point,c:Point){
+   const tint=new T.Color(color);
+   for(const p of [a,b,c]){positions.push(...p);colors.push(tint.r,tint.g,tint.b);}
+  }
+  const topL:Point=[-.071,.092,.008],topR:Point=[.071,.092,.008],bottom:Point=[0,-.104,-.006];
+  panel('#c4bfae',topL,topR,bottom);
+  panel('#303944',[0,.061,-.010],[.017,.043,-.011],[0,.018,-.016]);
+  panel('#46505b',[0,.061,-.010],[0,.018,-.016],[-.016,.043,-.011]);
+  panel('#39424b',[0,.025,-.014],[.018,-.055,-.013],[0,-.092,-.011]);
+  panel('#46505b',[0,.025,-.014],[0,-.092,-.011],[-.018,-.055,-.013]);
+  panel('#ded9c9',topL,[0,.065,-.013],[-.032,.019,-.014]);
+  panel('#cfcab9',[0,.065,-.013],topR,[.031,.019,-.014]);
+  const geometry=new T.BufferGeometry();geometry.setAttribute('position',new T.Float32BufferAttribute(positions,3));
+  geometry.setAttribute('color',new T.Float32BufferAttribute(colors,3));geometry.computeVertexNormals();
+  const textile=material('#ffffff');textile.vertexColors=true;textile.roughness=.96;
+  const shirt=mesh(geometry,textile,0,1.365,-.153,'body');shirt.name='resident-officer-shirt-and-tie';shirt.scale.set(w,h,1);
+ }else{
+  const neckline=new T.Shape();neckline.moveTo(-.065,.11);neckline.lineTo(.065,.11);neckline.lineTo(.032,-.12);neckline.lineTo(-.032,-.12);neckline.closePath();
+  const shirt=mesh(new T.ShapeGeometry(neckline),material(profile.look==='showman'?'#e6d6ab':'#c9bda1'),0,1.34,-.153,'body');shirt.rotation.y=Math.PI;shirt.scale.set(w,h,1);
+ }
  box(leather,0,.94,-.17,.39,.045,.06);box(gold,0,.94,-.207,.073,.055,.018);
  if(profile.look==='bruiser'){
   const hair=material('#24201e');
@@ -60,6 +83,12 @@ export function createResidentAppearance(root:T.Group,body:T.Object3D,id:string)
   // back above it instead of balancing on top of the scalp.
   const capProfile=[[.123,-.050],[.124,-.016],[.153,.012],[.161,.054],[.147,.077],[.074,.088],[0,.088]];
   const crown=new T.LatheGeometry(capProfile.map(([radius,y])=>new T.Vector2(radius,y)),20);
+  const crownColors:number[]=[],ringShade=[.40,.49,.83,.99,1.04,1.02,1];
+  for(let n=0;n<crown.attributes.position.count;n++){
+   const fold=ringShade[n%capProfile.length];
+   crownColors.push(fold,fold,fold);
+  }
+  crown.setAttribute('color',new T.Float32BufferAttribute(crownColors,3));cloth.vertexColors=true;
   const cap=mesh(crown,cloth,0,1.728,.012);cap.name='resident-oversized-cap';
   cap.scale.set(.88,1,1.08);cap.rotation.set(.09,0,.045);
   const visor=ball(dark,0,1.698,-.111,.116,.012,.090);visor.rotation.x=-.14;

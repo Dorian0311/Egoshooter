@@ -50,8 +50,10 @@ export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
   const bloom = new UnrealBloomPass(new T.Vector2(1, 1), .075, .3, 1.65);
   const smaa = new SMAAPass(1, 1);
   skipRedundantSmaaClears(smaa);
-  // SMAA reads only red and green edge flags. RG16F preserves their filtered values.
+  // The edge detector writes two binary flags. RG8 stores both endpoints exactly;
+  // the weights pass still uses the original linear filtering and half-float output.
   smaa.edgesRT.texture.format = T.RGFormat;
+  smaa.edgesRT.texture.type = T.UnsignedByteType;
   const blendOutput='gl_FragColor = SMAANeighborhoodBlendingPS( vUv, vOffset, tColor, tDiffuse );';
   // Keep the old half-float write precision before converting HDR to display color.
   smaa.materialBlend.fragmentShader=smaa.materialBlend.fragmentShader.replace(blendOutput,`${blendOutput}

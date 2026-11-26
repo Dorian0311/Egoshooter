@@ -262,7 +262,11 @@ with sync_playwright() as pw:
     width,height = map(int,os.environ.get('HARBOUR_VIEWPORT','1280x720').split('x'))
     quality=os.environ.get('BATTLE_GRAPHICS','performance')
     assert quality in ('auto','performance','high','ultra'),quality
+    difficulty=os.environ.get('HARBOUR_DIFFICULTY','easy')
+    assert difficulty in ('easy','normal','hard'),difficulty
     quality_suffix=('' if quality=='performance' else '-'+quality)+('-fixed-turns' if FIXED_TURNS else '')
+    if difficulty!='easy':
+        quality_suffix+='-'+difficulty
     if DRAW_PROFILE:
         quality_suffix+='-draw-profile'
     if GPU_PROFILE:
@@ -363,7 +367,7 @@ with sync_playwright() as pw:
         page.get_by_label('Gegner',exact=True).select_option(str(enemies))
     else:
         page.get_by_label('Gefecht',exact=True).select_option('team')
-    page.get_by_label('Schwierigkeit').select_option('easy')
+    page.get_by_label('Schwierigkeit').select_option(difficulty)
     button('Charakter wählen & starten').click()
     button('Weiter zur Waffenauswahl').click()
     start = page.locator('.loadout-start')
@@ -392,6 +396,7 @@ with sync_playwright() as pw:
     assert bots == (enemies or 7), bots
     activate_controls(page)
     assert page.evaluate('harbourQA.state.mapId') == map_id
+    assert page.evaluate('harbourQA.state.operation.config.difficulty') == difficulty
     print(map_id,'battle started with',bots,'bots',flush=True)
     exposed_cells=set()
     def approach(on_failure=None):
@@ -490,7 +495,7 @@ with sync_playwright() as pw:
                 profile_start=profile['startTime']/1000-navigation*1000
             (OUT/f'{map_id}-profile-timing.json').write_text(json.dumps(dict(start=profile_start,tasks=turn['longTasks'])))
             profiler.detach()
-        result=dict(bots=bots,width=width,height=height,quality=quality,renderer=renderer_info,entry=entry,turn=turn)
+        result=dict(bots=bots,width=width,height=height,quality=quality,difficulty=difficulty,renderer=renderer_info,entry=entry,turn=turn)
         suffix='-combat' if COMBAT_MOVEMENT else ''
         report=OUT/f'{map_id}-{bots}-bots-{width}x{height}{suffix}{quality_suffix}.json'
         report.write_text(json.dumps(result,indent=2))
@@ -518,7 +523,7 @@ with sync_playwright() as pw:
     run_id=time.time_ns()
     checkpoint=report_path.with_name(f'{report_path.stem}-{run_id}.partial.json')
     results = []
-    report=dict(bots=bots,width=width,height=height,quality=quality,renderer=renderer_info,
+    report=dict(bots=bots,width=width,height=height,quality=quality,difficulty=difficulty,renderer=renderer_info,
                 condition=condition or 'standard',runId=str(run_id),complete=False,results=results,routeFailures=[])
     def record_failure(stage,attempt,event):
         # Persist before any recovery, including the final exhausted attempt.

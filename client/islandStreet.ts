@@ -97,10 +97,11 @@ export function addIslandStreet(scene:T.Group){
   const cover=solid(lid,57.2,.071,-24.85,pavingMaterial);cover.rotation.x=-Math.PI/2;
   const atlas=loader.load(base+'shops.webp');atlas.colorSpace=T.SRGBColorSpace;atlas.anisotropy=4;
   const facade=new T.MeshStandardMaterial({map:atlas,roughness:.93});
-  const facadeV=(originalV:number)=>(384+2048*originalV)/2432;
+  const atlasV=(pixelY:number)=>1-pixelY/2752;
+  const facadeV=(originalV:number)=>atlasV((1-originalV)*2048);
   function drawer(x:number,y:number,z:number,width:number,height:number,yaw:number){
     const geometry=new T.PlaneGeometry(width,height),uv=geometry.getAttribute('uv');
-    for(let i=0;i<uv.count;i++)uv.setXY(i,(776+240*uv.getX(i))/1024,1-(2425-80*uv.getY(i))/2432);
+    for(let i=0;i<uv.count;i++)uv.setXY(i,(776+240*uv.getX(i))/1024,atlasV(2425-80*uv.getY(i)));
     const panel=solid(geometry,x,y,z,facade);panel.rotation.y=yaw;panel.castShadow=true;
   }
   const prints=loader.load(base+'interior-prints.webp');
@@ -149,9 +150,15 @@ export function addIslandStreet(scene:T.Group){
         const wall=cuboid(x,y,z,w,h,d,facade),uv=wall.geometry.getAttribute('uv');
         for(let face=0;face<6;face++)for(let n=0;n<4;n++){
           const i=face*4+n,lettering=role==='sign'&&face===(s.front===1?4:5);
+          const sideLining=role==='side'&&face===(x<s.x?0:1);
           if(s.id==='diner'&&role==='side'&&x<s.x&&face===1){
             // The west wall carries the full mural. The harbour side has the service hatch.
-            uv.setXY(i,(5+670*uv.getX(i))/1024,1-(2428-376*uv.getY(i))/2432);
+            uv.setXY(i,(5+670*uv.getX(i))/1024,atlasV(2428-376*uv.getY(i)));
+          }else if(s.id==='diner'&&(sideLining||role==='back'&&face===4)){
+            // A continuous tile dado wraps the dining room. Keep its physical tile
+            // size on the shorter side walls, and preserve each outer wall finish.
+            const portion=sideLining?s.d/s.w:1,start=sideLining&&x>s.x?1-portion:0;
+            uv.setXY(i,.001+.998*(start+portion*uv.getX(i)),atlasV(2746-309*uv.getY(i)));
           }else{
             uv.setXY(i,.001+.998*uv.getX(i),facadeV(lettering?(3-index+.70+.298*uv.getY(i))/4:(.003+.99*uv.getY(i))/4));
           }
@@ -172,7 +179,7 @@ export function addIslandStreet(scene:T.Group){
           const x0=width*(col/cols-.5),x1=x0+width/cols,z0=depth*(row/rows-.5),z1=z0+depth/rows;
           const n=points.length/3;
           points.push(x0,0,z0,x1,0,z0,x1,0,z1,x0,0,z1);indices.push(n,n+1,n+2,n,n+2,n+3);
-          uv.push(685/1024,1-2345/2432,764/1024,1-2345/2432,764/1024,1-2424/2432,685/1024,1-2424/2432);
+          uv.push(685/1024,atlasV(2345),764/1024,atlasV(2345),764/1024,atlasV(2424),685/1024,atlasV(2424));
         }
         const lining=new T.BufferGeometry();lining.setIndex(indices);
         lining.setAttribute('position',new T.Float32BufferAttribute(points,3));lining.setAttribute('uv',new T.Float32BufferAttribute(uv,2));
@@ -342,11 +349,16 @@ export function addIslandStreet(scene:T.Group){
       }
     }
     const back=-s.d/2+.27;
-    const panel=detail(0,.59,back,s.w-.48,1.18,.055,paintedBoards);
-    const panelUV=panel.geometry.getAttribute('uv');
-    for(let i=0;i<panelUV.count;i++)panelUV.setX(i,panelUV.getX(i)*s.w/1.6);
+    if(s.id==='diner'){
+      detail(0,.12,back,s.w-.48,.07,.061,iron);
+    }else{
+      const panel=detail(0,.59,back,s.w-.48,1.18,.055,paintedBoards);
+      const panelUV=panel.geometry.getAttribute('uv');
+      for(let i=0;i<panelUV.count;i++)panelUV.setX(i,panelUV.getX(i)*s.w/1.6);
+    }
     for(const side of [-1,1]){
-      detail(side*(s.w/2-.27),.59,0,.055,1.18,s.d-.52,wood);
+      if(s.id==='diner')detail(side*(s.w/2-.27),.12,0,.063,.07,s.d-.52,iron);
+      else detail(side*(s.w/2-.27),.59,0,.055,1.18,s.d-.52,wood);
       detail(side*3.85,2.3,back+.05,1.46,1.46,.08,iron);
       const artwork=new T.PlaneGeometry(1.32,1.32),uv=artwork.getAttribute('uv');
       const cell=index*2+(side===1?1:0);
@@ -396,7 +408,7 @@ export function addIslandStreet(scene:T.Group){
           // Fired tile bulkhead and separate steel expansion joints under the enamel sign.
           // The original facade atlas also supplies the lettering, so both share its batch.
           const tiles=new T.PlaneGeometry(frameWidth/3,.59),uv=tiles.getAttribute('uv');
-          for(let i=0;i<uv.count;i++)uv.setXY(i,.002+.996*uv.getX(i),1-(494-316*uv.getY(i))/2432);
+          for(let i=0;i<uv.count;i++)uv.setXY(i,.002+.996*uv.getX(i),atlasV(494-316*uv.getY(i)));
           solid(tiles,center,.525,frontZ+.085,facade).castShadow=true;
           cuboid(center-frameWidth/6+.011,.525,frontZ+.089,.023,.60,.033,chrome).castShadow=false;
           continue;
@@ -407,7 +419,7 @@ export function addIslandStreet(scene:T.Group){
           // of the shop's own atlas strip for each window, viewed from the street.
           const plaque=new T.PlaneGeometry(panelWidth-.055,.40),uv=plaque.getAttribute('uv');
           const u=direction<0?.502:.002;
-          for(let i=0;i<uv.count;i++)uv.setXY(i,u+.496*uv.getX(i),1-(index*512+432-200*uv.getY(i))/2432);
+          for(let i=0;i<uv.count;i++)uv.setXY(i,u+.496*uv.getX(i),atlasV(index*512+432-200*uv.getY(i)));
           const face=solid(plaque,center,.477,frontZ+s.front*.093,facade);
           face.rotation.y=Math.PI;face.castShadow=true;
           continue;
@@ -424,7 +436,7 @@ export function addIslandStreet(scene:T.Group){
       const galleyX=s.x+s.w/2,galleyZ=s.z+.62;
       const hatch=new T.PlaneGeometry(2.15,1.67),hatchUV=hatch.getAttribute('uv');
       for(let i=0;i<hatchUV.count;i++)
-        hatchUV.setXY(i,(686+330*hatchUV.getX(i))/1024,1-(2338-283*hatchUV.getY(i))/2432);
+        hatchUV.setXY(i,(686+330*hatchUV.getX(i))/1024,atlasV(2338-283*hatchUV.getY(i)));
       const galley=solid(hatch,galleyX+.024,1.84,galleyZ,facade);
       galley.rotation.y=Math.PI/2;galley.castShadow=true;
       for(const side of [-1,1]){

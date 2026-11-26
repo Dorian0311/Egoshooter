@@ -47,7 +47,7 @@ import {createCologneBridgeSteel} from './cologneBridge';
 import {cologneBridgeTracks} from './freightStreet';
 import {createMaterials,projectBoxUVs} from './materials.ts';
 import {addArchitecture,facadeColor} from './architecture.ts';
-import {createRockGeometry} from './rockGeometry.ts';
+import {alpineBoulderMaterial,createRockGeometry} from './rockGeometry.ts';
 import {createViewmodel,projectWeaponMuzzle} from './viewmodel.ts';
 import {createFallbackHands} from './fallbackHands.ts';
 import {RoundedBoxGeometry} from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
@@ -137,6 +137,7 @@ export function createScene(
     return mesh;
   }
   const river=mapId==='cologne'?createRiver(scene):undefined;
+  const alpineBoulders=mapId==='alpine'?alpineBoulderMaterial(mat('#818783'),mat('#deded4')):undefined;
   if(mapId==='cologne'){
     cube(-53,-.2,0,46,.4,150,'#77766b');cube(53,-.2,0,46,.4,150,'#77766b');
     scene.add(createCologneBridgeSteel(),cologneBridgeTracks());
@@ -153,7 +154,7 @@ export function createScene(
   const coverVisuals:{box:(typeof boxes)[number];mesh:T.Mesh}[]=[];
   for (const b of boxes){
     if(b.kind==='interior'||detailedPropKinds.has(b.kind??''))continue;
-    if(b.kind==='rock'){const rock=new T.Mesh(createRockGeometry(b,island),mat(island?'#858a79':'#818783'));rock.position.set(b.x,b.y,b.z);rock.castShadow=true;rock.receiveShadow=true;scene.add(rock);continue;}
+    if(b.kind==='rock'){const rock=new T.Mesh(createRockGeometry(b,island),alpineBoulders??mat(island?'#858a79':'#818783'));rock.position.set(b.x,b.y,b.z);rock.castShadow=true;rock.receiveShadow=true;scene.add(rock);continue;}
     const buildingIndex=buildings.findIndex(item=>Math.abs(b.x-item.x)<=item.w/2+.1&&Math.abs(b.z-item.z)<=item.d/2+.1);
     const visual=cube(
       b.x,
