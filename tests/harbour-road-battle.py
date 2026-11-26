@@ -778,9 +778,11 @@ with sync_playwright() as pw:
             result['weaponShadow']=shadow
             report.write_text(json.dumps(result,indent=2))
             reused=set(row[0] for row in shadow['warmup'])&set(row[0] for row in shadow['world'])
-            assert reused,shadow
+            # The shared depth material can select a different cached program
+            # depending on the preceding caster. That must not cause a live compile.
+            assert shadow['warmup'] and shadow['world'],shadow
             assert all(check['phase']=='warmup' for check in shadow['checks']),shadow
-            print('Kar98k shadow program reused',sorted(reused),shadow['checks'],flush=True)
+            print('Kar98k shadow warmup and live passes observed; matching program IDs',sorted(reused),shadow['checks'],flush=True)
         page.screenshot(path=str(OUT/f'{map_id}-live-{width}x{height}.jpg'),type='jpeg',quality=88)
         if os.environ.get('BATTLE_SHADER_PROFILE')=='1':
             (OUT/f'{map_id}-slow-shaders.json').write_text(json.dumps(page.evaluate('window.slowShaders'),indent=2))

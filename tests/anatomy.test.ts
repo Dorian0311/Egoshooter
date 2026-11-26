@@ -9,6 +9,28 @@ import {createStaticActorRig} from '../client/staticActorRig';
 import {makePlayer} from '../shared/game';
 import {acquireWoundMaterial,createWoundGeometry,createWoundMaterial} from '../client/woundSurfaces';
 import {freezeRemains} from '../client/remainsScene';
+test('injured, frozen and detached body draws keep their original material slots',async()=>{
+ const root=new T.Group(),geometry=new T.BufferGeometry();
+ geometry.setAttribute('position',new T.Float32BufferAttribute([0,1,0,.1,1,0,0,1.1,0,-.5,1,0,-.6,1,0,-.5,1.1,0],3));
+ geometry.setIndex([0,1,2,3,4,5]);
+ geometry.addGroup(0,3,2);geometry.addGroup(3,3,1);
+ const materials=[0,1,2].map(()=>new T.MeshStandardMaterial()),mesh=new T.Mesh(geometry,materials);
+ mesh.name='split-body';root.add(mesh);
+ const anatomy=createAnatomy(root),original=geometry.groups.map(g=>({...g}));
+ anatomy.setLost(2);
+ assert.deepEqual(geometry.groups,[original[0]]);
+ assert.deepEqual(Array.from(geometry.index!.array.slice(0,geometry.drawRange.count)),[0,1,2]);
+ const frozen=await freezeRemains(root);
+ assert.deepEqual((frozen.getObjectByName(mesh.name) as T.Mesh).geometry.groups,[original[0]]);
+ const arm=anatomy.detach('armL')!;
+ assert.deepEqual((arm.children[0] as T.Mesh).geometry.groups,[{start:0,count:3,materialIndex:1}]);
+ anatomy.setLost(0);
+ assert.deepEqual(geometry.groups,original);
+ assert.deepEqual(Array.from(geometry.index!.array),[0,1,2,3,4,5]);
+ frozen.traverse(o=>{if(o instanceof T.Mesh)o.geometry.dispose();});
+ arm.traverse(o=>{if(o instanceof T.Mesh){o.geometry.dispose();for(const m of Array.isArray(o.material)?o.material:[o.material])m.dispose();}});
+ anatomy.dispose();geometry.dispose();materials.forEach(m=>m.dispose());
+});
 test('late frozen remains use the warmed material until the last owner releases it',async()=>{
  const warmup=acquireWoundMaterial(),root=new T.Group(),template=createAnatomy(root);
  let disposals=0;
@@ -30,6 +52,9 @@ test('limb partitions detach actual posed triangles, restore the full mesh, and 
  const human=createHuman(data,'fr','cologne',new T.MeshStandardMaterial(),'us-field'),other=createHuman(data,'fr','cologne',new T.MeshStandardMaterial(),'us-field');
  const counts=(root:T.Group)=>{let total=0;root.traverse(o=>{if(o instanceof T.Mesh)total+=Math.min(o.geometry.drawRange.count,o.geometry.index?.count??o.geometry.getAttribute('position').count);});return total;};
  const original=counts(human.group),otherOriginal=counts(other.group),anatomy=createAnatomy(human.group);
+ const body=human.group.children.find(o=>o instanceof T.SkinnedMesh) as T.SkinnedMesh;
+ assert.deepEqual(body.geometry.groups.map(g=>g.materialIndex),[0,1]);
+ assert.ok(body.geometry.groups.every(g=>g.count>0));
  const baseline=counts(human.group);const arm=anatomy.detach('armL');assert.ok(arm);assert.ok(counts(arm)>30);anatomy.setLost(2);assert.ok(counts(human.group)<baseline);assert.equal(counts(other.group),otherOriginal);
  anatomy.setLost(0);assert.equal(counts(human.group),baseline);assert.ok(original>10000);
  arm.traverse(o=>{if(o instanceof T.Mesh){o.geometry.dispose();for(const m of Array.isArray(o.material)?o.material:[o.material])m.dispose();}});anatomy.dispose();human.dispose();other.dispose();

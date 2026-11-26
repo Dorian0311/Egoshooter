@@ -123,7 +123,7 @@ function createBodyMesh(data:HumanData,civilian:boolean,materials:T.Material[]){
  }
  geometry.setIndex(ordered.flat());
  let start=0;
- for(const [i,triangles] of ordered.entries()){geometry.addGroup(start,triangles.length,i);start+=triangles.length;}
+ for(const [i,triangles] of ordered.entries()){if(!triangles.length)continue;geometry.addGroup(start,triangles.length,i);start+=triangles.length;}
  geometry.computeVertexNormals();
  const mesh=new T.SkinnedMesh(geometry,materials);mesh.normalizeSkinWeights();
  if(!civilian){cache.set(data.indices,geometry);mesh.geometry=actorBodyGeometry(geometry);}
