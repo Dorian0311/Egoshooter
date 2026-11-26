@@ -2,6 +2,7 @@ import * as T from 'three';
 import type {World} from '../shared/world';
 import {insideBuilding} from '../shared/interiors';
 import {designSound,type SoundName,type FootMaterial} from './battleSoundDesign';
+import type {ImpactRequest,ImpactResult} from './impactAudio.worker';
 
 type Surface='footstep'|'metal'|'wood'|'stone'|'glass';
 type Position={x:number;y:number;z:number};
@@ -39,6 +40,8 @@ export function weaponSound(weapon:number,name=''):SoundName{
 export function createBattleAudio(context:()=>AudioContext|null,output:()=>AudioNode|null,camera:T.Camera){
  const buffers=new Map<string,AudioBuffer>(),voices=new Set<Voice>(),engines=new Map<string,Engine>();
  const sequences=new Map<SoundName,number>();let disposed=false,mix:DynamicsCompressorNode|undefined,limiter:WaveShaperNode|undefined,mixSink:AudioNode|null=null;
+ let impactWarmup:Promise<void>|undefined;
+ let cancelImpactWorker:(()=>void)|undefined;
  let reloadVoices:Voice[]=[];
  let shoreline:{source:AudioBufferSourceNode;gain:GainNode;filter:BiquadFilterNode}|undefined;
  function stopShoreline(){
@@ -56,6 +59,37 @@ export function createBattleAudio(context:()=>AudioContext|null,output:()=>Audio
  }
  function buffer(name:SoundName,variant:number){const audio=context();if(!audio)return;const key=`${name}:${variant}`;let cached=buffers.get(key);
   if(!cached){const data=designSound(name,audio.sampleRate,variant);cached=audio.createBuffer(1,data.length,audio.sampleRate);cached.getChannelData(0).set(data);buffers.set(key,cached);}return cached;
+ }
+ async function warmImpactSounds(audio:AudioContext){
+  const request:ImpactRequest={sampleRate:audio.sampleRate,names:['glass','flesh','body','stone']};
+  if(typeof Worker!=='undefined'){
+   const complete=await new Promise<boolean>(resolve=>{
+    let worker:Worker;
+    try{worker=new Worker(new URL('./impactAudio.worker.ts',import.meta.url),{type:'module'});}
+    catch{resolve(false);return;}
+    function finish(ok:boolean){
+     worker.onmessage=null;worker.onerror=null;worker.onmessageerror=null;
+     worker.terminate();cancelImpactWorker=undefined;resolve(ok);
+    }
+    cancelImpactWorker=()=>finish(true);
+    worker.onerror=()=>finish(false);
+    worker.onmessageerror=()=>finish(false);
+    worker.onmessage=({data}:MessageEvent<ImpactResult>)=>{
+     if(!data){finish(true);return;}
+     const key=`${data.name}:${data.variant}`;
+     if(buffers.has(key))return; // An early impact already prepared its own sample.
+     const prepared=audio.createBuffer(1,data.samples.length,audio.sampleRate);
+     prepared.getChannelData(0).set(data.samples);buffers.set(key,prepared);
+    };
+    try{worker.postMessage(request);}catch{finish(false);}
+   });
+   if(complete||disposed)return;
+  }
+  for(let variant=0;variant<4;variant++)for(const name of request.names){
+   await new Promise<void>(resolve=>setTimeout(resolve,0));
+   if(disposed)return;
+   buffer(name,variant);
+  }
  }
  function panner(point:Position){const audio=context()!,pan=audio.createPanner();pan.panningModel='equalpower';pan.distanceModel='inverse';pan.refDistance=3;pan.maxDistance=110;pan.rolloffFactor=1.25;pan.positionX.value=point.x;pan.positionY.value=point.y;pan.positionZ.value=point.z;return pan;}
  function play(name:SoundName,point:Position|undefined,volume:number,rate=1,muffled=false,delay=0,echo=false):Voice|undefined{
@@ -77,7 +111,13 @@ export function createBattleAudio(context:()=>AudioContext|null,output:()=>Audio
  function cancelReload(){for(const voice of reloadVoices)voice.stop();reloadVoices=[];}
  function stopEngine(id:string){const engine=engines.get(id);if(!engine)return;engine.source.stop();engine.source.disconnect();engine.gain.disconnect();engine.filter.disconnect();engine.pan.disconnect();engines.delete(id);}
  return {
-  async load(){if(disposed)return;for(const name of ['rifle','pistol','smg','g36','step-stone','step-earth','sever'] as const)for(let n=0;n<4;n++)buffer(name,n);buffer('rc-engine',0);buffer('rc-warning',0);},
+  async load(){
+   const audio=context();if(disposed||!audio)return;
+   for(const name of ['rifle','pistol','smg','g36','step-stone','step-earth','sever'] as const)for(let n=0;n<4;n++)buffer(name,n);
+   buffer('rc-engine',0);buffer('rc-warning',0);
+   impactWarmup??=warmImpactSounds(audio);
+   await impactWarmup;
+  },
   sample(surface:Surface,point:T.Vector3|undefined,volume:number,rate=1){return effect(surface==='footstep'?'step-stone':surface,point,volume,rate);},
   effect,
   shot(weapon:number,point:T.Vector3|undefined,volume:number,muffled:boolean,name='',indoors=false){effect(weaponSound(weapon,name),point,volume*(weapon===0?.85:weapon===4?.28:.6),1,muffled);if(indoors)play('stone',point,volume*.09,.7,muffled,.055,true);},
@@ -112,6 +152,6 @@ export function createBattleAudio(context:()=>AudioContext|null,output:()=>Audio
    listener.positionX.value=position.x;listener.positionY.value=position.y;listener.positionZ.value=position.z;listener.forwardX.value=direction.x;listener.forwardY.value=direction.y;listener.forwardZ.value=direction.z;listener.upX.value=up.x;listener.upY.value=up.y;listener.upZ.value=up.z;
   },
   clear(){stopShoreline();cancelReload();for(const voice of [...voices])voice.stop();for(const id of engines.keys())stopEngine(id);},
-  dispose(){this.clear();disposed=true;buffers.clear();mix?.disconnect();limiter?.disconnect();mix=undefined;limiter=undefined;mixSink=null;},
+  dispose(){this.clear();disposed=true;cancelImpactWorker?.();buffers.clear();mix?.disconnect();limiter?.disconnect();mix=undefined;limiter=undefined;mixSink=null;},
  };
 }

@@ -58,7 +58,7 @@ process.once('SIGTERM', () => {process.exitCode=143; stop();});
 try {
   assert(process.argv.slice(2).every(arg=>arg==='--check'), 'Expected --check or no arguments');
   assert(process.env.BATTLE_SHADER_PROFILE!=='1','Shader material tagging requires the development build');
-  let patched = false, drawPatched=false, phasePatched=false, gpuHooks=0;
+  let patched = false, drawPatched=false, phasePatched=false, snapshotPatched=false, snapshotAudioPatched=false, gpuHooks=0;
   const traceDraws=process.env.BATTLE_DRAW_PROFILE==='1';
   const traceGpu=process.env.BATTLE_GPU_PROFILE==='1';
   const traceGl=process.env.BATTLE_GL_STALLS==='1';
@@ -66,12 +66,22 @@ try {
   assert(!traceWeaponShadow||traceGl,'BATTLE_WEAPON_SHADOW requires BATTLE_GL_STALLS');
   let glPatched=false;
   const tracePhases=process.env.BATTLE_FRAME_PHASES==='1';
+  const traceSnapshots=process.env.BATTLE_SNAPSHOT_PROFILE==='1';
   const traceStartup=['1','timeout'].includes(process.env.BATTLE_STARTUP_SHADER);
   let startupPatched=false;
   await build({root, mode:'production', logLevel:'warn', build:{outDir:dist}, plugins:[{
     name:'local-battle-observation', enforce:'pre',
     transform(source, id) {
       const path=id.replaceAll('\\','/');
+      if(traceSnapshots&&path.endsWith('/client/battleAudio.ts')){
+        const start='const data=designSound(name,audio.sampleRate,variant);';
+        const finish='buffers.set(key,cached);';
+        assert.equal(source.split(start).length,2,'Audio synthesis start hook changed');
+        assert.equal(source.split(finish).length,2,'Audio synthesis finish hook changed');
+        snapshotAudioPatched=true;
+        return source.replace(start,'const audioStarted=performance.now();'+start)
+          .replace(finish,finish+'window.battleSceneAudioSyntheses?.push({name,variant,ms:performance.now()-audioStarted});');
+      }
       if(traceStartup&&path.endsWith('/client/alpineBackdrop.ts')){
         const anchor='texture.image=canvas;';
         assert.equal(source.split(anchor).length,2,'Fir atlas timing hook changed');
@@ -133,7 +143,7 @@ try {
           .replace(capture,capture+'frameState.gpuFrameId=++gpuFrameSequence;frameState.gpuQueries=gpuTiming.takeSamples();')
           .replace(submit,'gpuTiming.begin(frameState.gpuFrameId);');
       }
-      if(path.endsWith('/client/scene.ts')&&(traceDraws||tracePhases||traceStartup)) {
+      if(path.endsWith('/client/scene.ts')&&(traceDraws||tracePhases||traceStartup||traceSnapshots)) {
         if(traceDraws){
           const marker=/^  const renderer = new T\.WebGLRenderer\([^\n]+;$/gm;
           assert.equal([...source.matchAll(marker)].length,1,'Scene renderer hook changed');
@@ -157,6 +167,28 @@ try {
           source=source.replace(sample,sample+'phases:{simulationAndCamera:phaseMarkers[1]-phaseMarkers[0],actors:phaseMarkers[2]-phaseMarkers[1],effectsAndHud:phaseMarkers[3]-phaseMarkers[2],graphics:cpuStarted+cpuMs-phaseMarkers[3]},');
           phasePatched=true;
         }
+        if(traceSnapshots){
+          const start='function update(s: Snapshot, id: string, immutableLayout: boolean) {';
+          const finish=/^  \}\r?\n  const graphics=createGraphics\(/gm;
+          const hooks=[
+            ['operationScene.sync(s);remainsScene.sync(s);', 'operationScene.sync(s);markScenePhase("operation");remainsScene.sync(s);markScenePhase("remains");'],
+            ['if(layoutChanged)interiors.sync(s.interiors);','if(layoutChanged)interiors.sync(s.interiors);markScenePhase("interiors");'],
+            ['myId = id;', 'markScenePhase("weatherAndCollision");myId = id;'],
+            ['const actors=[...s.players,...s.npcs]', 'markScenePhase("localPredictionAndSteps");const actors=[...s.players,...s.npcs]'],
+            ['for (const e of s.events) {','markScenePhase("avatars");for (const e of s.events) {']
+          ];
+          assert.equal(source.split(start).length,2,'Scene snapshot timing hook changed');
+          assert.equal([...source.matchAll(finish)].length,1,'Scene snapshot finish hook changed');
+          source=source.replace(start,start+`
+            const scenePhases={};let phaseStarted=performance.now();
+            const markScenePhase=name=>{const now=performance.now();scenePhases[name]=now-phaseStarted;phaseStarted=now;};`);
+          source=source.replace(finish,'    markScenePhase("events");\n    window.battleSceneSnapshotPhases=scenePhases;\n$&');
+          for(const [anchor,probe] of hooks){
+            assert.equal(source.split(anchor).length,2,'Scene snapshot phase hook changed: '+anchor);
+            source=source.replace(anchor,probe);
+          }
+          snapshotPatched=true;
+        }
         return source;
       }
       if(!path.endsWith('/client/App.tsx')) return;
@@ -165,18 +197,19 @@ try {
       patched = true;
       let observe="window.observeHarbourBattle?.(own,s,scene.current,()=>battleInteriorWorld(getWorld(s.mapId),s.interiors).boxes,harbourBotRules[s.operation.config.difficulty].vision);";
       if(traceStartup)observe+="\nif(s.phase==='playing')window.battlePlayingAt??=performance.now();";
-      if(process.env.BATTLE_SNAPSHOT_PROFILE==='1'){
+      if(traceSnapshots){
         const merge='const s = mergeSnapshot(last.current, packet);';
         assert.equal(source.split(merge).length,2,'Snapshot merge timing hook changed');
         source=source.replace(merge,'const snapshotStart=performance.now();\n'+merge+'\nconst mergedAt=performance.now();');
-        observe=`const sceneDone=performance.now();\n${observe}
+        observe=`const sceneDone=performance.now(),scenePhases=window.battleSceneSnapshotPhases;
+          const audioSyntheses=window.battleSceneAudioSyntheses;window.battleSceneAudioSyntheses=undefined;\n${observe}
           const done=performance.now();
           const probe=window.harbourSnapshotProbe??={samples:[],count:0};
           probe.samples[probe.count++%2048]={start:snapshotStart,end:done,mergeMs:mergedAt-snapshotStart,
-            hudEventsMs:sceneStarted-mergedAt,sceneMs:sceneDone-sceneStarted,observerMs:done-sceneDone,
+            hudEventsMs:sceneStarted-mergedAt,sceneMs:sceneDone-sceneStarted,scenePhases,audioSyntheses,observerMs:done-sceneDone,
             full:!!packet.full,players:(packet.full?.players??packet.players??[]).length,
             freshEvents:freshEvents.map(e=>e.type)};`;
-        source=source.replace(anchor,'const sceneStarted=performance.now();\n'+anchor);
+        source=source.replace(anchor,'window.battleSceneSnapshotPhases=undefined;window.battleSceneAudioSyntheses=[];\nconst sceneStarted=performance.now();\n'+anchor);
       }
       return "import {interiorWorld as battleInteriorWorld} from '../shared/interiors';\n"+
         "import {difficultyRules as harbourBotRules} from '../shared/operationConfig';\n"+
@@ -186,6 +219,8 @@ try {
   assert(patched, 'Missing App observation hook');
   assert.equal(drawPatched,traceDraws,'Missing scene renderer hook');
   assert.equal(phasePatched,tracePhases,'Missing CPU phase hooks');
+  assert.equal(snapshotPatched,traceSnapshots,'Missing scene snapshot phase hooks');
+  assert.equal(snapshotAudioPatched,traceSnapshots,'Missing snapshot audio hook');
   assert.equal(gpuHooks,traceGpu?2:0,'Missing GPU profile hook');
   assert.equal(glPatched,traceGl,'Missing GL stall hooks');
   assert.equal(startupPatched,traceStartup,'Missing civilian startup hook');

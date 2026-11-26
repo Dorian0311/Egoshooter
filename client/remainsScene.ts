@@ -123,8 +123,46 @@ export function createRemainsScene(scene:T.Scene,camera:T.PerspectiveCamera,weap
    pieces.get(m)!.push(g);
   };
   box(0,.06,0,4.3,.12,4.4,metal);
-  box(-2,1.2,0,.06,2.4,4.2,cloth);
-  box(2,1.2,0,.06,2.4,4.2,cloth);
+  function canvasPanel(points:number[],uv:number[],indices:number[]){
+   const g=new T.BufferGeometry();
+   g.setAttribute('position',new T.Float32BufferAttribute(points,3));
+   g.setAttribute('uv',new T.Float32BufferAttribute(uv,2));
+   g.setIndex(indices);g.computeVertexNormals();pieces.get(cloth)!.push(g);
+  }
+  // Four stitched widths run from eave to groundsheet. The seams stay taut;
+  // the cloth between them bellies towards the outside and sags at the hem.
+  for(const side of [-1,1]){
+   const points:number[]=[],uv:number[]=[],indices:number[]=[];
+   for(let col=0;col<=12;col++){
+    const z=-2.1+4.2*col/12,fullness=col%3===0?0:Math.sin(Math.PI*(col%3)/3);
+    const bay=Math.floor(col/3),lean=(bay%2===0?1:-1)*side;
+    for(const [row,height] of [0,.28,.69,1].entries()){
+     const belly=[.009,.035,.047,0][row]*fullness;
+     const x=side*(1.99+belly*(1+.12*lean));
+     const y=.14+height*2.26-.025*(1-height)*fullness;
+     points.push(x,y,z+lean*.026*fullness*Math.sin(height*Math.PI));
+     uv.push(col/12,height);
+     if(col<12&&row<3){
+      const a=col*4+row;
+      if(side>0)indices.push(a,a+1,a+4,a+1,a+5,a+4);
+      else indices.push(a,a+4,a+1,a+1,a+4,a+5);
+     }
+    }
+   }
+   canvasPanel(points,uv,indices);
+  }
+  // The green cross lies just in front of the front valance. Even its lowest
+  // point clears the entry, leaving the treatment cot visible through the door.
+  {
+   const points:number[]=[],uv:number[]=[],indices:number[]=[];
+   for(const [i,x] of [-2,-1,0,1,2].entries()){
+    const edge=Math.abs(x)/2;
+    points.push(x,1.96+.18*edge*edge,-2.083,x,3.04-.80*edge,-2.096);
+    uv.push(i/4,0,i/4,1);
+    if(i<4){const a=i*2;indices.push(a,a+1,a+2,a+2,a+1,a+3);}
+   }
+   canvasPanel(points,uv,indices);
+  }
   box(0,1.2,2.05,4,2.4,.05,cloth);
   for(const side of [-1,1]){
    box(side,2.65,0,2.28,.05,4.4,cloth,side*-.38);
