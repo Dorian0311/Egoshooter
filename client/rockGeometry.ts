@@ -48,22 +48,19 @@ export function createRockGeometry(bounds:RockBounds,smoothEdges=false) {
   return geometry;
 }
 
-export function alpineBoulderMaterial(stone:T.MeshStandardMaterial,snow:T.MeshStandardMaterial){
+export function alpineBoulderMaterial(stone:T.MeshStandardMaterial,snow:T.MeshStandardMaterial,limestone:T.Texture){
   const material=stone.clone();
+  material.map=limestone;
   material.onBeforeCompile=shader=>{
     shader.uniforms.boulderSnowMap={value:snow.map};
-    const varyings='varying float vBoulderSnow; varying vec3 vBoulderPosition;\n';
-    shader.vertexShader='attribute float boulderSnow;\n'+varyings+shader.vertexShader;
-    shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>',
-      '#include <begin_vertex>\nvBoulderSnow=boulderSnow; vBoulderPosition=(modelMatrix*vec4(position,1.0)).xyz;');
-    shader.fragmentShader='uniform sampler2D boulderSnowMap;\n'+varyings+shader.fragmentShader;
+    shader.vertexShader='attribute float boulderSnow; varying float vBoulderSnow;\n'+shader.vertexShader;
+    shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\nvBoulderSnow=boulderSnow;');
+    shader.fragmentShader='uniform sampler2D boulderSnowMap; varying float vBoulderSnow;\n'+shader.fragmentShader;
     shader.fragmentShader=shader.fragmentShader.replace('#include <map_fragment>',`
       vec3 stoneGrain=texture2D(map,vMapUv).rgb;
       vec3 settledSnow=texture2D(boulderSnowMap,vMapUv*1.19).rgb;
       float drift=smoothstep(.37,.71,vBoulderSnow+(stoneGrain.g-.22)*.45);
-      float layers=sin(vBoulderPosition.y*8.7+vBoulderPosition.x*.49+sin(vBoulderPosition.z*.57)*1.3+stoneGrain.g*2.0);
-      float ledge=1.0-.23*smoothstep(.77,.98,layers);
-      vec3 limestone=(stoneGrain*vec3(1.18,1.21,1.26)+vec3(.13,.14,.15))*ledge;
+      vec3 limestone=stoneGrain*vec3(1.18,1.21,1.26)+vec3(.07,.08,.09);
       diffuseColor.rgb*=mix(limestone,mix(settledSnow,vec3(.94,.97,1.),.33),drift);`);
     shader.fragmentShader=shader.fragmentShader.replace(
       '#include <normal_fragment_maps>',

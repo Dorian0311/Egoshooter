@@ -2,6 +2,9 @@ import {Box3, Frustum, Matrix4, type Camera, type Object3D, type Scene} from 'th
 
 type FixedRoom = {object: Object3D; bounds: Box3};
 const roomsByScene = new WeakMap<Scene, FixedRoom[]>();
+export function fixedRooms(scene: Scene): readonly FixedRoom[] {
+  return roomsByScene.get(scene) ?? [];
+}
 
 /** Register only furnishings whose geometry and world placement are fixed for the map's lifetime. */
 export function registerFixedRoom(scene: Scene, object: Object3D) {

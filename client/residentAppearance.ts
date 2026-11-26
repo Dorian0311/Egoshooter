@@ -76,7 +76,7 @@ export function createResidentAppearance(root:T.Group,body:T.Object3D,id:string)
   for(const side of [-1,1])box(dark,side*.102,1.24,-.162,.041,.41,.025).rotation.z=side*.11;
   box(silver,.105,1.325,-.157,.055,.08,.01);box(dark,.105,1.337,-.166,.006,.055,.005);
  }else if(profile.look==='veteran'){
-  const grey=material('#b8b1a1'),scarf=material('#d9b862');
+  const scarf=material('#d9b862');
   // Bind-pose depths in millimetres sampled from the veteran's chin and cheek.
   // Each column runs from below the jaw to the short hairline beneath the lips.
   const skinDepth=[
@@ -101,7 +101,6 @@ export function createResidentAppearance(root:T.Group,body:T.Object3D,id:string)
   beard.setAttribute('color',new T.Float32BufferAttribute(beardColor,3));beard.setIndex(beardIndex);beard.computeVertexNormals();
   const whiskers=material('#8c8579');whiskers.vertexColors=true;whiskers.roughness=1;
   mesh(beard,whiskers,0,1.495/h,-.085).name='resident-veteran-beard';
-  ball(grey,0,1.75,.025,.096,.039,.085);
   glasses();
   const skirt=mesh(new T.CylinderGeometry(.23,.285,.43,24,1,true),cloth,0,.855,.009,'body');skirt.scale.x=w;skirt.scale.z=.65;
   // A diagonal wrap catches the light along its rolled edge. Its tucked end

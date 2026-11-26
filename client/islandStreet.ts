@@ -30,7 +30,7 @@ export function addIslandStreet(scene:T.Group){
   function label(x:number,y:number,z:number,width:number,height:number,yaw:number,cell:number){
     const quad=new T.PlaneGeometry(width,height),uv=quad.getAttribute('uv');
     for(let i=0;i<uv.count;i++)
-      uv.setXY(i,(cell%4+.012+.976*uv.getX(i))/4,(2-Math.floor(cell/4)+.012+.976*uv.getY(i))/3);
+      uv.setXY(i,(cell%4+.012+.976*uv.getX(i))/4,(3-Math.floor(cell/4)+.012+.976*uv.getY(i))/4);
     const mesh=solid(quad,x,y,z,labelMaterial);mesh.rotation.y=yaw;
     return mesh;
   }
@@ -169,21 +169,25 @@ export function addIslandStreet(scene:T.Group){
         ceiling.castShadow=false;
         for(let beam=-1;beam<=1;beam++)
           detail(0,y-h/2-.065,beam*2.45,w-.52,.078,.14,paint('#a49a80'));
-      }else if(role==='roof'&&s.id==='coast-records'){
+      }else if(role==='roof'){
         cuboid(x,y,z,w,h,d,iron);
-        // Light perforated panels replace the bare underside of the roof. The local
-        // UV of each tile repeats the recessed edge and perforations within the atlas.
+        // Each shop's lining repeats at its own physical scale within its stock atlas.
+        const supply=s.id==='harbour-supply';
         const points:number[]=[],uv:number[]=[],indices:number[]=[];
-        const width=w-.49,depth=d-.49,cols=14,rows=8;
+        const width=w-.49,depth=d-.49,cols=supply?4:14,rows=supply?4:8;
+        const u0=supply?1/1024:685/1024,u1=supply?510/1024:764/1024;
+        const v0=supply?255/1024:atlasV(2345),v1=supply?1/1024:atlasV(2424);
         for(let row=0;row<rows;row++)for(let col=0;col<cols;col++){
           const x0=width*(col/cols-.5),x1=x0+width/cols,z0=depth*(row/rows-.5),z1=z0+depth/rows;
           const n=points.length/3;
           points.push(x0,0,z0,x1,0,z0,x1,0,z1,x0,0,z1);indices.push(n,n+1,n+2,n,n+2,n+3);
-          uv.push(685/1024,atlasV(2345),764/1024,atlasV(2345),764/1024,atlasV(2424),685/1024,atlasV(2424));
+          uv.push(u0,v0,u1,v0,u1,v1,u0,v1);
         }
         const lining=new T.BufferGeometry();lining.setIndex(indices);
         lining.setAttribute('position',new T.Float32BufferAttribute(points,3));lining.setAttribute('uv',new T.Float32BufferAttribute(uv,2));
-        lining.computeVertexNormals();solid(lining,x,y-h/2-.012,z,facade).castShadow=true;
+        lining.computeVertexNormals();solid(lining,x,y-h/2-.012,z,supply?labelMaterial:facade).castShadow=!supply;
+        if(supply)for(const offset of [-depth/4,0,depth/4])
+          cuboid(x,y-h/2-.078,z+offset,width,.115,.14,paint('#a3a58b'));
       }else if(role==='rack'){
         for(const end of [-1,1])for(const flank of [-1,1])
           cuboid(x+flank*(w/2-.04),y,z+end*(d/2-.04),.055,h,.055,iron);
@@ -191,7 +195,7 @@ export function addIslandStreet(scene:T.Group){
         const boardX=s.x-inward*(s.w/2-.29),boardZ=z,rigging=inward<0;
         cuboid(boardX,3.08,boardZ,.09,1.68,3.76,wood);
         const plate=new T.PlaneGeometry(3.64,1.59),plateUV=plate.getAttribute('uv');
-        for(let i=0;i<plateUV.count;i++)plateUV.setXY(i,((rigging?1:0)+.004+.992*plateUV.getX(i))/2,(.006+.988*plateUV.getY(i))/3);
+        for(let i=0;i<plateUV.count;i++)plateUV.setXY(i,((rigging?1:0)+.004+.992*plateUV.getX(i))/2,(1.006+.988*plateUV.getY(i))/4);
         const sampleX=boardX+inward*.092;
         solid(plate,boardX+inward*.051,3.08,boardZ,labelMaterial).rotation.y=inward*Math.PI/2;
         // Full-sized shop samples stand proud of their painted mounting boards.
@@ -288,6 +292,24 @@ export function addIslandStreet(scene:T.Group){
           cuboid(x,h+.035,z,w+.06,.07,d+.05,cream);
           if(s.id==='coast-records')for(const drawerY of [.33,.81])for(const offset of [-.64,.64])
             drawer(x+offset,drawerY,z-d/2-.011,1.22,.43,Math.PI);
+          if(s.id==='harbour-supply'){
+            // Painted matchboards wrap the till. Only the aisle-facing face carries
+            // the brass order plate; the narrow ends retain vertical painted boards.
+            for(const end of [-1,0,1]){
+              const front=end===0;
+              const skin=new T.PlaneGeometry(front?w-.06:d-.04,h-.13),uv=skin.getAttribute('uv');
+              for(let i=0;i<uv.count;i++)uv.setXY(i,(513+(front?509:145)*uv.getX(i))/1024,
+                (front?2+107*uv.getY(i):113+140*uv.getY(i))/1024);
+              const face=solid(skin,x+end*(w/2+.008),h/2,z-(front?d/2+.008:0),labelMaterial);
+              face.rotation.y=front?Math.PI:end*Math.PI/2;
+            }
+            cuboid(x,.087,z-d/2-.017,w+.025,.11,.052,iron);
+            cuboid(x,h+.074,z-d*.34,w-.09,.015,.037,trim);
+            for(let tick=0;tick<=20;tick++){
+              const graduation=new T.PlaneGeometry(.013,tick%5===0?.034:.018);
+              solid(graduation,x+(tick/20-.5)*(w-.14),h+.084,z-d*.34,iron).rotation.x=-Math.PI/2;
+            }
+          }
           cuboid(x+.65,h+.18,z,.38,.24,.31,iron);
           cuboid(x+.65,h+.32,z-s.front*.10,.33,.12,.08,chrome);
           if(index===0){
@@ -393,6 +415,14 @@ export function addIslandStreet(scene:T.Group){
     }
     for(const side of [-1,1]){
       if(s.id==='diner')detail(side*(s.w/2-.27),.12,0,.063,.07,s.d-.52,iron);
+      else if(s.id==='harbour-supply'){
+        const length=(s.d-.52)/2;
+        for(const half of [-1,1]){
+          const boards=new T.PlaneGeometry(length,1.18),uv=boards.getAttribute('uv');
+          for(let i=0;i<uv.count;i++)uv.setXY(i,(513+509*uv.getX(i))/1024,(113+140*uv.getY(i))/1024);
+          solid(boards,s.x+side*(s.w/2-.27),.59,s.z+half*length/2,labelMaterial).rotation.y=-side*Math.PI/2;
+        }
+      }
       else detail(side*(s.w/2-.27),.59,0,.055,1.18,s.d-.52,wood);
       detail(side*3.85,2.3,back+.05,1.46,1.46,.08,iron);
       const artwork=new T.PlaneGeometry(1.32,1.32),uv=artwork.getAttribute('uv');

@@ -137,15 +137,21 @@ export function createScene(
     return mesh;
   }
   const river=mapId==='cologne'?createRiver(scene):undefined;
-  const alpineBoulders=mapId==='alpine'?alpineBoulderMaterial(mat('#818783'),mat('#deded4')):undefined;
+  let alpineBoulders:T.MeshStandardMaterial|undefined;
   if(mapId==='cologne'){
     cube(-53,-.2,0,46,.4,150,'#77766b');cube(53,-.2,0,46,.4,150,'#77766b');
     scene.add(createCologneBridgeSteel(),cologneBridgeTracks());
     scene.add(createCologneCathedral(mat('#827866').map!));
   }else if(mapId==='alpine'){
     renderer.setClearColor('#bac9d2');scene.fog=new T.Fog('#bac9d2',85,310);
-    scene.add(alpinePassGround(world,mat('#deded4'),mat('#8b8a7d'),mat('#818783')));
-    addAlpineBackdrop(scene,mat('#818783').map!,mat('#deded4').map!);
+    const stone=mat('#818783'),snow=mat('#deded4');
+    const limestone=new T.TextureLoader().load('/shooter/environment/alpine-limestone.webp');
+    limestone.colorSpace=T.SRGBColorSpace;
+    limestone.wrapS=limestone.wrapT=T.RepeatWrapping;
+    limestone.anisotropy=Math.min(4,renderer.capabilities.getMaxAnisotropy());
+    scene.add(alpinePassGround(world,snow,mat('#8b8a7d'),stone));
+    addAlpineBackdrop(scene,limestone,snow.map!);
+    alpineBoulders=alpineBoulderMaterial(stone,snow,limestone);
   }else if(mapId==='frontline'){
     scene.fog=new T.Fog('#b6a391',90,310);
   }else{

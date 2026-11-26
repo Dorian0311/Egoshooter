@@ -65,7 +65,9 @@ export function addAlpineBackdrop(scene:T.Scene,rock?:T.Texture,snow?:T.Texture)
       const r=row===0?T.MathUtils.clamp(border-3,74.1/axis,87/axis):T.MathUtils.lerp(border,247,t);
       const y=row===0?-.20:height(a,r);
       positions.push(Math.cos(a)*r,y,Math.sin(a)*r);
-      uv.push(i/segments*56,(r*.65+y*.95)/12);
+      // Break up aligned repeats while keeping the closed ring seamless.
+      uv.push(i/segments*42+.22*Math.sin(a*7)+.18*Math.sin(a*11+r*.047),
+        (r*.65+y*.95)/12+.24*Math.sin(a*5+r*.06));
       if(row<=rings&&i<segments){
         const v=row*(segments+1)+i,next=v+segments+1;
         if((row+i+1)%2)indices.push(v,v+1,next,next,v+1,next+1);
@@ -96,10 +98,8 @@ export function addAlpineBackdrop(scene:T.Scene,rock?:T.Texture,snow?:T.Texture)
     shader.fragmentShader=shader.fragmentShader.replace('#include <map_fragment>',`
       vec3 cliff=texture2D(map,vMapUv).rgb;
       vec3 drift=texture2D(alpSnow,vMapUv*.68).rgb;
-      float seams=sin(vMapUv.y*6.1+sin(vMapUv.x*1.9)*1.1);
-      float rockLight=.82+.18*smoothstep(-.2,.7,seams);
       float snowLine=smoothstep(.31,.69,vAlpSnow+(cliff.g-.20)*.30);
-      diffuseColor.rgb*=mix((cliff*vec3(.90,.94,.98)+vec3(.055))*rockLight,
+      diffuseColor.rgb*=mix(cliff*vec3(.85,.91,.98)+vec3(.042),
                             mix(drift,vec3(.92,.96,.99),.33),snowLine);`);
   };
   const mountain=new T.Mesh(geo,material);mountain.name='Ubaye limestone ridges and snowfields';scene.add(mountain);
