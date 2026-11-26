@@ -1,6 +1,6 @@
 import * as T from 'three';
 import {limbBits,type BodyPart} from '../shared/injuries';
-import {createWoundGeometry,createWoundMaterial} from './woundSurfaces';
+import {acquireWoundMaterial,createWoundGeometry} from './woundSurfaces';
 type Partition={mesh:T.Mesh;indices:Uint32Array;parts:BodyPart[];groups:{start:number;count:number;materialIndex:number}[]};
 const severable:BodyPart[]=['head','armL','armR','legL','legR'];
 const anchors:Record<string,[number,number,number]>={head:[0,1.53,0],armL:[-.23,1.4,0],armR:[.23,1.4,0],legL:[-.1,.86,0],legR:[.1,.86,0]};
@@ -28,7 +28,7 @@ export function createAnatomy(root:T.Group){
   }
   partitions.push({mesh:o,indices,parts,groups:geometry.groups.length?geometry.groups.map((g:{start:number;count:number;materialIndex?:number})=>({start:g.start,count:g.count,materialIndex:g.materialIndex??0})):[{start:0,count:indices.length,materialIndex:0}]});
  });
- const woundMaterial=createWoundMaterial(),capGeometries:T.BufferGeometry[]=[];
+ const {material:woundMaterial,release}=acquireWoundMaterial(),capGeometries:T.BufferGeometry[]=[];
  for(const part of severable){const cap=new T.Group();cap.name=`wound-${part}`;cap.userData.nonAnatomic=true;cap.position.set(...anchors[part]);const joint=root.getObjectByName(roots[part]);if(joint){cap.position.copy(root.worldToLocal(joint.getWorldPosition(new T.Vector3())));if(part!=='head'){let endpoint:T.Vector3|undefined,nearest=Infinity;joint.traverse(child=>{if(child===joint||!(child instanceof T.Bone)&&!child.name.startsWith('static-lower'))return;const candidate=root.worldToLocal(child.getWorldPosition(new T.Vector3())),distance=candidate.distanceTo(cap.position);if(distance>.04&&distance<nearest){nearest=distance;endpoint=candidate;}});if(endpoint){const direction=endpoint.sub(cap.position).normalize();cap.quaternion.setFromUnitVectors(new T.Vector3(0,1,0),direction);}}}
   // Head weights include hats, masks and wide collars; these are not neck diameter.
   const nominal=part.startsWith('arm')?.075:part==='head'?.055:.085,radii:number[]=[],normal=new T.Vector3(0,1,0).applyQuaternion(cap.quaternion);
@@ -53,6 +53,6 @@ export function createAnatomy(root:T.Group){
    }
    if(!vertexCount)return undefined;center.divideScalar(vertexCount);for(const child of result.children)(child as T.Mesh).geometry.translate(-center.x,-center.y,-center.z);result.position.copy(center);const sourceCap=caps.get(part);if(sourceCap){const cap=sourceCap.clone(true);cap.visible=true;cap.traverse(o=>{if(o instanceof T.Mesh){o.geometry=o.geometry.clone();o.material=Array.isArray(o.material)?o.material.map(m=>m.clone()):o.material.clone();}});const local=new T.Matrix4().makeTranslation(-center.x,-center.y,-center.z).multiply(sourceCap.matrixWorld);local.decompose(cap.position,cap.quaternion,cap.scale);cap.rotateX(Math.PI);result.add(cap);}result.name=`severed-${part}`;result.userData.sourcePart=part;return result;
   },
-  dispose(){for(const cap of caps.values())cap.removeFromParent();for(const geometry of capGeometries)geometry.dispose();woundMaterial.dispose();},
+  dispose(){for(const cap of caps.values())cap.removeFromParent();for(const geometry of capGeometries)geometry.dispose();release();},
  };
 }

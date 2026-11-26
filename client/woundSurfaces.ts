@@ -11,6 +11,18 @@ function woundDetail(){
 }
 export function createWoundMaterial(){return new T.MeshStandardMaterial({color:'#ffffff',vertexColors:true,roughness:.47,metalness:.035,side:T.DoubleSide,bumpMap:woundDetail(),bumpScale:.0022});}
 
+let sharedMaterial:T.MeshStandardMaterial|undefined,materialOwners=0;
+export function acquireWoundMaterial(){
+ const material=sharedMaterial??=createWoundMaterial();
+ materialOwners++;
+ let released=false;
+ return {material,release(){
+  if(released)return;
+  released=true;
+  if(--materialOwners===0){sharedMaterial=undefined;material.dispose();}
+ }};
+}
+
 /** Closed, irregular tissue surface, paired bones and connective fibres in one draw. */
 export function createWoundGeometry(part:BodyPart,radius:number){
  const segments=28,rings=5,depth=radius*.12,top=radius*.035,positions:number[]=[0,top,0],colors:number[]=[],indices:number[]=[],color=new T.Color();

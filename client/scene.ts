@@ -141,6 +141,7 @@ export function createScene(
   }
   const river=mapId==='cologne'?createRiver(scene):undefined;
   let alpineBoulders:T.MeshStandardMaterial|undefined;
+  let alpineGround:ReturnType<typeof alpinePassGround>|undefined;
   if(mapId==='cologne'){
     cube(-53,-.2,0,46,.4,150,'#77766b');cube(53,-.2,0,46,.4,150,'#77766b');
     scene.add(createCologneBridgeSteel(),cologneBridgeTracks());
@@ -152,7 +153,8 @@ export function createScene(
     limestone.colorSpace=T.SRGBColorSpace;
     limestone.wrapS=limestone.wrapT=T.RepeatWrapping;
     limestone.anisotropy=Math.min(4,renderer.capabilities.getMaxAnisotropy());
-    scene.add(alpinePassGround(world,snow,mat('#8b8a7d'),stone));
+    alpineGround=alpinePassGround(world,snow,mat('#8b8a7d'),stone);
+    scene.add(alpineGround);
     addAlpineBackdrop(scene,limestone,snow.map!);
     alpineBoulders=alpineBoulderMaterial(stone,snow,limestone);
   }else if(mapId==='frontline'){
@@ -575,6 +577,7 @@ export function createScene(
       const night=condition==='night',fog=condition==='fog';
       mapDetails.setWaterSunlight(!night&&!fog);
       environmentUpgrade.setNight(night);
+      alpineGround?.setNight(night);
       const weatherFog=night?new T.Fog(weatherHorizon.night,20,100):fog?new T.Fog(weatherHorizon.fog,4,42):null;
       scene.fog=weatherFog??daylightFog;
       sceneAssets.setWeatherBackground(night?'night':fog?'fog':null);

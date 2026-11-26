@@ -7,7 +7,24 @@ import {createAnatomy} from '../client/anatomy';
 import {createThrowingStarGeometry} from '../client/operationScene';
 import {createStaticActorRig} from '../client/staticActorRig';
 import {makePlayer} from '../shared/game';
-import {createWoundGeometry,createWoundMaterial} from '../client/woundSurfaces';
+import {acquireWoundMaterial,createWoundGeometry,createWoundMaterial} from '../client/woundSurfaces';
+import {freezeRemains} from '../client/remainsScene';
+test('late frozen remains use the warmed material until the last owner releases it',async()=>{
+ const warmup=acquireWoundMaterial(),root=new T.Group(),template=createAnatomy(root);
+ let disposals=0;
+ warmup.material.addEventListener('dispose',()=>disposals++);
+ template.setLost(4);
+ const corpse=await freezeRemains(root),arm=corpse.getObjectByName('tissue-armR') as T.Mesh;
+ assert.equal(arm.material,warmup.material);
+ assert.equal(arm.receiveShadow,true);
+ assert.deepEqual(Object.keys(arm.geometry.attributes).sort(),['color','normal','position','uv']);
+ template.dispose();
+ assert.equal(disposals,0);
+ arm.geometry.dispose();
+ warmup.release();warmup.release();
+ assert.equal(disposals,1);
+ const next=acquireWoundMaterial();assert.notEqual(next.material,warmup.material);next.release();
+});
 test('limb partitions detach actual posed triangles, restore the full mesh, and stay instance-local',()=>{
  const data=JSON.parse(readFileSync('public/shooter/characters/humanoid.json','utf8'));
  const human=createHuman(data,'fr','cologne',new T.MeshStandardMaterial(),'us-field'),other=createHuman(data,'fr','cologne',new T.MeshStandardMaterial(),'us-field');

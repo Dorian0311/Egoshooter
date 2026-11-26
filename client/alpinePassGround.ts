@@ -94,6 +94,15 @@ export function alpinePassGround(world:World,snow:T.MeshStandardMaterial,road:T.
   const rows=[-88.5,-74,-60,-45,-30,-20,-14,-10.3,-8.9,-8.1,-7.45,-6.8,-6.1,-4.8,-2.4,0,2.4,4.8,6.1,6.8,7.45,8.1,8.9,10.3,14,20,30,45,60,74,88.5];
   const cols=72;
   const fort=world.buildings.find(b=>b.name==='ROCHE-LA-CROIX');
+  // Front face of the existing wall fixture, facing the packed approach from the pass.
+  const lampGlass=fort?new T.Mesh(new T.PlaneGeometry(.15,.185),new T.MeshBasicMaterial({color:0xffd49a})):undefined;
+  const lampNight={value:0},lampFootprint=new T.Vector2();
+  if(fort&&lampGlass){
+    lampGlass.name='Roche-la-Croix entrance lamp glass';
+    lampGlass.position.set(fort.x+2.7,2.77,fort.z+fort.d/2+.547);
+    lampFootprint.set(lampGlass.position.x,lampGlass.position.z);
+    lampGlass.visible=false;
+  }
   for(const [j,z] of rows.entries())for(let i=0;i<=cols;i++){
     const x=(i/cols-.5)*extent,side=Math.sign(z);
     const edge=7.66+.59*Math.sin(x*.18+side)+.37*Math.sin(x*.49-side);
@@ -159,11 +168,27 @@ export function alpinePassGround(world:World,snow:T.MeshStandardMaterial,road:T.
       vec3 micro=mix(texture2D(normalMap,vNormalMapUv).xyz,texture2D(passSettsNormal,vNormalMapUv*1.48).xyz,paving)*2.-1.;
       micro.xy*=normalScale*mix(1.,.62,packed);normal=normalize(tbn*micro);`);
     shader.fragmentShader=shader.fragmentShader.replace('#include <roughnessmap_fragment>','float roughnessFactor=roughness-packed*.23+gravel*.035;');
+    if(lampGlass){
+      shader.uniforms.fortLampNight=lampNight;
+      shader.uniforms.fortLampFootprint={value:lampFootprint};
+      shader.fragmentShader='uniform float fortLampNight; uniform vec2 fortLampFootprint;\n'+shader.fragmentShader;
+      shader.fragmentShader=shader.fragmentShader.replace('#include <emissivemap_fragment>',`#include <emissivemap_fragment>
+        if(fortLampNight>0.0){
+          vec2 delta=vMapUv*4.2-fortLampFootprint;
+          vec2 footprint=vec2((delta.x+.12*delta.y)/1.18,(delta.y-.66)/1.53);
+          float falloff=max(0.,1.-dot(footprint,footprint));
+          float snow=(1.-paving)*(1.-.77*gravel);
+          totalEmissiveRadiance+=diffuseColor.rgb*vec3(.56,.34,.16)*snow*falloff*falloff*smoothstep(-.02,.3,delta.y);
+        }`);
+    }
   };
   material.addEventListener('dispose',()=>mask.dispose());
   const mesh=new T.Mesh(geometry,material);mesh.receiveShadow=true;mesh.name='Alpine pass – ploughed road and barracks approaches';
   // Let opaque buildings populate the depth buffer first. Equal-depth edging
   // and pavement retain priority over the ground drawn underneath them.
   mesh.renderOrder=1;
-  return mesh;
+  if(lampGlass)mesh.add(lampGlass);
+  return Object.assign(mesh,{setNight(enabled:boolean){
+    if(lampGlass){lampGlass.visible=enabled;lampNight.value=enabled?1:0;}
+  }});
 }

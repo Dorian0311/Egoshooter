@@ -1,4 +1,5 @@
 import * as T from 'three';
+import {acquireWoundMaterial,createWoundGeometry} from './woundSurfaces';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import {WorldRenderPass} from './worldRenderPass';
@@ -150,6 +151,8 @@ export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
     finally{renderer.setRenderTarget(previous);}
   }
   const warmedShadowSources=new Set<string>();
+  const woundOwner=acquireWoundMaterial();
+  let woundUploaded=false;
   function warmupWorldDraw(actorRoots:readonly T.Group[]=[],actorsOnly=false){
     // compileAsync links colour programs. A tiny off-screen draw also
     // initializes vertex buffers, texture bindings and shadow depth programs.
@@ -158,6 +161,7 @@ export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
     const shadowUpdate=renderer.shadowMap.needsUpdate;
     const uncull:T.Object3D[]=[],hidden:T.Object3D[]=[],extraLayer:T.Object3D[]=[];
     const cameraLayers=camera.layers.mask,uploadLayer=30;
+    const wound=woundUploaded?undefined:new T.Mesh(createWoundGeometry('armR',.075),woundOwner.material);
     function enableUpload(object:T.Object3D){
       if(object.layers.test(camera.layers)&&!object.layers.isEnabled(uploadLayer)){
         object.layers.enable(uploadLayer);extraLayer.push(object);
@@ -170,6 +174,16 @@ export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
       }
       target.scissor.set(0,0,1,1);target.scissorTest=true;
       renderer.setRenderTarget(target);
+      if(wound){
+        wound.name='tissue-armR-warmup';wound.castShadow=wound.receiveShadow=true;
+        wound.frustumCulled=false;wound.layers.mask=cameraLayers;
+        camera.updateWorldMatrix(true,false);
+        wound.position.set(-1+1/target.width,-1+1/target.height,0).unproject(camera);
+        camera.getWorldQuaternion(wound.quaternion);wound.rotateX(Math.PI/2);
+        // Bind the depth program without writing a synthetic caster into the cached sunlight map.
+        wound.geometry.setDrawRange(0,0);
+        scene.add(wound);
+      }
       // These shadow casters may arrive after the first shadow map or start outside its frustum.
       // Exercise one real mesh of each kind without unculling the entire map's shadows.
       const sources=[
@@ -192,14 +206,16 @@ export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
           }
           prepared.push(name);
         }
-        if(prepared.length||(!actorsOnly&&!sun.shadow.map)){
+        if(wound||prepared.length||(!actorsOnly&&!sun.shadow.map)){
           renderer.shadowMap.needsUpdate=true;
           renderer.render(scene,camera);
           prepared.forEach(name=>warmedShadowSources.add(name));
         }
       }finally{for(const restore of restoreDepth)restore();}
       withBodyDistanceUpload(actorRoots,()=>{
+        if(wound)wound.geometry.setDrawRange(0,Infinity);
         if(actorsOnly){
+          if(wound)enableUpload(wound);
           for(const actor of actorRoots)actor.traverseVisible(enableUpload);
           scene.traverseVisible(object=>{if(object instanceof T.Light)enableUpload(object);});
           camera.layers.set(uploadLayer);
@@ -209,8 +225,10 @@ export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
         });
         renderer.shadowMap.needsUpdate=false;
         renderer.render(scene,camera);
+        if(wound)woundUploaded=true;
       });
     }finally{
+      if(wound){wound.removeFromParent();wound.geometry.dispose();}
       camera.layers.mask=cameraLayers;
       for(const object of extraLayer)object.layers.disable(uploadLayer);
       for(const object of hidden)object.visible=false;
@@ -340,6 +358,7 @@ export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
       }
     },
     dispose() {
+      woundOwner.release();
       sun.shadow.getFrustum=lightFrustum;
       for (const pass of pipeline) pass.dispose();
       // r170's SSAOPass.dispose omits these owned GPU resources.

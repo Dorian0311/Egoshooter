@@ -11,7 +11,7 @@ import {createPeriodQuarter} from './periodQuarter';
 import {createPeriodArchitecture,setPeriodNight} from './periodArchitecture';
 import {createCoastalArchitecture} from './coastalArchitecture';
 import {applySurfaceFinish} from './surfaceFinish';
-import {createFacadeBatches} from './facadeBatches';
+import {bakeAlpinePlaster,createFacadeBatches} from './facadeBatches';
 import {freezeStaticTransforms} from './staticTransforms';
 import {facadePartIsBuried,opaqueWallCores} from './facadeOcclusion';
 import {addFactoryGlazing} from './factoryGlazing';
@@ -32,6 +32,7 @@ export function loadEnvironmentUpgrade(scene:T.Scene,world:World,renderer:T.WebG
  if(quarter)architecture.add(quarter);
  root.add(architecture);sources.push(architecture);
  const distantDetails:T.InstancedMesh[]=[],compactFacades=new Set<T.InstancedMesh>(),detailedFacades:T.BatchedMesh[]=[];
+ const bakedPlaster:T.Mesh[]=[];
  let visibilityDirty=true,appliedQuality:GraphicsQuality|undefined;
  const multiDraw=world.id==='storm'&&renderer.extensions.has('WEBGL_multi_draw');
  const markDetails=(from:number)=>{
@@ -88,7 +89,11 @@ export function loadEnvironmentUpgrade(scene:T.Scene,world:World,renderer:T.WebG
    if(world.id==='storm'&&pack==='modular_factory_facade'){
     for(const {part} of modules)addFactoryGlazing(part);
    }
-   for(const {part,matrices} of modules)instanceStaticModel(root,part,matrices,false,48,mesh=>{
+   const cellSize=48;
+   const plaster=world.id==='alpine'?bakeAlpinePlaster(root,modules,cellSize):undefined;
+   if(plaster)bakedPlaster.push(...plaster.meshes);
+   for(const {part,matrices} of modules)instanceStaticModel(root,part,matrices,false,cellSize,mesh=>{
+    if(plaster?.parts.has(mesh))return false;
     if(Array.isArray(mesh.material)||mesh.material.name!=='modular_factory_facade_windows_glass')return true;
     if(!mesh.visible)return false;
     mesh.geometry.computeBoundingBox();
@@ -175,6 +180,6 @@ export function loadEnvironmentUpgrade(scene:T.Scene,world:World,renderer:T.WebG
    }
    visibilityDirty=false;
   },
-  dispose(){disposed=true;root.traverse(o=>{if(o instanceof T.InstancedMesh||o instanceof T.BatchedMesh)o.dispose();});sources.forEach(disposeSource);root.removeFromParent();},
+  dispose(){disposed=true;root.traverse(o=>{if(o instanceof T.InstancedMesh||o instanceof T.BatchedMesh)o.dispose();});bakedPlaster.forEach(mesh=>mesh.geometry.dispose());sources.forEach(disposeSource);root.removeFromParent();},
  };
 }
