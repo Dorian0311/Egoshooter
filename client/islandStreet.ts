@@ -98,6 +98,11 @@ export function addIslandStreet(scene:T.Group){
   const atlas=loader.load(base+'shops.webp');atlas.colorSpace=T.SRGBColorSpace;atlas.anisotropy=4;
   const facade=new T.MeshStandardMaterial({map:atlas,roughness:.93});
   const facadeV=(originalV:number)=>(384+2048*originalV)/2432;
+  function drawer(x:number,y:number,z:number,width:number,height:number,yaw:number){
+    const geometry=new T.PlaneGeometry(width,height),uv=geometry.getAttribute('uv');
+    for(let i=0;i<uv.count;i++)uv.setXY(i,(776+240*uv.getX(i))/1024,1-(2425-80*uv.getY(i))/2432);
+    const panel=solid(geometry,x,y,z,facade);panel.rotation.y=yaw;panel.castShadow=true;
+  }
   const prints=loader.load(base+'interior-prints.webp');
   prints.colorSpace=T.SRGBColorSpace;prints.anisotropy=4;
   const printMaterial=new T.MeshStandardMaterial({map:prints,roughness:.9});
@@ -157,6 +162,21 @@ export function addIslandStreet(scene:T.Group){
         ceiling.castShadow=false;
         for(let beam=-1;beam<=1;beam++)
           detail(0,y-h/2-.065,beam*2.45,w-.52,.078,.14,paint('#a49a80'));
+      }else if(role==='roof'&&s.id==='coast-records'){
+        cuboid(x,y,z,w,h,d,iron);
+        // Light perforated panels replace the bare underside of the roof. The local
+        // UV of each tile repeats the recessed edge and perforations within the atlas.
+        const points:number[]=[],uv:number[]=[],indices:number[]=[];
+        const width=w-.49,depth=d-.49,cols=14,rows=8;
+        for(let row=0;row<rows;row++)for(let col=0;col<cols;col++){
+          const x0=width*(col/cols-.5),x1=x0+width/cols,z0=depth*(row/rows-.5),z1=z0+depth/rows;
+          const n=points.length/3;
+          points.push(x0,0,z0,x1,0,z0,x1,0,z1,x0,0,z1);indices.push(n,n+1,n+2,n,n+2,n+3);
+          uv.push(685/1024,1-2345/2432,764/1024,1-2345/2432,764/1024,1-2424/2432,685/1024,1-2424/2432);
+        }
+        const lining=new T.BufferGeometry();lining.setIndex(indices);
+        lining.setAttribute('position',new T.Float32BufferAttribute(points,3));lining.setAttribute('uv',new T.Float32BufferAttribute(uv,2));
+        lining.computeVertexNormals();solid(lining,x,y-h/2-.012,z,facade).castShadow=true;
       }else if(role==='rack'){
         for(const end of [-1,1])for(const flank of [-1,1])
           cuboid(x+flank*(w/2-.04),y,z+end*(d/2-.04),.055,h,.055,iron);
@@ -179,6 +199,12 @@ export function addIslandStreet(scene:T.Group){
         }
       }else if(role==='bin'){
         cuboid(x,y,z,w,h,d,wood);
+        const inward=x<s.x?1:-1;
+        for(const drawerY of [.34,.79]){
+          for(let col=0;col<3;col++)drawer(x+inward*(w/2+.01),drawerY,z+(col-1)*1.22,1.18,.412,inward*Math.PI/2);
+          drawer(x,drawerY,z-d/2-.01,w-.08,.412,Math.PI);
+        }
+        cuboid(x+inward*(w/2+.009),.105,z,.047,.15,d,iron);
         for(let n=0;n<15;n++){
           const sleeve=cuboid(x,h+.17,z+(n-7)*.23,.68,.45,.035,[accent,iron,cream,wood][n%4]);
           sleeve.rotation.x=-.17;
@@ -218,6 +244,8 @@ export function addIslandStreet(scene:T.Group){
         cuboid(x,y,z,w,h,d,role==='counter'?wood:iron);
         if(role==='counter'){
           cuboid(x,h+.035,z,w+.06,.07,d+.05,cream);
+          if(s.id==='coast-records')for(const drawerY of [.33,.81])for(const offset of [-.64,.64])
+            drawer(x+offset,drawerY,z-d/2-.011,1.22,.43,Math.PI);
           cuboid(x+.65,h+.18,z,.38,.24,.31,iron);
           cuboid(x+.65,h+.32,z-s.front*.10,.33,.12,.08,chrome);
           if(index===0){

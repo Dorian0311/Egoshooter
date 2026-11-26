@@ -56,9 +56,14 @@ export function createResidentAppearance(root:T.Group,body:T.Object3D,id:string)
   box(leather,.255,.91,.015,.18,.24,.13).name='resident-veteran-satchel';
   const strap=box(leather,0,1.24,-.172,.024,.56,.014);strap.rotation.z=-.55;
  }else if(profile.look==='officer'){
-  const cap=mesh(new T.CylinderGeometry(.185,.133,.14,32),cloth,0,1.825,.003);cap.name='resident-oversized-cap';cap.rotation.z=.09;
-  const visor=ball(dark,0,1.777,-.134,.16,.017,.114);visor.rotation.x=-.08;
-  box(gold,0,1.806,-.145,.07,.045,.014,'head');
+  // The lower band fits around the temples; the broader cloth crown rolls
+  // back above it instead of balancing on top of the scalp.
+  const capProfile=[[.123,-.050],[.124,-.016],[.153,.012],[.161,.054],[.147,.077],[.074,.088],[0,.088]];
+  const crown=new T.LatheGeometry(capProfile.map(([radius,y])=>new T.Vector2(radius,y)),20);
+  const cap=mesh(crown,cloth,0,1.728,.012);cap.name='resident-oversized-cap';
+  cap.scale.set(.88,1,1.08);cap.rotation.set(.09,0,.045);
+  const visor=ball(dark,0,1.698,-.111,.116,.012,.090);visor.rotation.x=-.14;
+  box(gold,0,1.726,-.137,.037,.025,.008,'head');
   for(const side of [-1,1]){box(gold,side*.191,1.442,-.017,.103,.019,.10);box(gold,side*.051,1.38,-.126,.045,.026,.014);}
   for(let i=0;i<4;i++)ball(gold,0,1.115+i*.072,-.15,.009,.009,.006,'body');
   const clipboard=box(leather,.235,1.055,-.133,.23,.34,.027);clipboard.name='resident-clipboard';clipboard.rotation.z=.19;

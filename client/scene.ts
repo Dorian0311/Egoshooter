@@ -956,14 +956,17 @@ export function createScene(
     const scopedFov=T.MathUtils.radToDeg(2*Math.atan(Math.tan(T.MathUtils.degToRad(settings.fov/2))/zoom));
     const frameFov=inspectionView?50:T.MathUtils.lerp(settings.fov,zoom>1&&!special?scopedFov:settings.fov-24,aimBlend);
     if(camera.fov!==frameFov){camera.fov=frameFov;camera.updateProjectionMatrix();}
-    const ammoDisplay=!car&&local?.hp&&snapshot?.phase==='playing'&&!saw&&!special?'block':'none';
+    const showAmmo=!!local?.hp&&!car&&snapshot?.phase==='playing'&&!saw&&!special;
+    const ammoDisplay=showAmmo?'block':'none';
     if(ammoReadout.style.display!==ammoDisplay)ammoReadout.style.display=ammoDisplay;
-    if(local&&!saw&&!car){
-      weapon.localToWorld(ammoAnchor.set(.34,-.15,-.52));
-      const projected=projectWeaponMuzzle(ammoAnchor,camera,62-12*(pose?.aimBlend??0)).project(camera);
-      const anchorX=Math.max(.56,Math.min(.91,(projected.x+1)/2))*viewport.width;
-      ammoReadout.style.left=`${Math.max(12,Math.min(viewport.width-ammoWidth-16,anchorX+12))}px`;
-      ammoReadout.style.top=`${Math.max(55,Math.min(81,(1-projected.y)*50))}%`;
+    if(showAmmo&&local){
+      if(scopeHidden){
+        weapon.localToWorld(ammoAnchor.set(.34,-.15,-.52));
+        const projected=projectWeaponMuzzle(ammoAnchor,camera,62-12*aimBlend).project(camera);
+        const anchorX=Math.max(.56,Math.min(.91,(projected.x+1)/2))*viewport.width;
+        const x=Math.max(12,Math.min(viewport.width-ammoWidth-16,anchorX+12)),y=Math.max(.55,Math.min(.81,(1-projected.y)*.5))*viewport.height;
+        ammoReadout.style.translate=`${x}px ${y}px 0px`;
+      }
       const count=String(local.ammo).padStart(2,'0'),reserve=` / ${weapons[local.weapon].mag} · ${local.reserve} Reserve`,status=local.reloadAt?'NACHLADEN …':local.ammo===0?`${settings.bindings.reload.replace('Key','')} NACHLADEN`:weapons[local.weapon].name.toUpperCase();
       if(ammoNumber.textContent!==count)ammoNumber.textContent=count;
       if(ammoReserve.textContent!==reserve)ammoReserve.textContent=reserve;

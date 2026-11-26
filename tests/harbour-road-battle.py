@@ -18,8 +18,10 @@ COMBAT_MOVEMENT = os.environ.get('BATTLE_COMBAT_MOVEMENT') == '1'
 FIXED_TURNS = os.environ.get('BATTLE_FIXED_TURNS') == '1'
 DRAW_PROFILE = os.environ.get('BATTLE_DRAW_PROFILE') == '1'
 GPU_PROFILE = os.environ.get('BATTLE_GPU_PROFILE') == '1'
+FRAME_PHASES = os.environ.get('BATTLE_FRAME_PHASES') == '1'
 assert not DRAW_PROFILE or PRODUCTION, 'BATTLE_DRAW_PROFILE requires the separate production harness'
 assert not GPU_PROFILE or PRODUCTION, 'BATTLE_GPU_PROFILE requires the separate production harness'
+assert not FRAME_PHASES or PRODUCTION, 'BATTLE_FRAME_PHASES requires the separate production harness'
 
 
 def observe(route):
@@ -227,6 +229,15 @@ def read_profile(page, name, during_turn=False):
         result['gpuSamples'] = len(queries)
         if queries:
             result['gpuFrameMs'] = distribution(queries)
+    if FRAME_PHASES:
+        result['cpuPhases'] = {phase: distribution(f['phases'][phase] for f in frames)
+                               for phase in frames[0]['phases']}
+        for i in sorted(range(1,len(frames)),key=lambda j:frames[j]['frameMs'],reverse=True)[:3]:
+            preceding = frames[i-1]
+            if frames[i]['frameMs']>25:
+                result.setdefault('delayedFrames',[]).append(dict(
+                    ms=round(frames[i]['frameMs'],2), phases=preceding['phases'],
+                    calls=preceding['calls'], triangles=preceding['triangles']))
     if during_turn:
         result['activeTurn'] = moving_frames(frames, page.evaluate('turnRanges'))
         if DRAW_PROFILE:
@@ -256,6 +267,8 @@ with sync_playwright() as pw:
         quality_suffix+='-draw-profile'
     if GPU_PROFILE:
         quality_suffix+='-gpu-profile'
+    if FRAME_PHASES:
+        quality_suffix+='-cpu-phases'
     page = browser.new_page(viewport=dict(width=width,height=height), device_scale_factor=1)
     page.add_init_script(f"localStorage.setItem('altstadt.graphics.v3',{json.dumps(quality)})")
     page.add_init_script("""if(PerformanceObserver.supportedEntryTypes.includes('long-animation-frame')){

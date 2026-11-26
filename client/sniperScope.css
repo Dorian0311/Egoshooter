@@ -24,8 +24,9 @@
 
 :has(> .sniper-scope:not([hidden])) .city-crosshair:not(.city-hit) { visibility: hidden; }
 :has(> .sniper-scope:not([hidden])) > .weapon-ammo {
-  left: auto !important;
-  top: auto !important;
+  left: auto;
+  top: auto;
   right: 16px;
   bottom: 16px;
+  translate: none !important;
 }

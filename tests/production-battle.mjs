@@ -5,6 +5,7 @@
 // Set BATTLE_FIXED_TURNS=1 for repeatable 100 ms sweeps from the same compass heading.
 // Set BATTLE_DRAW_PROFILE=1 to trace CPU draw submission and actual WebGL program binds.
 // Set BATTLE_GPU_PROFILE=1 to sample raw GPU frame times, including on High and Ultra.
+// Set BATTLE_FRAME_PHASES=1 to attribute long CPU frames to work inside the game callback.
 import assert from 'node:assert/strict';
 import {spawn} from 'node:child_process';
 import {randomBytes} from 'node:crypto';
@@ -48,9 +49,10 @@ process.once('SIGTERM', () => {process.exitCode=143; stop();});
 try {
   assert(process.argv.slice(2).every(arg=>arg==='--check'), 'Expected --check or no arguments');
   assert(process.env.BATTLE_SHADER_PROFILE!=='1','Shader material tagging requires the development build');
-  let patched = false, drawPatched=false, gpuHooks=0;
+  let patched = false, drawPatched=false, phasePatched=false, gpuHooks=0;
   const traceDraws=process.env.BATTLE_DRAW_PROFILE==='1';
   const traceGpu=process.env.BATTLE_GPU_PROFILE==='1';
+  const tracePhases=process.env.BATTLE_FRAME_PHASES==='1';
   await build({root, mode:'production', logLevel:'warn', build:{outDir:dist}, plugins:[{
     name:'local-battle-observation', enforce:'pre',
     transform(source, id) {
@@ -70,12 +72,31 @@ try {
         return source.replace(sampling,'timingEnabled&&adaptive&&currentTimingFrame%17===0')
           .replace(capture,capture+'frameState.gpuQueryCount=gpuTiming.state.samples;frameState.gpuQueryMs=gpuTiming.state.latestSample;');
       }
-      if(traceDraws && path.endsWith('/client/scene.ts')) {
-        const marker=/^  const renderer = new T\.WebGLRenderer\([^\n]+;$/gm;
-        assert.equal([...source.matchAll(marker)].length,1,'Scene renderer hook changed');
-        drawPatched=true;
-        return "import {attachBattleDrawProbe} from '../tests/battle-draw-probe.mjs';\n"+
-          source.replace(marker,'$&\nwindow.battleDrawProbe=attachBattleDrawProbe(renderer);');
+      if(path.endsWith('/client/scene.ts')&&(traceDraws||tracePhases)) {
+        if(traceDraws){
+          const marker=/^  const renderer = new T\.WebGLRenderer\([^\n]+;$/gm;
+          assert.equal([...source.matchAll(marker)].length,1,'Scene renderer hook changed');
+          drawPatched=true;
+          source="import {attachBattleDrawProbe} from '../tests/battle-draw-probe.mjs';\n"+
+            source.replace(marker,'$&\nwindow.battleDrawProbe=attachBattleDrawProbe(renderer);');
+        }
+        if(tracePhases){
+          const hooks=[
+            ['const frameMs=t-last;', 'const phaseMarkers=frameProfile.length<profileLimit?[cpuStarted]:undefined;'],
+            ['for (const g of avatars.values()) {', 'phaseMarkers?.push(performance.now());'],
+            ['contactShadows.end();', 'phaseMarkers?.push(performance.now());'],
+            ['graphics.render(dt,', 'phaseMarkers?.push(performance.now());']
+          ];
+          for(const [anchor,probe] of hooks){
+            assert.equal(source.split(anchor).length,2,'Frame phase hook changed: '+anchor);
+            source=source.replace(anchor,probe+'\n'+anchor);
+          }
+          const sample='frameProfile.push({frameMs,cpuMs,';
+          assert.equal(source.split(sample).length,2,'Frame sample hook changed');
+          source=source.replace(sample,sample+'phases:{simulationAndCamera:phaseMarkers[1]-phaseMarkers[0],actors:phaseMarkers[2]-phaseMarkers[1],effectsAndHud:phaseMarkers[3]-phaseMarkers[2],graphics:cpuStarted+cpuMs-phaseMarkers[3]},');
+          phasePatched=true;
+        }
+        return source;
       }
       if(!path.endsWith('/client/App.tsx')) return;
       const anchor = "scene.current?.update(s, access.playerId, 'network');";
@@ -87,6 +108,7 @@ try {
   }]});
   assert(patched, 'Missing App observation hook');
   assert.equal(drawPatched,traceDraws,'Missing scene renderer hook');
+  assert.equal(phasePatched,tracePhases,'Missing CPU phase hooks');
   assert.equal(gpuHooks,traceGpu?2:0,'Missing GPU profile hook');
   await child(process.execPath, [join(root,'scripts/compress-client.mjs')], {cwd:scratch}).done;
 
