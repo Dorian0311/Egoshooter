@@ -10,7 +10,10 @@ export function harbourEntrance(world:World,aggregate:T.Texture|null){
   const group=new T.Group(),parts:T.BufferGeometry[]=[];
   const iron='#4b5b59',cream='#e1d6af',teal='#4a6867',rust='#93745a',ochre='#bf994e';
   const tint=new T.Color(),up=new T.Vector3(0,1,0);
-  const enamelArea=[.68,.022,.22,.042],pierArea=[.648,.078,.331,.325];
+  const enamelArea=[.68,.011,.22,.021],pierArea=[.648,.039,.331,.1625];
+  function panel(x:number,y:number,w:number,h:number){return [x/1024,1-(y+h)/1024,w/1024,h/1024];}
+  const chart=panel(3,3,473,260),tides=panel(489,3,267,261),receiver=panel(768,3,252,261);
+  const boarding=panel(4,280,449,226),glazing=panel(468,281,285,225),worktop=panel(770,281,249,224);
   function piece(g:T.BufferGeometry,tone:string,area=enamelArea){
     const uv=g.getAttribute('uv'),n=g.getAttribute('normal'),p=g.getAttribute('position'),rgb=new Float32Array(p.count*3);
     tint.set(tone);
@@ -23,8 +26,8 @@ export function harbourEntrance(world:World,aggregate:T.Texture|null){
     g.setAttribute('color',new T.BufferAttribute(rgb,3));
     const flat=g.index?g.toNonIndexed():g;if(flat!==g)g.dispose();parts.push(flat);
   }
-  function box(x:number,y:number,z:number,w:number,h:number,d:number,tone:string,rz=0){
-    piece(new T.BoxGeometry(w,h,d).rotateZ(rz).translate(x,y,z),tone);
+  function box(x:number,y:number,z:number,w:number,h:number,d:number,tone:string,rz=0,area=enamelArea){
+    piece(new T.BoxGeometry(w,h,d).rotateZ(rz).translate(x,y,z),tone,area);
   }
   function beam(a:Point,b:Point,w:number,tone:string){
     const start=new T.Vector3(...a),end=new T.Vector3(...b),delta=end.clone().sub(start);
@@ -50,7 +53,7 @@ export function harbourEntrance(world:World,aggregate:T.Texture|null){
   for(const h of [6.22,7.16])box(92,h,-29.2,.64,.21,.50,iron);
   for(const z of [-26.45,-20.42])beam([92,6.2,z],[92,5.75,z],.13,iron);
   box(92,5.22,-23.45,.20,1.83,6.65,iron);
-  westSign(91.888,5.22,-23.45,6.52,1.78,[.002,.444,.996,.551]);
+  westSign(91.888,5.22,-23.45,6.52,1.78,[.002,.222,.996,.2755]);
   for(const z of [-26.90,-20.0]){
     box(92,5.31,z,.42,.78,.36,iron);
     const lens=new T.CylinderGeometry(.118,.118,.035,14).rotateZ(Math.PI/2);
@@ -63,20 +66,41 @@ export function harbourEntrance(world:World,aggregate:T.Texture|null){
   for(const z of [cz-2.95,cz+2.98])for(const x of [cx-2.77,cx+2.77]){
     cylinder(x,-2.74,z,.20,.24,2.4,iron);
   }
-  box(cx,.85,cz,4.58,2.50,4.68,'#a49e85');
-  for(let i=0;i<10;i++)box(cx-2.31,-.18+i*.113,cz,.055,.045,4.67,'#7c8275');
+  box(cx,.19,cz,4.58,1.21,4.68,'#ece8d6',0,boarding);
   box(cx,2.27,cz,4.60,.63,4.70,teal);
   for(const side of [-1,1]){
     const x=cx+side*2.32;
-    box(x,1.48,cz,.065,1.28,4.45,'#364c50');
     for(let i=0;i<=4;i++)box(x+side*.04,1.48,cz-2.19+i*1.095,.09,1.36,.085,cream);
-    box(cx,1.48,cz+side*2.37,4.45,1.28,.065,'#43585a');
     for(const dx of [-1.96,-.66,.66,1.96])box(cx+dx,1.48,cz+side*2.41,.07,1.36,.09,cream);
+    for(const y of [.82,2.12]){
+      box(x,y,cz,.17,.12,4.89,cream);
+      box(cx,y,cz+side*2.37,4.80,.12,.145,cream);
+    }
+    // The sliding end sashes overlap at the seaward end. The other bays look into the watch room.
+    const sashZ=cz+side*2.37;
+    box(cx+1.33,1.49,sashZ,1.21,1.20,.038,'#b2c3ba',0,glazing);
+    box(cx+1.30,1.49,sashZ-side*.065,1.25,1.27,.035,'#99ada7',0,glazing);
+    box(cx+.68,1.49,sashZ,.065,1.30,.10,cream);
   }
-  for(const y of [.82,2.13])box(cx,y,cz,4.80,.12,4.89,cream);
+  // A lined rear bulkhead holds a drawn pilot chart and the daily tide board. The furniture
+  // stands on separate depth planes so the desktop and receiver move against the chart on approach.
+  box(cx+2.22,1.43,cz,.13,1.43,4.52,'#e2e0ca',0,boarding);
+  box(cx+2.12,1.46,cz-.63,.095,1.32,2.45,iron);
+  westSign(cx+2.065,1.46,cz-.63,2.37,1.26,chart);
+  box(cx+2.12,1.46,cz+1.36,.095,1.27,1.20,'#74654d');
+  westSign(cx+2.065,1.46,cz+1.36,1.13,1.20,tides);
+  box(cx-.21,.88,cz,.98,.105,3.98,'#d8cdb5',0,worktop);
+  box(cx-.06,1.08,cz+1.28,.51,.34,.69,iron);
+  westSign(cx-.32,1.08,cz+1.28,.62,.29,receiver);
+  for(let i=0;i<3;i++)box(cx-.26,.95+i*.058,cz-.47,.38,.047,.51,['#b9ac8a','#997f66','#c9bea1'][i],i*.025);
+  cylinder(cx-.04,.99,cz-1.40,.12,.16,.12,ochre);
+  beam([cx-.04,1.04,cz-1.40],[cx-.04,1.47,cz-1.40],.043,iron);
+  beam([cx-.04,1.47,cz-1.40],[cx-.24,1.56,cz-1.40],.041,iron);
+  cylinder(cx-.24,1.47,cz-1.40,.068,.19,.18,'#789283');
+  cylinder(cx-.24,1.374,cz-1.40,.17,.17,.013,'#e5d4a3');
   box(cx,2.72,cz,5.46,.19,5.66,teal,-.105);
   for(let j=0;j<8;j++)box(cx,2.82,cz-2.6+j*.74,5.47,.035,.047,'#748681',-.105);
-  westSign(cx-2.324,2.32,cz,3.22,.69,[.003,.101,.62,.295]);
+  westSign(cx-2.324,2.32,cz,3.22,.69,[.003,.0505,.62,.1475]);
   cylinder(cx+1.80,3.77,cz-.73,.041,.050,2.5,iron);
   beam([cx+1.8,4.87,cz-1.41],[cx+1.8,4.87,cz+.02],.046,iron);
   // Timber fendering, mooring bitts and a life ring belong to the quay rather than the road.

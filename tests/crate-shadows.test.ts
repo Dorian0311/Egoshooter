@@ -18,7 +18,7 @@ test('crate shadow hulls keep the color geometry intact and switch only for the 
  const renderer={shadowMap} as unknown as T.WebGLRenderer;
  const source=new T.Group(),geometry=new T.BoxGeometry(1,1,1,12,12,12),material=new T.MeshBasicMaterial();
  source.add(new T.Mesh(geometry,material));
- const crates=createCrateShadows(renderer,world,true);
+ const crates=createCrateShadows(renderer,world,'high');
  crates.load(source,[new T.Matrix4()]);
  const depth=world.getObjectByName('cover-crate-shadow-hulls')!;
  const color=world.getObjectByName('cover-crates')!;
@@ -34,11 +34,11 @@ test('crate shadow hulls keep the color geometry intact and switch only for the 
  camera.fov=18;
  shadowMap.render([],world,camera);
  camera.fov=72;
- crates.setCompact(false);
+ crates.setQuality('ultra');
  shadowMap.render([],world,camera);
  assert.deepEqual(calls,[{depthVisible:false,fullCasts:false},{depthVisible:true,fullCasts:false},
   {depthVisible:false,fullCasts:true},{depthVisible:false,fullCasts:true},{depthVisible:false,fullCasts:true}]);
- crates.setCompact(true);throws=true;
+ crates.setQuality('performance');throws=true;
  assert.throws(()=>shadowMap.render([],world,camera),/interrupted shadow/);
  assert.equal(depth.visible,false);
  crates.dispose();

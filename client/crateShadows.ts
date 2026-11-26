@@ -2,9 +2,10 @@ import * as T from 'three';
 import {ConvexGeometry} from 'three/examples/jsm/geometries/ConvexGeometry.js';
 import {crateColorLod,type CrateIndexAsset} from './crateColorLod';
 import {instanceStaticModel} from './scenery';
+import type {GraphicsQuality} from './graphicsSettings';
 
 /** The closed crate body, lid and latch each retain their own outer hull.
- * At the 1024/1536 shadow-map sizes, sub-texel bevels need no depth triangles. */
+ * Fine bevels are below one shadow texel in the standard and High light footprints. */
 function createCrateShadowSource(source:T.Object3D){
  const hulls=new T.Group(),material=new T.MeshBasicMaterial();
  source.updateWorldMatrix(true,true);
@@ -29,7 +30,8 @@ function createCrateShadowSource(source:T.Object3D){
 
 /** Three checks the world camera's layers for shadow casters. A separate
  * visibility scope keeps the proxy meshes out of the ordinary color pass. */
-export function createCrateShadows(renderer:T.WebGLRenderer,world:T.Scene,compact:boolean){
+export function createCrateShadows(renderer:T.WebGLRenderer,world:T.Scene,quality:GraphicsQuality){
+ let compactColor=quality==='auto'||quality==='performance';
  const lod=crateColorLod();
  const color=new T.Group(),depth=new T.Group();
  color.name='cover-crates';depth.name='cover-crate-shadow-hulls';
@@ -42,7 +44,7 @@ export function createCrateShadows(renderer:T.WebGLRenderer,world:T.Scene,compac
   for(const child of color.children)child.castShadow=value;
  }
  const renderWithCrates:typeof shadowMap.render=function(lights,scene,camera){
-  if(!compact||!proxySource||scene!==world||!(shadowMap.autoUpdate||shadowMap.needsUpdate)){
+  if(quality==='ultra'||!proxySource||scene!==world||!(shadowMap.autoUpdate||shadowMap.needsUpdate)){
    render.call(shadowMap,lights,scene,camera);return;
   }
   // A nearby stack or a narrower scope makes its fine shadow detail visible.
@@ -57,9 +59,10 @@ export function createCrateShadows(renderer:T.WebGLRenderer,world:T.Scene,compac
   finally{depth.visible=false;if(nearby)setDetailedCastShadow(false);}
  };
  shadowMap.render=renderWithCrates;
- function setCompact(value:boolean){
-  compact=value;if(!compact)lod.restore();
-  setDetailedCastShadow(!compact||!proxySource);
+ function setQuality(value:GraphicsQuality){
+  quality=value;compactColor=value==='auto'||value==='performance';
+  if(!compactColor)lod.restore();
+  setDetailedCastShadow(quality==='ultra'||!proxySource);
  }
  return {
   load(source:T.Object3D,placements:T.Matrix4[]){
@@ -76,14 +79,14 @@ export function createCrateShadows(renderer:T.WebGLRenderer,world:T.Scene,compac
     const cell=cells.get(key);if(cell)cell.push(placement);else cells.set(key,[placement]);
    }
    for(const cell of cells.values()){
-    const first=color.children.length;instanceStaticModel(color,source,cell,!compact||!proxySource);
+    const first=color.children.length;instanceStaticModel(color,source,cell,quality==='ultra'||!proxySource);
     lod.register(color.children.slice(first));
    }
    if(proxySource)instanceStaticModel(depth,proxySource,placements,true,32);
   },
-  setCompact,
+  setQuality,
   setColorLod:(source:T.Object3D,asset:CrateIndexAsset)=>lod.load(source,asset),
-  updateColor:(camera:T.Camera,aimed:boolean)=>lod.update(camera,compact,aimed),
+  updateColor:(camera:T.Camera,aimed:boolean)=>lod.update(camera,compactColor,aimed),
   dispose(){
    lod.dispose();
    if(shadowMap.render===renderWithCrates)shadowMap.render=render;

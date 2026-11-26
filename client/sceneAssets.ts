@@ -21,8 +21,7 @@ export function loadSceneAssets(scene:T.Scene,renderer:T.WebGLRenderer,covers:{b
  const manager=new T.LoadingManager();
  const ready=new Promise<void>(resolve=>{manager.onLoad=resolve;});
  const loader=new GLTFLoader(manager);
- const compact=(value:GraphicsQuality)=>value==='auto'||value==='performance';
- const crateShadows=createCrateShadows(renderer,scene,compact(quality));
+ const crateShadows=createCrateShadows(renderer,scene,quality);
  const loadedModels:T.Object3D[]=[];
  new RGBELoader(manager).load(island?'/shooter/environment/island-daylight.hdr':'/shooter/environment/sky.hdr',texture=>{
   if(disposed){texture.dispose();return;}texture.mapping=T.EquirectangularReflectionMapping;
@@ -69,7 +68,7 @@ export function loadSceneAssets(scene:T.Scene,renderer:T.WebGLRenderer,covers:{b
    scene.backgroundBlurriness=weather||island?0:.025;
    scene.backgroundRotation.y=weather?0:scene.environmentRotation.y;
   },
-  setQuality:(value:GraphicsQuality)=>crateShadows.setCompact(compact(value)),
+  setQuality:crateShadows.setQuality,
   dispose(){disposed=true;crateShadows.dispose();for(const sky of skies.values())sky.dispose();environment?.dispose();loadedModels.forEach(disposeObject);},
  };
 }
