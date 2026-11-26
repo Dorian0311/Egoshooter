@@ -255,6 +255,23 @@ export function freightYard(world:World){
   cylinder(0,-.26,0,.53,.57,1.46,stone);cylinder(0,2.20,0,.19,.28,3.58,tank);
   cylinder(0,3.90,0,.30,.30,.24,metal);box(0,3.98,-1.03,.24,.23,2.29,tank);
   cylinder(0,3.63,-2.11,.18,.17,.61,metal);cylinder(0,3.16,-2.11,.161,.135,.40,'#514d43');
+  // The bolted base and swivelling crown share the weathered finish of the water tower.
+  for(const [y,r] of [[.53,.34],[3.81,.27]] as const){
+    add(new T.CylinderGeometry(r,r,.093,16),0,y,0,'#8b8980',ironPlate);
+    for(let bolt=0;bolt<8;bolt++){
+      const angle=bolt*Math.PI/4;
+      add(new T.CylinderGeometry(.035,.035,.042,6),Math.cos(angle)*(r-.045),y+.061,Math.sin(angle)*(r-.045),'#675d4f');
+    }
+  }
+  add(new T.CylinderGeometry(.234,.234,.115,12),0,1.32,0,'#71685a',ironPlate);
+  box(-.24,1.30,0,.19,.18,.16,metal);
+  add(new T.CylinderGeometry(.062,.062,.20,10),-.37,1.30,0,'#615848',0,0,0,Math.PI/2);
+  spokeWheel(-.43,1.30,0,.25,true);
+  for(const y of [3.88,3.49,3.29])add(new T.CylinderGeometry(.194,.194,.065,12),0,y,-2.11,'#878474',ironPlate);
+  const nozzle=new T.CylinderGeometry(.151,.128,.158,12,1,true);
+  add(nozzle,0,2.95,-2.11,'#5d5850');
+  add(new T.TorusGeometry(.132,.026,5,14),0,2.87,-2.11,'#747165',0,Math.PI/2);
+  add(new T.CircleGeometry(.105,12),0,2.89,-2.11,'#292923',0,Math.PI/2);
   const geometry=mergeGeometries(pieces)!;pieces.forEach(g=>g.dispose());
   const loader=new T.TextureLoader(),atlas=loader.load('/shooter/environment/freight-yard.webp'),normal=loader.load('/shooter/environment/freight-yard-normal.webp');
   atlas.colorSpace=T.SRGBColorSpace;atlas.anisotropy=normal.anisotropy=4;

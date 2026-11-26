@@ -138,6 +138,8 @@ export function addIslandStreet(scene:T.Group){
     const detail=(x:number,y:number,z:number,w:number,h:number,d:number,m:T.Material)=>
       cuboid(s.x+x,y,s.z+z*s.front,w,h,d,m);
     const parts=shopParts(s);
+    const jambWidth=parts.find(part=>part.role==='post')!.w;
+    const sideWidth=parts.find(part=>part.role==='side')!.w;
     const furniture=parts.filter(p=>['rack','bench','table','counter','bin'].includes(p.role));
     // Bake broad contact shadows into the floor vertices. They remain visible on low shadow settings.
     const floor=new T.PlaneGeometry(s.w-.42,s.d-.42,Math.ceil(s.w*2),Math.ceil(s.d*2));
@@ -161,7 +163,11 @@ export function addIslandStreet(scene:T.Group){
     for(const part of parts){
       const {role,x,y,z,w,h,d}=part;
       if(role==='side'||role==='back'||role==='sign'||role==='sill'){
-        const wall=cuboid(x,y,z,w,h,d,facade),uv=wall.geometry.getAttribute('uv');
+        // Render each sill between the door jamb and the side wall. The collision
+        // boxes meet across the full wing, but their overlapping faces flicker.
+        const jamb=role==='sill'?jambWidth:0,sideWall=role==='sill'?sideWidth:0;
+        const wallX=x+Math.sign(x-s.x)*(jamb-sideWall)/2;
+        const wall=cuboid(wallX,y,z,w-jamb-sideWall,h,d,facade),uv=wall.geometry.getAttribute('uv');
         for(let face=0;face<6;face++)for(let n=0;n<4;n++){
           const i=face*4+n,lettering=role==='sign'&&face===(s.front===1?4:5);
           const sideLining=role==='side'&&face===(x<s.x?0:1);
@@ -612,10 +618,12 @@ export function addIslandStreet(scene:T.Group){
     solid(new T.TubeGeometry(arm,6,.048,5,false),x,0,poleZ,iron);
     cuboid(x,5.47,poleZ+.13,.22,.42,.088,lampEnamel);
     cuboid(x,5.33,poleZ+.58,.055,.061,1.10,iron).rotation.x=-.46;
-    const shield=new T.LatheGeometry([[.363,-.201],[.372,-.18],[.195,-.095],[.141,.03],[.085,.08]]
+    // Turn the shade hem under to meet the opal bowl. Increasing radii wind
+    // this underside toward the pavement; the outer shell then turns upward.
+    const shield=new T.LatheGeometry([[.305,-.193],[.339,-.205],[.357,-.208],[.363,-.201],[.372,-.18],[.195,-.095],[.141,.03],[.085,.08]]
       .map(([r,h])=>new T.Vector2(r,h)),10);
     solid(shield,x,5.55,shadeZ,lampEnamel);
-    const lens=new T.LatheGeometry([[.008,-.326],[.228,-.287],[.305,-.193]]
+    const lens=new T.LatheGeometry([[0,-.326],[.228,-.287],[.305,-.193]]
       .map(([r,h])=>new T.Vector2(r,h)),10);
     solid(lens,x,5.55,shadeZ,porcelain);
   }

@@ -3,9 +3,12 @@ import { SSAOPass } from 'three/examples/jsm/postprocessing/SSAOPass.js';
 import {createRoomNormalProxies} from './roomNormalProxies';
 import {fixedRooms} from './staticRoomCulling';
 import {WorldNormalSelection} from './worldNormalSelection';
+import {createDepthReconstructedMaterial} from './depthReconstructedAO';
 
 /** Only visible points and lines need a visibility override in the normal/depth pass. */
 export class WorldOcclusionPass extends SSAOPass {
+  private depthNormals?: ReturnType<typeof createDepthReconstructedMaterial>;
+  private readingWorldDepth = false;
   private selection?: WorldNormalSelection;
   private worldFrame = -1;
   private roomNormals?: ReturnType<typeof createRoomNormalProxies>;
@@ -61,7 +64,31 @@ export class WorldOcclusionPass extends SSAOPass {
 
   override render(...args: Parameters<SSAOPass['render']>) {
     this.copyMaterial.uniforms.scalarInput.value = this.output !== SSAOPass.OUTPUT.Normal;
-    super.render(...args);
+    const [renderer, , readBuffer] = args;
+    const depth = readBuffer.depthTexture;
+    if (!this.depthNormals || !depth || this.output !== SSAOPass.OUTPUT.Default || renderer.xr.isPresenting ||
+        this.worldFrame < 0 || renderer.info.render.frame !== this.worldFrame) {
+      super.render(...args);
+      return;
+    }
+    const original = this.ssaoMaterial, previousDepth = original.uniforms.tDepth.value;
+    this.readingWorldDepth = true;
+    this.ssaoMaterial = this.depthNormals;
+    this.ssaoMaterial.uniforms.tDepth.value = depth;
+    try {
+      super.render(...args);
+    } finally {
+      this.readingWorldDepth = false;
+      this.worldFrame = -1;
+      this.ssaoMaterial = original;
+      original.uniforms.tDepth.value = previousDepth;
+    }
+  }
+
+  prepareWorldDepth() {
+    if (!(this.camera instanceof PerspectiveCamera)) return false;
+    this.depthNormals ??= createDepthReconstructedMaterial(this.ssaoMaterial);
+    return !!this.depthNormals;
   }
 
   setNormalPrecision(fullPrecision: boolean) {
@@ -79,6 +106,7 @@ export class WorldOcclusionPass extends SSAOPass {
   worldRendered(frame: number) { this.worldFrame = frame; }
 
   overrideVisibility() {
+    if (this.readingWorldDepth) return;
     this.scene.traverseVisible(this.hidePrimitive);
   }
 
@@ -88,6 +116,7 @@ export class WorldOcclusionPass extends SSAOPass {
   }
 
   override renderOverride(...args: Parameters<SSAOPass['renderOverride']>) {
+    if (this.readingWorldDepth) return;
     const scene = this.scene;
     const background = scene.background;
     const updateMatrices = scene.matrixWorldAutoUpdate;
@@ -115,6 +144,7 @@ export class WorldOcclusionPass extends SSAOPass {
   }
 
   override dispose() {
+    this.depthNormals?.dispose();
     this.roomNormals?.dispose();
     super.dispose();
   }

@@ -375,6 +375,19 @@ with sync_playwright() as pw:
         if start.is_enabled():
             break
         page.locator('.weapon-catalog button[aria-pressed=false]:enabled').first.click()
+    # Measure the browser's frame cadence before the game and GPU workload start.
+    baseline_frames=page.evaluate("""()=>new Promise(resolve=>{
+      const times=[];
+      const deadline=setTimeout(()=>resolve(null),4000);
+      const collect=time=>{
+        times.push(time);
+        if(times.length===61){
+          clearTimeout(deadline);
+          resolve(times.slice(1).map((t,i)=>t-times[i]));
+        }else requestAnimationFrame(collect);
+      };
+      requestAnimationFrame(collect);
+    })""")
     start.click()
     print(map_id,'loadout submitted',flush=True)
     try:
@@ -390,6 +403,7 @@ with sync_playwright() as pw:
             timerQuerySupported:!!gl.getExtension('EXT_disjoint_timer_query_webgl2'),
             quality:harbourQA.scene.getRenderStats().quality};
     }""")
+    renderer_info['lobbyFrameMs']=distribution(baseline_frames) if baseline_frames else None
     assert renderer_info['quality']==quality,(renderer_info,quality)
     print(renderer_info,flush=True)
     bots = page.evaluate("harbourQA.state.players.filter(p=>p.kind==='bot').length")
@@ -414,15 +428,20 @@ with sync_playwright() as pw:
               }
               return [[qa.player.x,qa.player.z],boxes
                 .filter(b=>b.y-b.h/2<1.75 && b.y+b.h/2>.29)
-                .map(b=>[b.x,b.z,b.w,b.d]),qa.state.players
+                .map(b=>[b.x,b.z,b.w,b.d,b.y+b.h/2>1.25 && b.y-b.h/2<1.3 && b.kind!=='glass']),qa.state.players
                 .filter(p=>p.kind==='bot'&&p.team!==qa.player.team&&p.connected&&p.hp>0)
                 .map(p=>[p.x,p.z])];
             }""")
             occupied=set()
-            for bx,bz,bw,bd in boxes:
+            cover=set()
+            for bx,bz,bw,bd,tall in boxes:
                 for ix in range(math.ceil(bx-bw/2-1),math.floor(bx+bw/2+1)+1):
                     for iz in range(math.ceil(bz-bd/2-1),math.floor(bz+bd/2+1)+1):
                         occupied.add((ix,iz))
+                if tall:
+                    for ix in range(math.ceil(2*bx-bw),math.floor(2*bx+bw)+1):
+                        for iz in range(math.ceil(2*bz-bd),math.floor(2*bz+bd)+1):
+                            cover.add((ix,iz))
             origin=tuple(round(v) for v in start)
             opened=[(0,0,origin)]
             parent={origin:None}
@@ -430,8 +449,17 @@ with sync_playwright() as pw:
             threat={}
             def danger(point):
                 if point not in threat:
-                    distance=min((math.hypot(point[0]-x,point[1]-z) for x,z in opponents),default=32)
-                    threat[point]=max(0,(32-distance)/8)+(4 if point in exposed_cells else 0)
+                    px,pz=point
+                    exposure=0
+                    for x,z in opponents:
+                        distance=math.hypot(x-px,z-pz)
+                        if distance>=46:
+                            continue
+                        steps=math.ceil(distance*2)
+                        if any((round(2*(px+(x-px)*i/steps)),round(2*(pz+(z-pz)*i/steps))) in cover for i in range(1,steps)):
+                            continue
+                        exposure=max(exposure,(46-distance)/7)
+                    threat[point]=exposure+(4 if point in exposed_cells else 0)
                 return threat[point]
             while opened:
                 _,steps,point=heapq.heappop(opened)

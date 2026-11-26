@@ -61,11 +61,13 @@ export function createResidentAppearance(root:T.Group,body:T.Object3D,id:string)
   geometry.setAttribute('color',new T.Float32BufferAttribute(colors,3));geometry.computeVertexNormals();
   const textile=material('#ffffff');textile.vertexColors=true;textile.roughness=.96;
   const shirt=mesh(geometry,textile,0,1.365,-.153,'body');shirt.name='resident-officer-shirt-and-tie';shirt.scale.set(w,h,1);
- }else{
+ }else if(profile.look!=='veteran'){
   const neckline=new T.Shape();neckline.moveTo(-.065,.11);neckline.lineTo(.065,.11);neckline.lineTo(.032,-.12);neckline.lineTo(-.032,-.12);neckline.closePath();
   const shirt=mesh(new T.ShapeGeometry(neckline),material(profile.look==='showman'?'#e6d6ab':'#c9bda1'),0,1.34,-.153,'body');shirt.rotation.y=Math.PI;shirt.scale.set(w,h,1);
  }
- box(leather,0,.94,-.17,.39,.045,.06);box(gold,0,.94,-.207,.073,.055,.018);
+ if(profile.look!=='veteran'){
+  box(leather,0,.94,-.17,.39,.045,.06);box(gold,0,.94,-.207,.073,.055,.018);
+ }
  if(profile.look==='bruiser'){
   const hair=material('#24201e');
   ball(hair,0,1.755,.012,.102,.075,.087).name='resident-pompadour';
@@ -103,6 +105,13 @@ export function createResidentAppearance(root:T.Group,body:T.Object3D,id:string)
   mesh(beard,whiskers,0,1.495/h,-.085).name='resident-veteran-beard';
   glasses();
   const skirt=mesh(new T.CylinderGeometry(.23,.285,.43,24,1,true),cloth,0,.855,.009,'body');skirt.scale.x=w;skirt.scale.z=.65;
+  // Match the coat's taper and angular divisions so the belt hugs its entire waist.
+  const beltY=.94,bandHeight=.033;
+  const coatRadius=(y:number)=>.23+.055*(.5-(y-.855*h)/.43);
+  const beltRadius=coatRadius(beltY*h)+.004;
+  const belt=mesh(new T.CylinderGeometry(coatRadius(beltY*h+bandHeight/2)+.004,coatRadius(beltY*h-bandHeight/2)+.004,bandHeight,24,1,true),leather,0,beltY,.009,'body');
+  belt.scale.copy(skirt.scale);belt.name='resident-veteran-belt';
+  box(gold,0,beltY,.009-beltRadius*.65-.003,.046,.032,.007).name='resident-veteran-buckle';
   // A diagonal wrap catches the light along its rolled edge. Its tucked end
   // drapes over the chest with a central fold and a slanted hem.
   const scarfPositions:number[]=[],scarfColors:number[]=[],scarfIndices:number[]=[];
@@ -132,12 +141,37 @@ export function createResidentAppearance(root:T.Group,body:T.Object3D,id:string)
   drape.setAttribute('color',new T.Float32BufferAttribute(scarfColors,3));drape.setIndex(scarfIndices);drape.computeVertexNormals();
   scarf.vertexColors=true;scarf.roughness=.96;
   mesh(drape,scarf,0,0,0,'body').name='resident-veteran-scarf';
-  for(let i=0;i<3;i++){
-   box(material(['#99453e','#416077','#a08440'][i]),-.105+i*.054,1.345,-.163,.033,.067,.013);
-   const medal=mesh(new T.CylinderGeometry(.027,.027,.01,16),i===1?silver:gold,-.105+i*.054,1.294,-.172,'body');medal.rotation.x=Math.PI/2;
+  const ribbonPositions:number[]=[],ribbonColors:number[]=[];
+  // Jacket depths and lateral gradients at the three pin positions in the bind pose.
+  for(const [i,[x,z,slope]] of [[-.113,-.078,-.94],[-.085,-.099,-.50],[-.057,-.109,-.40]].entries()){
+   const tint=new T.Color(['#813f39','#455d69','#8a7547'][i]);
+   for(const [dx,dy] of [[-.010,.017],[.010,.017],[-.008,-.014],[.010,.017],[.008,-.014],[-.008,-.014]]){
+    ribbonPositions.push(x*w+dx,1.29*h+dy,z-.005+slope*dx+.15*dy);
+    ribbonColors.push(tint.r,tint.g,tint.b);
+   }
+   const medal=mesh(new T.CylinderGeometry(.012,.012,.003,16),i===1?silver:gold,x,1.29-.019/h,z-.010,'body');
+   medal.quaternion.setFromUnitVectors(new T.Vector3(0,1,0),new T.Vector3(slope,.15,-1).normalize());medal.name='resident-veteran-medal';
   }
+  const ribbons=new T.BufferGeometry();
+  ribbons.setAttribute('position',new T.Float32BufferAttribute(ribbonPositions,3));
+  ribbons.setAttribute('color',new T.Float32BufferAttribute(ribbonColors,3));ribbons.computeVertexNormals();
+  const ribbonCloth=material('#ffffff');ribbonCloth.vertexColors=true;
+  mesh(ribbons,ribbonCloth,0,0,0,'body').name='resident-veteran-ribbons';
   box(leather,.255,.91,.015,.18,.24,.13).name='resident-veteran-satchel';
-  const strap=box(leather,0,1.24,-.172,.024,.56,.014);strap.rotation.z=-.55;
+  // Follow the jacket under the scarf, then turn around the hip into the bag.
+  const strapPath=[
+   [-.17,1.435,.025],[-.16,1.43,-.027],[-.13,1.39,-.063],[-.08,1.34,-.110],
+   [0,1.27,-.133],[.08,1.19,-.121],[.15,1.12,-.050],[.19,1.07,-.066],[.23,1.021,-.046],
+  ];
+  const strapVertices:number[]=[],strapIndices:number[]=[];
+  for(const [i,[x,y,z]] of strapPath.entries()){
+   strapVertices.push((x-.010)*w,(y-.008)*h,z,(x+.010)*w,(y+.008)*h,z);
+   if(i){const a=(i-1)*2;strapIndices.push(a,a+1,a+2,a+1,a+3,a+2);}
+  }
+  const strapGeometry=new T.BufferGeometry();
+  strapGeometry.setAttribute('position',new T.Float32BufferAttribute(strapVertices,3));
+  strapGeometry.setIndex(strapIndices);strapGeometry.computeVertexNormals();
+  mesh(strapGeometry,leather,0,0,0,'body').name='resident-veteran-satchel-strap';
  }else if(profile.look==='officer'){
   // The lower band fits around the temples; the broader cloth crown rolls
   // back above it instead of balancing on top of the scalp.

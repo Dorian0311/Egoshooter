@@ -2,6 +2,7 @@ import * as T from 'three';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import {WorldRenderPass} from './worldRenderPass';
+import {setWorldDepthTexture,validateWorldDepthTexture} from './depthReconstructedAO';
 import {createStaticRoomCulling} from './staticRoomCulling';
 import {installPointLightCutoff} from './pointLightCutoff';
 import {installDirectionalShadowCutoff} from './directionalShadowCutoff';
@@ -122,6 +123,9 @@ export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
       sun.shadow.mapSize.set(shadowSize, shadowSize);
     }
     ao.enabled = preset.ao;
+    const depthNormals = quality === 'high' && !renderer.capabilities.logarithmicDepthBuffer &&
+      !renderer.capabilities.reverseDepthBuffer && ao.prepareWorldDepth();
+    setWorldDepthTexture(composer.readBuffer, depthNormals);
     if (ao.enabled) ao.setNormalPrecision(quality === 'ultra');
     bloom.enabled = preset.bloom;
     fxaa.enabled=preset.antialias==='fxaa';smaa.enabled=preset.antialias==='smaa';
@@ -248,6 +252,7 @@ export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
         camera.aspect=w/h;
         camera.updateProjectionMatrix();
         composer.setSize(renderer.domElement.width,renderer.domElement.height);
+        validateWorldDepthTexture(renderer, composer.readBuffer);
       }
       if(ao.enabled){
         // SSAOPass r170 caches projection on resize; scoped FOV and indoor far clipping change it independently.
