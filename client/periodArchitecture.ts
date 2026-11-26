@@ -27,6 +27,7 @@ export function createPeriodArchitecture(world:World){
     const upper=b.upper?8:4,wallX=b.w/2,wallZ=b.d/2,gableZ=wallZ+.52;
     const alpine=world.id==='alpine',cinema=b.name==='UNION-LICHTSPIELE';
     const fortress=alpine&&b.name==='ROCHE-LA-CROIX';
+    const mountainPost=alpine&&b.name==='POSTE DES ALPES';
     const domhof=world.id==='cologne'&&b.name==='AM DOMHOF';
     const bridgeWatch=world.id==='cologne'&&b.name==='BRÜCKENWACHE';
     const station=/BAHNHOF|KÖLN-DEUTZ/.test(b.name);
@@ -267,6 +268,38 @@ export function createPeriodArchitecture(world:World){
         const a=(i-2)*.62;
         const port=new T.BoxGeometry(.37,.105,.09).rotateY(a);
         add(port,cx+1.445*Math.sin(a),seat+.59,cz+1.445*Math.cos(a),'#333d38');
+      }
+    }
+    if(mountainPost){
+      // The main entrance faces the pass. Brackets cantilever from the solid
+      // wall beside the doorway, leaving the approach and upper openings clear.
+      const front=wallZ+.38,roofZ=front+1.12,slope=.18;
+      const timberDark='#514338',edge='#806e58',snow='#e4eaec';
+      for(let plank=0;plank<14;plank++){
+        const x=(plank-6.5)*.474;
+        box(x,3.86,roofZ,.468,.09,2.45,plank%4===0?'#756650':timberDark,slope);
+      }
+      const drift=new T.PlaneGeometry(6.60,2.06,24,4).rotateX(-Math.PI/2);
+      const vertices=drift.getAttribute('position');
+      for(let i=0;i<vertices.count;i++){
+        const x=vertices.getX(i),rawZ=vertices.getZ(i),t=rawZ/2.06+.5;
+        const lip=.15*Math.sin(x*1.7)+.09*Math.sin(x*4.5+.9);
+        const z=rawZ+t*lip-.125;
+        vertices.setXYZ(i,x,3.942-.183*z+.028*Math.sin(x*2.7+t*1.2),roofZ+z);
+      }
+      drift.computeVertexNormals();
+      add(drift,0,0,0,snow);
+      for(const x of [-3.16,-2.06,0,2.06,3.16]){
+        box(x,3.77,roofZ,.13,.17,2.54,edge,slope);
+        box(x,3.59,roofZ+1.18,.18,.19,.21,timberDark);
+      }
+      box(0,3.64,roofZ+1.245,6.76,.20,.13,timberDark);
+      box(0,3.74,roofZ+1.268,6.82,.055,.14,edge);
+      for(const x of [-3.04,3.04]){
+        box(x,3.45,front+.051,.22,.99,.19,timberDark);
+        box(x,3.40,front+.91,.14,.16,2.01,timberDark,-.35);
+        box(x,3.53,front+1.40,.12,.32,.13,edge,0,0,true);
+        for(const y of [3.05,3.67])box(x,y,front+.154,.085,.082,.042,'#53564e',0,0,true);
       }
     }
     if(alpine){

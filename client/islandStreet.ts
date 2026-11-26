@@ -533,6 +533,28 @@ export function addIslandStreet(scene:T.Group){
     cuboid(x,5.6,-28,.09,.09,2.4,iron);
     cuboid(x,5.50,-26.88,.46,.16,.65,trim);
   }
+  // Mount the exchange telephone on the existing pole, on the seaward side of the footway.
+  const phoneX=55,phoneZ=-28.91,phoneEnamel=paint('#355b54'),bakelite=paint('#302e29');
+  cuboid(phoneX,1.54,phoneZ,.71,.97,.27,phoneEnamel);
+  cuboid(phoneX,2.065,phoneZ+.056,.81,.075,.46,phoneEnamel).rotation.x=.085;
+  for(const side of [-1,1])cuboid(phoneX+side*.351,1.55,phoneZ+.098,.046,.95,.21,phoneEnamel);
+  function phonePlate(x:number,y:number,z:number,width:number,height:number,yaw:number,tile:number[]){
+    const geometry=new T.PlaneGeometry(width,height),uv=geometry.getAttribute('uv');
+    for(let i=0;i<uv.count;i++)uv.setXY(i,(tile[0]+uv.getX(i)*tile[2])/1536,1-(tile[1]+(1-uv.getY(i))*tile[3])/960);
+    solid(geometry,x,y,z,pavingMaterial).rotation.y=yaw;
+  }
+  phonePlate(phoneX,1.55,phoneZ+.137,.66,.90,0,[756,706,208,240]);
+  cuboid(phoneX-.218,1.56,phoneZ+.205,.068,.36,.09,bakelite).rotation.z=-.12;
+  for(const y of [1.39,1.73]){
+    const ear=solid(new T.CylinderGeometry(.075,.094,.094,12),phoneX-.216+(y-1.55)*.12,y,phoneZ+.21,bakelite);
+    ear.rotation.x=Math.PI/2;
+  }
+  const flex=new T.CatmullRomCurve3([new T.Vector3(-.22,1.36,.21),new T.Vector3(-.25,1.11,.22),
+    new T.Vector3(-.15,1.04,.19),new T.Vector3(-.10,1.22,.14)]);
+  solid(new T.TubeGeometry(flex,9,.013,5,false),phoneX,0,phoneZ,bakelite);
+  cuboid(phoneX,3.02,phoneZ+.52,.08,.075,1.47,iron);
+  cuboid(phoneX,2.78,phoneZ+.66,.053,.43,1.31,phoneEnamel);
+  for(const side of [-1,1])phonePlate(phoneX+side*.029,2.78,phoneZ+.66,1.29,.40,side*Math.PI/2,[283,705,462,138]);
   const points:number[]=[];
   for(let span=1;span<streetPoles.length;span++)for(const offset of [-.7,0,.7]){
     const start=streetPoles[span-1],end=streetPoles[span];

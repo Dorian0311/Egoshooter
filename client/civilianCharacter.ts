@@ -88,6 +88,7 @@ export function createCivilianCharacter(data:CivilianCharacterData,residentId='r
   for(const {mesh,weights,clothes,head}of skinMeshes){const colors=mesh.geometry.getAttribute('color');for(let i=0;i<weights.length;i++){if(head)vertexColor.copy(skinColor);else vertexColor.copy(clothColors[clothes[i]]).lerp(handColor,Math.min(1,weights[i]));colors.setXYZ(i,vertexColor.r,vertexColor.g,vertexColor.b);}colors.needsUpdate=true;}
  }
  style(residentId);
+ const footPoint=new T.Vector3();
  let disposed=false,initialized=false,lastX=0,lastZ=0,speed=0,phase=0;
  return {group,
   update(player:Player,time:number,dt:number,now=time){
@@ -95,7 +96,12 @@ export function createCivilianCharacter(data:CivilianCharacterData,residentId='r
    initialized=true;lastX=player.x;lastZ=player.z;const movement=player.hp>0?Math.min(1.4,distance/step/.9):0;speed+=(movement-speed)*(1-Math.exp(-step*12));phase+=step*6*speed;
    const walk=Math.sin(phase)*.36*speed;body.position.y=baseY+(player.hp>0?Math.abs(Math.sin(phase))*.012*speed:0);
    for(const part of animated){const angle=part.kind==='head'?-player.pitch*.35:part.kind==='thigh'?walk*part.side:part.kind==='calf'?-Math.max(0,-Math.sin(phase+part.side*Math.PI/2))*.55*speed:Math.sin(phase)*part.side*.07*speed;part.bone.quaternion.copy(part.rest).multiply(rotation.setFromAxisAngle(part.axis,angle));}
-   if(player.hp>0&&!isCrawling(player)&&feet.length){group.updateWorldMatrix(true,true);const lowest=Math.min(...feet.map(foot=>group.worldToLocal(foot.getWorldPosition(new T.Vector3())).y));body.position.y+=footGround-lowest;group.updateWorldMatrix(true,true);}
+   if(player.hp>0&&!isCrawling(player)&&feet.length){
+    // getWorldPosition updates the foot's ancestors, including the animated legs.
+    let lowest=Infinity;
+    for(const foot of feet)lowest=Math.min(lowest,group.worldToLocal(foot.getWorldPosition(footPoint)).y);
+    body.position.y+=footGround-lowest;group.updateWorldMatrix(true,true);
+   }
    const gesturing=player.hp>0&&player.gestureUntil>now&&!isCrawling(player),gestureSide=hasLost(player,'armL')?'armR':'armL';
    for(const finger of fingers){const active=gesturing&&finger.side===gestureSide,angle=active?(finger.digit===2?0:finger.digit===0?.65:finger.joint===0?.9:finger.joint===1?1.3:.9):finger.digit===0?.08:finger.joint===0?.12:.18;finger.bone.quaternion.copy(finger.rest).multiply(rotation.setFromAxisAngle(finger.axis,angle));}
    held.update(player,time,now);for(const side of ['armL','armR'] as const)if(!hasLost(player,side)&&(!gesturing||side!==gestureSide))relaxedHand(side);if(gesturing&&!hasLost(player,gestureSide))gesture(gestureSide);
