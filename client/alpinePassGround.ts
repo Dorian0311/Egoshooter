@@ -156,8 +156,17 @@ export function alpinePassGround(world:World,snow:T.MeshStandardMaterial,road:T.
     shader.fragmentShader=shader.fragmentShader.replace('#include <map_fragment>',`
       vec3 layer=texture2D(passControl,vMapUv*(4.2/177.0)+.5).rgb;
       vec3 snowSample=texture2D(map,vMapUv).rgb;
-      vec3 setts=texture2D(passSetts,vMapUv*1.48).rgb;
-      vec3 grit=texture2D(passStone,vMapUv*2.7).rgb;
+      // With no road weights, both blends are zero even at the brightest snow texel.
+      bool pureSnow=(layer.r==0.0 && layer.g==0.0);
+      vec2 settUV=vMapUv*1.48,gritUV=vMapUv*2.7,roadNormalUV=vNormalMapUv*1.48;
+      vec2 settDx=dFdx(settUV),settDy=dFdy(settUV);
+      vec2 gritDx=dFdx(gritUV),gritDy=dFdy(gritUV);
+      vec2 roadNormalDx=dFdx(roadNormalUV),roadNormalDy=dFdy(roadNormalUV);
+      vec3 setts=vec3(0.0),grit=vec3(0.0);
+      if(!pureSnow){
+        setts=textureGrad(passSetts,settUV,settDx,settDy).rgb;
+        grit=textureGrad(passStone,gritUV,gritDx,gritDy).rgb;
+      }
       float packed=smoothstep(.03,.78,layer.b);
       float gravel=smoothstep(.035,.72,layer.g+(grit.g-.28)*min(1.,layer.g*6.));
       float paving=smoothstep(.13,.82,layer.r+(snowSample.g-.45)*.22);
@@ -165,7 +174,10 @@ export function alpinePassGround(world:World,snow:T.MeshStandardMaterial,road:T.
       vec3 street=mix(setts*vec3(.79,.74,.66),setts*vec3(.58,.57,.53),packed*.68);
       diffuseColor.rgb*=mix(mix(ice,grit*.81+vec3(.065),gravel*.77),street,paving);`);
     shader.fragmentShader=shader.fragmentShader.replace('#include <normal_fragment_maps>',`
-      vec3 micro=mix(texture2D(normalMap,vNormalMapUv).xyz,texture2D(passSettsNormal,vNormalMapUv*1.48).xyz,paving)*2.-1.;
+      vec3 snowNormal=texture2D(normalMap,vNormalMapUv).xyz;
+      vec3 micro=snowNormal;
+      if(!pureSnow)micro=mix(snowNormal,textureGrad(passSettsNormal,roadNormalUV,roadNormalDx,roadNormalDy).xyz,paving);
+      micro=micro*2.-1.;
       micro.xy*=normalScale*mix(1.,.62,packed);normal=normalize(tbn*micro);`);
     shader.fragmentShader=shader.fragmentShader.replace('#include <roughnessmap_fragment>','float roughnessFactor=roughness-packed*.23+gravel*.035;');
     if(lampGlass){

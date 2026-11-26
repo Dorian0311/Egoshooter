@@ -1,4 +1,5 @@
 import * as T from 'three';
+import {mergeGeometries} from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import {createAnatomy} from './anatomy';
 import {loadHuman,createHuman} from './humanoid';
 import {makePlayer,type Player,type Snapshot} from '../shared/game';
@@ -109,7 +110,40 @@ export function createRemainsScene(scene:T.Scene,camera:T.PerspectiveCamera,weap
  const clear=()=>{for(const c of corpses.values()){if(c.body)disposeGeometry(c.body);if(c.head)disposeGeometry(c.head,true);c.root.removeFromParent();}for(const part of parts.values()){if(part.body)disposeGeometry(part.body,true);part.root.removeFromParent();}corpses.clear();parts.clear();firstPerson.clear();};
  const buildCorpse=(corpse:Corpse,visual:CorpseVisual)=>schedule(async()=>{const source=await template(corpse.uniform,corpse.team,corpse.kind==='resident',corpse.sourceId);await nextTurn();if(stopped||corpses.get(corpse.id)!==visual)return;const latest=snapshot?.corpses.find(c=>c.id===corpse.id);if(!latest)return;source.anatomy.setLost(latest.lost|1);const neck=source.human.group.getObjectByName('wound-head');if(neck)neck.visible=!!(latest.lost&1);source.human.group.updateWorldMatrix(true,true);const key=`${latest.uniform}:${latest.team}:${latest.kind}:${latest.kind==='resident'?latest.sourceId:''}:${latest.lost}`;let cached=bodyTemplates.get(key);if(!cached){cached=await freezeRemains(source.human.group,()=>!stopped&&corpses.get(corpse.id)===visual);if(stopped||corpses.get(corpse.id)!==visual){disposeGeometry(cached);return;}bodyTemplates.set(key,cached);await nextTurn();if(stopped||corpses.get(corpse.id)!==visual)return;}const body=cached.clone(true);body.userData.sharedRemainsResources=true;if(visual.body)disposeGeometry(visual.body);visual.body=body;visual.root.add(body);if(!(latest.lost&1)&&!visual.head){const key=`${latest.uniform}:${latest.team}:${latest.kind}:${latest.kind==='resident'?latest.sourceId:''}:attached-head`;let cached=partTemplates.get(key);if(!cached){const head=source.anatomy.detach('head');if(head){const closure=head.getObjectByName('wound-head');if(closure)closure.visible=false;cached={body:head,length:.35};partTemplates.set(key,cached);}}if(cached){const head=cached.body.clone(true);head.userData.sharedRemainsResources=true;visual.head=head;visual.headRest=head.position.clone();visual.headQuaternion=head.quaternion.clone();visual.root.add(head);}}visual.lost=latest.lost;visual.loading=false;visual.root.position.set(0,0,0);corpseQuaternion(latest.yaw,false,visual.root.quaternion);if(visual.head)visual.head.visible=!(latest.lost&1);visual.root.updateWorldMatrix(true,true);bounds.setFromObject(visual.root);visual.groundLift=.012-bounds.min.y;});
  const buildPart=(item:BodyPartItem,visual:PartVisual)=>schedule(async()=>{const key=`${item.uniform}:${item.team}:${item.kind}:${item.kind==='resident'?item.sourceId:''}:${item.part}`;let prototype=partTemplates.get(key);if(!prototype){const source=await template(item.uniform,item.team,item.kind==='resident',item.sourceId);await nextTurn();if(stopped||parts.get(item.id)!==visual)return;source.anatomy.setLost(0);source.human.group.updateWorldMatrix(true,true);const body=source.anatomy.detach(item.part);if(!body){visual.loading=false;return;}body.position.set(0,0,0);bounds.setFromObject(body);const size=bounds.getSize(new T.Vector3());if(item.part!=='head'){const axis=size.x>size.y&&size.x>size.z?new T.Vector3(1,0,0):size.z>size.y?new T.Vector3(0,0,1):new T.Vector3(0,1,0);body.quaternion.setFromUnitVectors(axis,yAxis);}body.updateWorldMatrix(true,true);bounds.setFromObject(body);const center=bounds.getCenter(new T.Vector3());body.position.sub(center);prototype={body,length:bounds.getSize(target).y};partTemplates.set(key,prototype);}if(stopped||parts.get(item.id)!==visual)return;const body=prototype.body.clone(true);body.userData.sharedRemainsResources=true;visual.length=prototype.length;visual.body=body;visual.root.add(body);visual.loading=false;});
- const tent=(t:AidTent)=>{const group=new T.Group();group.name='first-aid-tent';const cloth=new T.MeshStandardMaterial({color:'#d2cbb0',roughness:.9,side:T.DoubleSide}),metal=new T.MeshStandardMaterial({color:'#4c5847',roughness:.7}),cross=new T.MeshStandardMaterial({color:'#386d52',roughness:.8});for(const m of [cloth,metal,cross])material.add(m);const box=(x:number,y:number,z:number,w:number,h:number,d:number,m:T.Material)=>{const g=new T.BoxGeometry(w,h,d);geometry.add(g);const mesh=new T.Mesh(g,m);mesh.position.set(x,y,z);mesh.castShadow=mesh.receiveShadow=true;group.add(mesh);return mesh;};box(0,.06,0,4.3,.12,4.4,metal);box(-2,1.2,0,.06,2.4,4.2,cloth);box(2,1.2,0,.06,2.4,4.2,cloth);box(0,1.2,2.05,4,2.4,.05,cloth);for(const side of [-1,1]){const roof=box(side,2.65,0,2.28,.05,4.4,cloth);roof.rotation.z=side*-.38;box(side*1.95,1.25,-2.1,.07,2.5,.07,metal);}box(0,2.3,-2.12,.16,.62,.04,cross);box(0,2.3,-2.13,.62,.16,.04,cross);box(0,.53,.3,1.1,.12,2.1,cloth);for(const x of [-.45,.45])for(const z of [-.5,1.1])box(x,.29,z,.05,.5,.05,metal);group.position.set(t.x,t.y,t.z);root.add(group);return group;};
+ const tent=(t:AidTent)=>{
+  const group=new T.Group();group.name='first-aid-tent';
+  const cloth=new T.MeshStandardMaterial({color:'#d2cbb0',roughness:.9,side:T.DoubleSide});
+  const metal=new T.MeshStandardMaterial({color:'#4c5847',roughness:.7});
+  const cross=new T.MeshStandardMaterial({color:'#386d52',roughness:.8});
+  const pieces=new Map<T.Material,T.BufferGeometry[]>([[metal,[]],[cloth,[]],[cross,[]]]);
+  const box=(x:number,y:number,z:number,w:number,h:number,d:number,m:T.Material,roll=0)=>{
+   const g=new T.BoxGeometry(w,h,d);
+   if(roll)g.rotateZ(roll);
+   g.translate(x,y,z);
+   pieces.get(m)!.push(g);
+  };
+  box(0,.06,0,4.3,.12,4.4,metal);
+  box(-2,1.2,0,.06,2.4,4.2,cloth);
+  box(2,1.2,0,.06,2.4,4.2,cloth);
+  box(0,1.2,2.05,4,2.4,.05,cloth);
+  for(const side of [-1,1]){
+   box(side,2.65,0,2.28,.05,4.4,cloth,side*-.38);
+   box(side*1.95,1.25,-2.1,.07,2.5,.07,metal);
+  }
+  box(0,2.3,-2.12,.16,.62,.04,cross);
+  box(0,2.3,-2.13,.62,.16,.04,cross);
+  box(0,.53,.3,1.1,.12,2.1,cloth);
+  for(const x of [-.45,.45])for(const z of [-.5,1.1])box(x,.29,z,.05,.5,.05,metal);
+  for(const [m,parts] of pieces){
+   const merged=mergeGeometries(parts)!;
+   for(const piece of parts)piece.dispose();
+   geometry.add(merged);material.add(m);
+   const mesh=new T.Mesh(merged,m);
+   mesh.castShadow=mesh.receiveShadow=true;
+   group.add(mesh);
+  }
+  group.position.set(t.x,t.y,t.z);root.add(group);return group;
+ };
  return {
   sync(s:Snapshot){snapshot=s;receivedAt=performance.now();if(match!==s.matchId){clear();match=s.matchId;}for(const c of s.corpses){let visual=corpses.get(c.id);if(!visual){visual={root:new T.Group(),lost:-1,loading:true};visual.root.name=c.id;root.add(visual.root);corpses.set(c.id,visual);buildCorpse(c,visual);}else if(visual.lost!==c.lost&&!visual.loading){visual.loading=true;buildCorpse(c,visual);}}
    for(const [id,visual]of corpses)if(!s.corpses.some(c=>c.id===id)){if(visual.body)disposeGeometry(visual.body);if(visual.head)disposeGeometry(visual.head,true);visual.root.removeFromParent();corpses.delete(id);}

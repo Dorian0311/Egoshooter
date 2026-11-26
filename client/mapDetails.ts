@@ -175,6 +175,23 @@ export function createMapDetails(scene:T.Scene,world:World,get:(color:string)=>T
           const brace=box(b.x+offset*2.05,1.55,z+side*.055,.13,2.58,.1,frame);
           brace.rotation.z=offset<0?-.57:.57;
         }
+        // The closed freight door rides outside the siding and under its upper guide.
+        const lower=bodyBottom+.11,upper=bodyTop-.24;
+        const door=box(b.x,(lower+upper)/2,z+side*.065,2.69,upper-lower,.08,boards);
+        const uv=door.geometry.getAttribute('uv'),normal=door.geometry.getAttribute('normal');
+        const pos=door.geometry.getAttribute('position');
+        for(let i=0;i<uv.count;i++){
+          if(Math.abs(normal.getZ(i))<.9)continue;
+          const height=door.position.y+pos.getY(i);
+          uv.setXY(i,(562+(height-1.04+.19)*189/.43)/1024,-uv.getX(i)+.37);
+        }
+        box(b.x+1.40,upper+.12,z+side*.105,5.77,.067,.055,frame);
+        for(const dx of [-1.08,1.08]){
+          box(b.x+dx,upper+.031,z+side*.12,.115,.19,.045,frame);
+        }
+        for(const y of [lower+.044,upper-.044]){
+          box(b.x,y,z+side*.111,2.69,.079,.027,frame);
+        }
         box(b.x+.91,1.39,z+side*.10,.23,.1,.10,frame);
         box(b.x-3.62,1.91,z+side*.064,.86,.36,.023,material('#312f29')).castShadow=false;
       }
