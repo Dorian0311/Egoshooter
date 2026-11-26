@@ -383,9 +383,12 @@ export function createMapDetails(scene:T.Scene,world:World,get:(color:string)=>T
   batchStaticMeshes(root,new Set(),64,tintable);
   const wetGround=roadSurface?dampSurface(roadSurface):war&&terrain?dampSurface(terrain.mesh.material,.67):
     world.id==='cologne'?dampSurface(get('#77766b'),.78):undefined;
+  let waterDetail=false,waterSunlight=true;
   return {
     update(seconds:number){ocean?.update(seconds);if(radarRotor)radarRotor.rotation.y=seconds*.25;},
     setDampness(damp:boolean){wetGround?.(damp);street?.setDampness(damp);},
+    setWaterDetail(enabled:boolean){waterDetail=enabled;ocean?.setDetail(waterDetail&&waterSunlight);},
+    setWaterSunlight(enabled:boolean){waterSunlight=enabled;ocean?.setDetail(waterDetail&&waterSunlight);},
     dispose(){ocean?.dispose();street?.dispose();roadSurface?.dispose();roadTextures.forEach(texture=>texture.dispose());terrain?.dispose();colors.forEach(m=>m.dispose());},
   };
 }

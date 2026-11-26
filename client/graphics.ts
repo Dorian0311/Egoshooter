@@ -1,7 +1,7 @@
 import * as T from 'three';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
-import { SSAOPass } from 'three/examples/jsm/postprocessing/SSAOPass.js';
+import { WorldOcclusionPass } from './worldOcclusionPass';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js';
 import {ShaderPass} from 'three/examples/jsm/postprocessing/ShaderPass.js';
@@ -35,7 +35,7 @@ export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
   const viewmodel=createWeaponScene(scene,camera,weaponCamera);
   const weaponPass=new WeaponPass(viewmodel.scene,weaponCamera);
   weaponPass.clear=false;weaponPass.clearDepth=true;
-  const ao = new SSAOPass(scene, camera, 1, 1, 24);
+  const ao = new WorldOcclusionPass(scene, camera, 1, 1, 24);
   ao.kernelRadius = .65;
   ao.minDistance = .001;
   ao.maxDistance = .025;

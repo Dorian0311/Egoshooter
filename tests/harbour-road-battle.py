@@ -157,8 +157,10 @@ def read_profile(page, name):
 with sync_playwright() as pw:
     browser = pw.chromium.launch(channel='chrome', headless=os.environ.get('HARBOUR_HEADED')!='1', args=['--enable-webgl','--ignore-gpu-blocklist'])
     width,height = map(int,os.environ.get('HARBOUR_VIEWPORT','1280x720').split('x'))
+    quality=os.environ.get('BATTLE_GRAPHICS','performance')
+    assert quality in ('auto','performance','high','ultra'),quality
     page = browser.new_page(viewport=dict(width=width,height=height), device_scale_factor=1)
-    page.add_init_script("localStorage.setItem('altstadt.graphics.v3','performance')")
+    page.add_init_script(f"localStorage.setItem('altstadt.graphics.v3',{json.dumps(quality)})")
     page.add_init_script("""if(PerformanceObserver.supportedEntryTypes.includes('long-animation-frame')){
         window.harbourLongFrames=[];
         new PerformanceObserver(list=>{for(const f of list.getEntries()){
@@ -339,9 +341,10 @@ with sync_playwright() as pw:
                 profile_start=profile['startTime']/1000-navigation*1000
             (OUT/f'{map_id}-profile-timing.json').write_text(json.dumps(dict(start=profile_start,tasks=turn['longTasks'])))
             profiler.detach()
-        result=dict(bots=bots,width=width,height=height,entry=entry,turn=turn)
+        result=dict(bots=bots,width=width,height=height,quality=quality,entry=entry,turn=turn)
         suffix='-combat' if COMBAT_MOVEMENT else ''
-        report=OUT/f'{map_id}-{bots}-bots-{width}x{height}{suffix}.json'
+        quality_suffix='' if quality=='performance' else '-'+quality
+        report=OUT/f'{map_id}-{bots}-bots-{width}x{height}{suffix}{quality_suffix}.json'
         report.write_text(json.dumps(result,indent=2))
         try:
             warm=measure(page,map_id+' repeat')

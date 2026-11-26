@@ -5,7 +5,7 @@ import {createHash} from 'node:crypto';
 import * as T from 'three';
 import {decodeBodyDistance,matchingBodyDistance} from '../client/bodyDistance';
 import {createHuman} from '../client/humanoid';
-import {createActorDetails,withBodyDistanceUpload} from '../client/actorDetails';
+import {actorLodHeight,createActorDetails,withBodyDistanceUpload} from '../client/actorDetails';
 import {createAnatomy} from '../client/anatomy';
 
 test('standard distance body uses original skinned vertices and retreats on injury, approach and scope zoom',async()=>{
@@ -44,6 +44,14 @@ test('standard distance body uses original skinned vertices and retreats on inju
    assert.ok(full.visible&&far.visible);throw Error('simulated draw failure');
   }),/simulated draw failure/);
   assert.equal(full.visible,!expectedFar);assert.equal(far.visible,expectedFar);
+ }
+ // CSS size stays fixed; use actual render-target heights at this distance.
+ for(const [quality,height,expectedFar] of [
+  ['auto',720,true],['high',1440,false],['performance',900,true],['ultra',2160,false],
+  ['auto',2160,true],['ultra',0,true],
+ ] as const){
+  details.update(19.5,actorLodHeight(quality,1080,height),80);
+  assert.equal(far.visible,expectedFar,quality+' at '+height);
  }
  check(8,80,false);checkUploadRestores(false);
  check(60,80,true);checkUploadRestores(true);

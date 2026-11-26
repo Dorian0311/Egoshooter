@@ -1,5 +1,12 @@
 import * as T from 'three';
+import type {GraphicsQuality} from './graphicsSettings';
 import {createDistanceBody} from './bodyDistance';
+
+/** Fixed-quality presets resolve details in drawing-buffer pixels; adaptive
+ * presets keep their existing screen-space triangle budget while scaling. */
+export function actorLodHeight(quality:GraphicsQuality,viewportHeight:number,bufferHeight:number){
+ return (quality==='high'||quality==='ultra')&&bufferHeight>0?bufferHeight:viewportHeight;
+}
 
 type DistanceBody=NonNullable<ReturnType<typeof createDistanceBody>>;
 const distanceBodies=new WeakMap<T.Group,DistanceBody[]>();

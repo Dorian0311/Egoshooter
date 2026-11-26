@@ -107,6 +107,7 @@ function show() {
   if(mapId==='storm'&&params.get('focus')==='water')Object.assign(player,{x:8,z:117,y:ground(8,117,routeWorld),yaw:Math.PI-.48,pitch:-.05});
   if(mapId==='cologne'&&params.get('focus')==='station-front')Object.assign(player,{x:50,z:-11,y:0,yaw:.10,pitch:.19});
   if(mapId==='cologne'&&params.get('focus')==='cathedral')Object.assign(player,{x:-62,z:-7,y:0,yaw:.40,pitch:.53});
+  if(mapId==='cologne'&&params.get('focus')==='roofscape')Object.assign(player,{x:-66,z:-61,y:0,yaw:1.45,pitch:.22});
   if(mapId==='cologne'&&params.get('focus')==='bridge')Object.assign(player,{x:-25,z:1.7,y:0,yaw:-Math.PI/2,pitch:.19});
   if(mapId==='cologne'&&params.get('focus')==='rhine-quay')Object.assign(player,{x:-31.3,z:-45,y:0,yaw:-1.93,pitch:-.075});
   if(mapId==='storm'&&params.get('focus')==='passage')Object.assign(player,{x:-21,y:0,z:72,yaw:.08,pitch:.03});

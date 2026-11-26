@@ -1,5 +1,6 @@
 import * as T from 'three';
 import type {MapId} from '../shared/world';
+import type {GraphicsQuality} from './graphicsSettings';
 import {addRhineQuays} from './rhineQuays';
 
 type Point=[number,number,number];
@@ -8,6 +9,7 @@ type Point=[number,number,number];
 export function createPeriodQuarter(id:Extract<MapId,'cologne'|'frontline'>,loader=new T.TextureLoader()){
   const cologne=id==='cologne',position:number[]=[],uv:number[]=[],colors:number[]=[],indices:number[]=[];
   const windows:number[]=[];
+  const roofs:{tier:number;cx:number;cz:number;w:number;d:number;h:number;rise:number;sideways:boolean;factory:boolean;roof:number}[]=[];
   const night={value:0};
   let seed=cologne?1938:1944;
   const random=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};
@@ -52,7 +54,7 @@ export function createPeriodQuarter(id:Extract<MapId,'cologne'|'frontline'>,load
     }
     groundRect(x-r,x+r,z-r,z+r,height,tile);
   }
-  function house(cx:number,cz:number,width:number,depth:number,floors:number,sideways:boolean,factory:boolean){
+  function house(cx:number,cz:number,width:number,depth:number,floors:number,sideways:boolean,factory:boolean,tier:number){
     const w=width/2,d=depth/2,y=-.9,h=y+floors*(factory?3.8:3.05),rise=factory?1.7:2.1+random()*2.2;
     const facade=factory?4+Math.floor(random()*3):Math.floor(random()*4);
     const roof=factory?15:random()<.45?8:9,tone=.82+.18*random();
@@ -87,6 +89,7 @@ export function createPeriodQuarter(id:Extract<MapId,'cologne'|'frontline'>,load
       const top=pt((random()-.5)*w,h+rise*.66,-d*.27);
       chimney(top[0],top[2],top[1]-.28,top[1]+1.7,.40,10);
     }
+    if(tier<2)roofs.push({tier,cx,cz,w,d,h,rise,sideways,factory,roof});
   }
   const layers=cologne?[100,164,224]:[145,196,249];
   for(const [tier,distance] of layers.entries())for(const alongX of [false,true])for(const side of [-1,1]){
@@ -101,9 +104,63 @@ export function createPeriodQuarter(id:Extract<MapId,'cologne'|'frontline'>,load
       const x=alongX?span:shift,z=alongX?shift:span;
       if(cologne&&(Math.abs(x)-(alongX?width:depth)/2<32||Math.abs(x+88)<23&&Math.abs(z+45)<23))continue;
       const levels=(factory?2:2+tier%2)+Math.floor(random()*(factory?2:3));
-      house(x,z,width,depth,levels,!alongX,factory);
+      house(x,z,width,depth,levels,!alongX,factory,tier);
       if(factory&&random()<.085)chimney(x+depth*.35,z+width*.27,-1,19+random()*10,.95,10);
     }
+  }
+  // Keep the original facade layout and pack the three skyline levels consecutively into one draw.
+  const ranges:number[]=[];
+  for(let level=0;level<3;level++){
+    for(const r of roofs){
+      const {tier,cx,cz,w,d,h,rise,sideways,factory,roof}=r;
+      const key=Math.abs(Math.floor(cx*73+cz*127)),side=(sideways?cx:cz)>0?-1:1;
+      const roofLevel=tier===0&&key%4===0?0:tier===0||key%3===0?1:2;
+      const center=((key%7)-3)*w*.085;
+      function at(x:number,y:number,z:number):Point{
+        return sideways?[cx+side*z,y,cz-x]:[cx+x,y,cz+side*z];
+      }
+      function panel(points:Point[],tile:number,shade:number){
+        const order=side===1?points:points.length===3?[points[1],points[0],points[2]]:[points[1],points[0],points[3],points[2]];
+        face(order.map(p=>at(p[0]+center,p[1],p[2])),tile,shade);
+      }
+      if(level===roofLevel&&(factory?key%4!==0:key%7<3)){
+        const z=d*(factory?.39:.66),back=d*.12,base=h+rise*(1-z/d)-.06;
+        const half=factory?w*.46:1.08+(key%4)*.16,eave=base+(factory?1.24:1.72),peak=eave+(factory?.46:.77);
+        // Rows of glass roof monitors on the sheds; projecting gabled dormers on residential roofs.
+        const bays=factory?Math.max(2,Math.round(half)):1;
+        for(let j=0;j<bays;j++){
+          const l=-half+2*half*j/bays,m=l+2*half/bays;
+          panel([[l,base,z],[m,base,z],[m,eave,z],[l,eave,z]],factory?4:key%4,.88);
+        }
+        if(factory){
+          panel([[-half,eave,z],[half,eave,z],[half,peak,back],[-half,peak,back]],15,.96);
+          panel([[half,base,z],[half,base,back],[half,peak,back],[half,eave,z]],11,.75);
+          panel([[-half,base,back],[-half,base,z],[-half,eave,z],[-half,peak,back]],11,.79);
+        }else{
+          panel([[-half,eave,z],[half,eave,z],[0,peak,z]],11,.91);
+          for(const wing of [-1,1]){
+            const x=wing*half;
+            const flank:Point[]=[[x,base,z],[x,base,back],[x,eave,back],[x,eave,z]];
+            const slope:Point[]=[[x,eave,z],[x,eave,back],[0,peak,back],[0,peak,z]];
+            panel(wing===1?flank:[flank[1],flank[0],flank[3],flank[2]],11,.68);
+            panel(wing===1?slope:[slope[1],slope[0],slope[3],slope[2]],roof,wing===1?.98:.78);
+          }
+        }
+        // Lead apron and fascia retain a narrow, cool edge in front of the lighter glazing.
+        panel([[-half-.10,base+.03,z+.17],[half+.10,base+.03,z+.17],[half+.10,base+.19,z],[-half-.10,base+.19,z]],9,.74);
+      }
+      if(level===2&&key%3===1){
+        // Offset flues and their projecting capstones avoid a repeated picket-fence skyline.
+        const z=-.19*d,x=-w*.24,foot=h+rise*.79-.15,top=foot+1.43+(key%3)*.28,pos=at(x,foot,z);
+        chimney(pos[0],pos[2],foot,top,.43,10);
+        chimney(pos[0],pos[2],top,top+.15,.54,14);
+        for(const offset of [-.21,.21]){
+          const q=at(x+offset,top,z);
+          chimney(q[0],q[2],top+.15,top+.58+(offset>0?.14:0),.14,10);
+        }
+      }
+    }
+    ranges.push(indices.length);
   }
   const geometry=new T.BufferGeometry();
   geometry.setAttribute('position',new T.Float32BufferAttribute(position,3));
@@ -134,5 +191,12 @@ export function createPeriodQuarter(id:Extract<MapId,'cologne'|'frontline'>,load
   };
   const mesh=new T.Mesh(geometry,material);
   mesh.name='Outer quarter and embankments';mesh.matrixAutoUpdate=false;
-  return Object.assign(mesh,{setNight(enabled:boolean){night.value=Number(enabled);}});
+  geometry.setDrawRange(0,ranges[0]);
+  return Object.assign(mesh,{
+    setNight(enabled:boolean){night.value=Number(enabled);},
+    setQuality(quality:GraphicsQuality){
+      const count=ranges[quality==='ultra'?2:quality==='high'?1:0];
+      if(geometry.drawRange.count!==count)geometry.setDrawRange(0,count);
+    },
+  });
 }

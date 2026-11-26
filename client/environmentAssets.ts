@@ -130,6 +130,7 @@ export function loadEnvironmentUpgrade(scene:T.Scene,world:World,renderer:T.WebG
   ready:Promise.all(loading),
   setNight(enabled:boolean){setPeriodNight(architecture,enabled);quarter?.setNight(enabled);},
   update(position:T.Vector3,quality:GraphicsQuality){
+   quarter?.setQuality(quality);
    const limit=quality==='auto'||quality==='performance'?45:Infinity;
    for(const item of distantDetails){
     const bounds=item.boundingSphere;

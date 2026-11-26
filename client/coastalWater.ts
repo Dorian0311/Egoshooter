@@ -28,11 +28,13 @@ function createWaterGeometry(world:World){
 
 export function createCoastalWater(scene:T.Scene,world:World){
   const time={value:0},ripples=new T.TextureLoader().load('/shooter/environment/ocean-ripple.png');
+  const detail={value:0};
   ripples.wrapS=ripples.wrapT=T.RepeatWrapping;
   const material=new T.MeshPhysicalMaterial({roughness:.21,ior:1.333,metalness:0});
   material.onBeforeCompile=shader=>{
     shader.uniforms.oceanTime=time;
     shader.uniforms.oceanRipples={value:ripples};
+    shader.uniforms.oceanDetail=detail;
     shader.vertexShader=shader.vertexShader.replace('#include <common>',`#include <common>
       uniform float oceanTime;
       attribute float waterDepth;
@@ -48,6 +50,7 @@ export function createCoastalWater(scene:T.Scene,world:World){
     shader.fragmentShader=shader.fragmentShader.replace('#include <common>',`#include <common>
       uniform float oceanTime;
       uniform sampler2D oceanRipples;
+      uniform float oceanDetail;
       varying vec2 vOceanXZ;
       varying float vDepth;
     `).replace('#include <color_fragment>',`#include <color_fragment>
@@ -66,6 +69,16 @@ export function createCoastalWater(scene:T.Scene,world:World){
       float crest=(1.-smoothstep(.63,2.25,vDepth))*smoothstep(.83,.98,breaker);
       float spray=smoothstep(.22,.72,pattern);
       float foam=clamp(edge*(.09+.66*spray)+crest*(.15+.47*spray),0.,1.);
+      if(oceanDetail>.0){
+        // Sunlit ripple intersections on the submerged sand. Fade them before
+        // the water turns opaque and before the pattern aliases at a distance.
+        float bedDepth=smoothstep(.20,.64,vDepth)*(1.-smoothstep(1.35,3.2,vDepth));
+        float bedDistance=1.-smoothstep(32.,100.,length(vViewPosition));
+        vec2 refraction=(longRipples.rg-.5)*.16;
+        float focused=texture2D(oceanRipples,(vOceanXZ+refraction)*.31+vec2(.017,-.024)*oceanTime).b;
+        float patches=.32+.68*shortRipples.b;
+        water+=vec3(.080,.126,.092)*oceanDetail*bedDepth*bedDistance*patches*smoothstep(.45,.79,focused);
+      }
       diffuseColor.rgb=mix(water,vec3(.66,.75,.73),foam);
     `).replace('#include <roughnessmap_fragment>',`#include <roughnessmap_fragment>
       roughnessFactor+=.40*foam;
@@ -78,8 +91,12 @@ export function createCoastalWater(scene:T.Scene,world:World){
       normal=normalize(mat3(viewMatrix)*vec3(-slope.x,1.,-slope.y));
     `);
   };
-  material.customProgramCacheKey=()=>'island-coastal-water-v2';
+  material.customProgramCacheKey=()=>'island-coastal-water-v3';
   const water=new T.Mesh(createWaterGeometry(world),material);
   water.name='Island coastal water';water.position.y=seaLevel;scene.add(water);
-  return {update(seconds:number){time.value=seconds;},dispose(){ripples.dispose();}};
+  return {
+    update(seconds:number){time.value=seconds;},
+    setDetail(enabled:boolean){detail.value=Number(enabled);},
+    dispose(){ripples.dispose();},
+  };
 }

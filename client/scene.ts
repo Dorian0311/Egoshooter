@@ -19,7 +19,7 @@ import {createWanderers} from './wanderers';
 import {createMapDetails,detailedPropKinds} from './mapDetails';
 import {CameraMotion} from './cameraMotion';
 import {actorBehindWall} from './actorOcclusion';
-import {createActorDetails} from './actorDetails';
+import {actorLodHeight,createActorDetails} from './actorDetails';
 import {RemoteMotion} from './remoteMotion';
 import {terrainHeight} from '../shared/terrain';
 import {createContactShadows} from './contactShadows';
@@ -296,6 +296,7 @@ export function createScene(
   const disposeMilitaryRoofs=mapId==='storm'?addMilitaryRoofs(scene,buildings,mat):undefined;
   const environmentUpgrade=loadEnvironmentUpgrade(scene,world,renderer);
   const mapDetails=createMapDetails(scene,world,mat,camera);
+  mapDetails.setWaterDetail(quality==='high'||quality==='ultra');
   const harbourStreet=island?scene.getObjectByName('Harbour Road'):undefined;
   const disposeShopLights=harbourStreet?bakeShopLights(harbourStreet):undefined;
   const claims=island?createHarbourClaims(scene):undefined;
@@ -563,6 +564,7 @@ export function createScene(
       condition=s.operation.condition;
       mapDetails.setDampness(condition==='fog');
       const night=condition==='night',fog=condition==='fog';
+      mapDetails.setWaterSunlight(!night&&!fog);
       environmentUpgrade.setNight(night);
       const weatherFog=night?new T.Fog(weatherHorizon.night,20,100):fog?new T.Fog(weatherHorizon.fog,4,42):null;
       scene.fog=weatherFog??daylightFog;
@@ -839,6 +841,7 @@ export function createScene(
       }
     }
     contactShadows.begin();
+    const detailHeight=actorLodHeight(quality,viewport.height,graphics.frameState.pixelRatio?renderer.domElement.height:0);
     let detailDrawsSkipped=0;
     for (const g of avatars.values()) {
       const p = g.userData.target as Player;
@@ -854,7 +857,7 @@ export function createScene(
       const compact=quality==='auto'||quality==='performance';
       const drawActor=inView&&(!compact||!p.hp||!actorBehindWall(camera.position,g.position,opaqueWalls));
       if(g.userData.human)g.userData.human.group.visible=drawActor;
-      if(drawActor)detailDrawsSkipped+=g.userData.details?.update(actorDistance,viewport.height,camera.fov)??0;
+      if(drawActor)detailDrawsSkipped+=g.userData.details?.update(actorDistance,detailHeight,camera.fov)??0;
       if(drawActor&&p.hp>0&&p.grounded)contactShadows.actor(remote.x,remote.y,remote.z,p.crouching||isCrawling(p),remote.yaw);
       if(!p.hp&&!p.downedUntil&&p.diedAt){
         const pose=headshotPose(Math.max(0,((snapshot?.now??0)+t-receivedAt-p.diedAt)/1000),!!g.userData.deathSlowMotion);
@@ -1012,7 +1015,7 @@ export function createScene(
   let receivedAt = performance.now();
   raf = requestAnimationFrame(frame);
   return {
-    setQuality(value:GraphicsQuality){quality=value;sceneAssets.setQuality(value);graphics.setQuality(value);},
+    setQuality(value:GraphicsQuality){quality=value;mapDetails.setWaterDetail(value==='high'||value==='ultra');sceneAssets.setQuality(value);graphics.setQuality(value);},
     setSettings(value:GameSettings){settings=value;if(!value.volume)residentVoice.stop();if(audioOutput)audioOutput.gain.value=value.volume===0?0:1;release();},
     setEnabled(value:boolean){enabled=value;if(!value){residentVoice.stop();release();dragLook=false;if(document.pointerLockElement===canvas)document.exitPointerLock();}},
     startAudio,
