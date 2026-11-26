@@ -1,7 +1,7 @@
 import * as T from 'three';
 import {RoundedBoxGeometry} from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import type {Box,World} from '../shared/world';
-import {batchStaticMeshes} from './scenery';
+import {batchStaticMeshes,shareStaticTintMaterials} from './scenery';
 import {createIslandQuay} from './islandQuay';
 import {coastalRadar} from './coastalRadar';
 import {harbourEntrance} from './harbourEntrance';
@@ -398,6 +398,7 @@ export function createMapDetails(scene:T.Scene,world:World,get:(color:string)=>T
   const tintable=new Set([...colors.values()].filter(m=>m.onBeforeCompile===T.Material.prototype.onBeforeCompile&&
     !Object.values(m).some(value=>value instanceof T.Texture)));
   batchStaticMeshes(root,new Set(),64,tintable);
+  if(island)shareStaticTintMaterials(root);
   const wetGround=roadSurface?dampSurface(roadSurface):war&&terrain?dampSurface(terrain.mesh.material,.67):
     world.id==='cologne'?dampSurface(get('#77766b'),.78):undefined;
   let waterDetail=false,waterSunlight=true;

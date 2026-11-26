@@ -455,16 +455,38 @@ export function addIslandStreet(scene:T.Group){
     }
     cuboid(s.x,s.h-.08,edge,s.w+.22,.15,.34,trim);
     const canvas=paint(awnings[index]),y=s.h*.70;
-    cuboid(s.x,y,edge+s.front*.54,s.w-.32,.10,1.27,canvas).rotation.x=s.front*.13;
-    cuboid(s.x,y-.13,edge+s.front*1.15,s.w-.32,.19,.06,canvas);
-    // Alternate woven strips and a separate rail give the valance a legible silhouette from across the road.
-    const stripeCount=Math.floor(s.w/.9),stripeWidth=(s.w-.32)/stripeCount;
-    for(let n=0;n<stripeCount;n+=2){
-      const x=s.x-(s.w-.32)/2+(n+.5)*stripeWidth;
-      cuboid(x,y+.055,edge+s.front*.54,stripeWidth,.012,1.27,cream).rotation.x=s.front*.13;
-      cuboid(x,y-.13,edge+s.front*1.186,stripeWidth,.19,.014,cream);
+    // Cut the canopy in cloth panels. Each bows between its stitched edges, runs
+    // over the front roller and ends in a scallop that is visible from both sides.
+    const stripeCount=Math.floor(s.w/.83),stripeWidth=(s.w-.32)/stripeCount;
+    for(let n=0;n<stripeCount;n++){
+      const positions:number[]=[],indices:number[]=[],coords:number[]=[];
+      for(let i=0;i<=4;i++){
+        const t=i/4,curve=Math.sin(t*Math.PI),x=(t-.5)*stripeWidth;
+        const bow=.043*curve,hem=-.25-.115*curve;
+        for(const [level,depth] of [[.105,-.03],[-.038-bow,.63],[-.095,1.14],
+          [-.126,1.20],[hem,1.18],[hem,1.18],[-.116,1.157],[-.095,.63],[.086,-.03]]){
+          positions.push(x,level,s.front*depth);coords.push(t,depth);
+        }
+        if(i===4)continue;
+        for(let joint=0;joint<8;joint++){
+          if(joint===4)continue; // The front and back meet along the cut fabric edge.
+          const step=joint===3||joint===5?1:joint===2||joint>5?4:2;
+          if(i%step)continue;
+          const a=i*9+joint,b=a+step*9;
+          if(s.front===1)indices.push(a,a+1,b,b,a+1,b+1);
+          else indices.push(a,b,a+1,b,b+1,a+1);
+        }
+      }
+      const fabric=new T.BufferGeometry();fabric.setIndex(indices);
+      fabric.setAttribute('position',new T.Float32BufferAttribute(positions,3));fabric.setAttribute('uv',new T.Float32BufferAttribute(coords,2));
+      fabric.computeVertexNormals();
+      solid(fabric,s.x-(s.w-.32)/2+(n+.5)*stripeWidth,y,edge,n%2?canvas:cream);
     }
-    for(const dx of [-.41,0,.41])cuboid(s.x+dx*s.w,y-.22,edge+s.front*.46,.055,.055,1.15,iron).rotation.x=-s.front*.35;
+    cuboid(s.x,y-.12,edge+s.front*1.109,s.w-.30,.058,.076,iron);
+    for(const dx of [-.41,0,.41]){
+      cuboid(s.x+dx*s.w,y-.28,edge+s.front*.54,.055,.061,1.21,iron).rotation.x=-s.front*.25;
+      cuboid(s.x+dx*s.w,y-.43,edge+s.front*.06,.13,.22,.08,wood);
+    }
     for(const direction of [-1,1]){
       const windowX=s.x+direction*s.w*.285;
       cuboid(windowX,s.h*.192,edge+s.front*.11,s.w*.386,.10,.23,concrete);

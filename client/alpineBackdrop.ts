@@ -1,8 +1,9 @@
 import * as T from 'three';
+import type {Building} from '../shared/world';
 
 const tau=Math.PI*2;
 
-export function createAlpineFlurries(scene:T.Scene){
+export function createAlpineFlurries(scene:T.Scene,buildings:readonly Building[]){
   const positions=new Float32Array(320*3);
   let seed=34851;
   for(let i=0;i<positions.length;i++){
@@ -13,23 +14,34 @@ export function createAlpineFlurries(scene:T.Scene){
   geometry.setAttribute('position',new T.BufferAttribute(positions,3));
   const uniforms={
     eye:{value:new T.Vector3()},seconds:{value:0},opacity:{value:0},
-    tint:{value:new T.Color('#eceff3')},pixelRatio:{value:1}
+    tint:{value:new T.Color('#eceff3')},pixelRatio:{value:1},
+    shelters:{value:buildings.map(b=>new T.Vector4(b.x,b.z,b.w/2,b.d/2))},
+    shelterTops:{value:buildings.map(b=>b.upper?8.3:4.3)}
   };
   const material=new T.ShaderMaterial({
     uniforms,transparent:true,depthWrite:false,
     vertexShader:`
       uniform vec3 eye;
       uniform float seconds, pixelRatio;
+      uniform vec4 shelters[${buildings.length}];
+      uniform float shelterTops[${buildings.length}];
       varying float vFade;
       void main(){
         vec3 span=vec3(38.0,12.0,38.0);
         vec3 drift=vec3(seconds*.72,-seconds*(.50+position.y*.52),seconds*.26);
         drift.x+=sin(seconds*1.26+position.z*24.0)*.31;
         vec3 offset=mod(position*span+drift-eye+span*.5,span)-span*.5;
-        vec4 point=viewMatrix*vec4(eye+offset,1.0);
+        vec3 world=eye+offset;
+        vec4 point=viewMatrix*vec4(world,1.0);
         float distanceToEye=length(offset);
         vFade=smoothstep(1.2,3.8,distanceToEye)*(1.0-smoothstep(10.0,18.0,distanceToEye));
         vFade*=1.0-smoothstep(4.6,6.0,abs(offset.y));
+        // Shelter the ground and upper floors without hiding the snow seen through a window.
+        for(int i=0;i<${buildings.length};i++){
+          vec2 inset=shelters[i].zw-abs(world.xz-shelters[i].xy);
+          float edge=min(min(inset.x,inset.y),shelterTops[i]-world.y);
+          vFade*=1.0-smoothstep(-.15,.13,edge);
+        }
         gl_PointSize=clamp(13.0/max(1.0,-point.z),1.15,3.1)*pixelRatio;
         gl_Position=projectionMatrix*point;
       }`,
@@ -49,8 +61,8 @@ export function createAlpineFlurries(scene:T.Scene){
   snow.name='Windblown Alpine flurries';snow.frustumCulled=false;snow.visible=false;
   scene.add(snow);
   return {
-    update(eye:T.Vector3,time:number,dt:number,covered:boolean,condition:string|undefined,pixelRatio:number){
-      const target=covered?0:condition==='fog'?.58:condition==='night'?.31:.39;
+    update(eye:T.Vector3,time:number,dt:number,condition:string|undefined,pixelRatio:number){
+      const target=condition==='fog'?.58:condition==='night'?.31:.39;
       uniforms.opacity.value+=(target-uniforms.opacity.value)*Math.min(1,dt*6);
       snow.visible=uniforms.opacity.value>.008;
       uniforms.eye.value.copy(eye);

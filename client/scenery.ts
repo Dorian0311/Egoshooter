@@ -3,6 +3,29 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import type { Building } from '../shared/world.ts';
 import {freezeStaticTransforms} from './staticTransforms';
 
+const bakedTintMaterials = new WeakSet<T.Material>();
+
+/** Baked vertex colours carry the paint; equal static surface materials can share renderer state across cells. */
+export function shareStaticTintMaterials(root: T.Object3D) {
+  const palette = new Map<string, T.MeshStandardMaterial>();
+  root.traverse(object => {
+    if (!(object instanceof T.Mesh)) return;
+    const material = object.material;
+    if (!(material instanceof T.MeshStandardMaterial) || !bakedTintMaterials.has(material)) return;
+    if (Object.values(material).some(value => value instanceof T.Texture) ||
+        material.clippingPlanes || material.onBeforeCompile !== T.Material.prototype.onBeforeCompile) return;
+    const {uuid, metadata, name, ...appearance} = material.toJSON();
+    const key = JSON.stringify([appearance, material.shadowSide, material.precision, material.emissive.toArray()]);
+    const shared = palette.get(key);
+    if (shared && shared !== material) {
+      object.material = shared;
+      material.dispose();
+    } else {
+      palette.set(key, material);
+    }
+  });
+}
+
 export function instanceStaticModel(scene: T.Scene|T.Group, source: T.Object3D, placements: T.Matrix4[],castShadow=true,cellSize=Infinity,includePart?:(part:T.Mesh)=>boolean) {
   const cells=new Map<string,T.Matrix4[]>();
   for(const placement of placements){
@@ -59,7 +82,7 @@ export function batchStaticMeshes(scene: T.Scene | T.Group, excluded: Set<T.Obje
     geometries.forEach(g => g.dispose());
     if (!geometry) continue;
     const material=tinted?(meshes[0].material as T.MeshStandardMaterial).clone():meshes[0].material;
-    if(tinted&&material instanceof T.MeshStandardMaterial){material.color.setRGB(1,1,1);material.vertexColors=true;}
+    if(tinted&&material instanceof T.MeshStandardMaterial){material.color.setRGB(1,1,1);material.vertexColors=true;bakedTintMaterials.add(material);}
     const batch = new T.Mesh(geometry, material);
     batch.castShadow = meshes[0].castShadow;
     batch.receiveShadow = meshes[0].receiveShadow;

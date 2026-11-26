@@ -7,7 +7,31 @@ import * as T from 'three';
 import {createMuzzleEffects} from '../client/muzzleEffects';
 import {createBlastEffects} from '../client/blastEffects';
 import {dampSurface} from '../client/dampSurface';
-import { addFacadeDetails, addAlpineBackdrop, createRiver, batchStaticMeshes, instanceStaticModel } from '../client/scenery.ts';
+import { addFacadeDetails, addAlpineBackdrop, createRiver, batchStaticMeshes, instanceStaticModel, shareStaticTintMaterials } from '../client/scenery.ts';
+
+test('static paint batches share identical shading without merging spatial cells or changing other materials', () => {
+  const root = new T.Group();
+  const paint = new T.MeshStandardMaterial({color: '#ab4513', roughness: .8});
+  const blue = new T.MeshStandardMaterial({color: '#185c91', roughness: .8});
+  const polished = new T.MeshStandardMaterial({roughness: .4});
+  for (const [index, material] of [paint, blue, polished].entries()) {
+    for (const dx of [0, 1]) {
+      const mesh = new T.Mesh(new T.BoxGeometry(), material);
+      mesh.position.x = index * 64 + dx; root.add(mesh);
+    }
+  }
+  batchStaticMeshes(root, new Set(), 64, new Set([paint, blue, polished]));
+  const [a, b, c] = root.children as T.Mesh<T.BufferGeometry, T.MeshStandardMaterial>[];
+  const untouched = new T.Mesh(new T.BoxGeometry(), a.material.clone());
+  root.add(untouched);
+  assert.notEqual(a.material, b.material);
+  shareStaticTintMaterials(root);
+  assert.equal(root.children.length, 4);
+  assert.equal(a.material, b.material);
+  assert.notEqual(a.material, c.material);
+  assert.notEqual(a.material, untouched.material);
+  assert.notDeepEqual(a.geometry.getAttribute('color').array, b.geometry.getAttribute('color').array);
+});
 import { getWorld } from '../shared/world.ts';
 
 test('graphics preferences tolerate old or corrupt storage values', () => {
