@@ -2,6 +2,7 @@ import * as T from 'three';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import {WorldRenderPass} from './worldRenderPass';
+import {createStaticRoomCulling} from './staticRoomCulling';
 import {installPointLightCutoff} from './pointLightCutoff';
 import {installDirectionalShadowCutoff} from './directionalShadowCutoff';
 import { WorldOcclusionPass } from './worldOcclusionPass';
@@ -37,6 +38,8 @@ export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
   // RenderPass updates shadows once; the following SSAO normal pass reuses them.
   renderer.shadowMap.autoUpdate = false;
   const render = new WorldRenderPass(scene, camera);
+  const rooms = createStaticRoomCulling(scene);
+  render.afterWorld = rooms.afterWorld;
   const weaponCamera=new T.PerspectiveCamera(62,1,.025,8);
   weaponCamera.layers.set(1);
   const viewmodel=createWeaponScene(scene,camera,weaponCamera);
@@ -277,8 +280,8 @@ export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
       if(weaponCamera.aspect!==camera.aspect||weaponCamera.fov!==fov){
         weaponCamera.aspect=camera.aspect;weaponCamera.fov=fov;weaponCamera.updateProjectionMatrix();
       }
+      if(weaponVisible||ao.enabled)camera.updateWorldMatrix(true,false);
       if(weaponVisible){
-        camera.updateWorldMatrix(true,false);
         camera.matrixWorld.decompose(weaponCamera.position,weaponCamera.quaternion,weaponCamera.scale);
         weaponCamera.updateMatrixWorld();
         viewmodel.sync();
@@ -306,7 +309,11 @@ export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
       }
       const sky=scene.background;
       if(skyOccluded)scene.background=null;
-      try{composer.render(dt);}finally{
+      try{
+        if(ao.enabled&&!renderer.xr.isPresenting)rooms.begin(camera,updateShadow?clippedShadow:undefined);
+        composer.render(dt);
+      }finally{
+        rooms.restore();
         if(skyOccluded)scene.background=sky;
         if(restrictedTarget){restrictedTarget.scissor.copy(savedShadowScissor);restrictedTarget.scissorTest=false;}
         clippedShadow=undefined;gpuTiming.end();

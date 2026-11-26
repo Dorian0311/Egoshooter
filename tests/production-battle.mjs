@@ -78,7 +78,7 @@ try {
           source.replace(marker,'$&\nwindow.battleDrawProbe=attachBattleDrawProbe(renderer);');
       }
       if(!path.endsWith('/client/App.tsx')) return;
-      const anchor = 'scene.current?.update(s, access.playerId);';
+      const anchor = "scene.current?.update(s, access.playerId, 'network');";
       assert.equal(source.split(anchor).length, 2, 'App snapshot hook changed');
       patched = true;
       return "import {interiorWorld as battleInteriorWorld} from '../shared/interiors';\n"+

@@ -25,7 +25,7 @@ assert not GPU_PROFILE or PRODUCTION, 'BATTLE_GPU_PROFILE requires the separate 
 def observe(route):
     # Add read-only probes to the local Vite response, leaving gameplay and frame scheduling intact.
     response = route.fetch()
-    source, count = re.subn(r'(scene\.current\?\.update\(s, (\w+)\.playerId\);)',
+    source, count = re.subn(r"(scene\.current\?\.update\(s, (\w+)\.playerId, 'network'\);)",
         r'\1 window.observeHarbourBattle(own,s,scene.current);', response.text())
     assert count == 1, 'Snapshot observation point changed'
     route.fulfill(response=response, body=source)

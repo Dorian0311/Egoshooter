@@ -2,6 +2,7 @@ import {Texture} from 'three';
 import {RenderPass} from 'three/examples/jsm/postprocessing/RenderPass.js';
 
 export class WorldRenderPass extends RenderPass {
+  afterWorld?: () => void;
   override render(...args: Parameters<RenderPass['render']>) {
     const [renderer] = args;
     const clearColor = renderer.autoClearColor;
@@ -11,6 +12,7 @@ export class WorldRenderPass extends RenderPass {
     }
     try {
       super.render(...args);
+      this.afterWorld?.();
     } finally {
       renderer.autoClearColor = clearColor;
     }

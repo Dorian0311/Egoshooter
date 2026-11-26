@@ -550,12 +550,16 @@ export function createScene(
     if(!p||weapon===undefined)return;
     battleAudio.shot(weapon,audioPoint(p),settings.volume,audioMuffled(p)||(island&&weapon===2),weapons[weapon]?.name,insideBuilding(world,p.x,p.z)>=0);
   }
-  function update(s: Snapshot, id: string) {
+  function update(s: Snapshot, id: string, immutableLayout: boolean) {
     const oldPhase = snapshot?.phase;
     const previousCar=controlledCar()?.id;
+    const previousInteriors=snapshot?.interiors;
+    const layoutChanged=!immutableLayout||!snapshot||previousInteriors!==s.interiors;
     if(oldPhase&&oldPhase!==s.phase){battleAudio.clear();stepPositions.clear();}
-    if(snapshot?.interiors&&s.interiors&&local){for(const f of interiorFixtures(world)){if(f.type==='door'&&snapshot.interiors.doors[f.id]!==s.interiors.doors[f.id]&&Math.hypot(f.box.x-local.x,f.box.z-local.z)<12){roomSound(new T.Vector3(f.box.x,f.box.y,f.box.z));break;}}}
-    snapshot = s;interiors.sync(s.interiors);operationScene.sync(s);remainsScene.sync(s);
+    if(layoutChanged&&previousInteriors&&s.interiors&&local){for(const f of interiorFixtures(world)){if(f.type==='door'&&previousInteriors.doors[f.id]!==s.interiors.doors[f.id]&&Math.hypot(f.box.x-local.x,f.box.z-local.z)<12){roomSound(new T.Vector3(f.box.x,f.box.y,f.box.z));break;}}}
+    snapshot = s;
+    if(layoutChanged)interiors.sync(s.interiors);
+    operationScene.sync(s);remainsScene.sync(s);
     if(condition!==s.operation.condition){
       condition=s.operation.condition;
       mapDetails.setDampness(condition==='fog');
@@ -571,7 +575,7 @@ export function createScene(
       if(fog){skyLight.color.set('#e0e5e4');skyLight.groundColor.set('#a6a49a');sun.color.set('#efe4c9');}
       sun.intensity=night?.29:fog?daylightStrength*.27:daylightStrength;
     }
-    collisionWorld=interiorWorld(world,s.interiors);
+    if(layoutChanged)collisionWorld=interiorWorld(world,s.interiors);
     myId = id;
     const own = s.players.find((p) => p.id === id);
     const movingActors=[...s.players,...s.npcs];
@@ -1034,9 +1038,10 @@ export function createScene(
     audioStream:()=>audioCapture?.stream,
     resetReplay(){seenEvents.clear();pending.length=0;gore.dispose();hitEffects.clear();battleAudio.clear();residentVoice.reset();stepPositions.clear();for(const g of avatars.values())delete g.userData.motion;},
     getRenderStats:()=>{const frames=[...frameTimes].sort((a,b)=>a-b),cpu=[...cpuTimes].sort((a,b)=>a-b);return {calls:renderer.info.render.calls,triangles:renderer.info.render.triangles,frameP95:frames[Math.floor(frames.length*.95)]??0,frameMax:frames.at(-1)??0,cpuP95:cpu[Math.floor(cpu.length*.95)]??0,...hitEffects.stats(),...remainsScene.stats(),...worldWeaponStats(),...graphics.stats()};},
-    update(s: Snapshot, id: string) {
+    update(s: Snapshot, id: string, source: 'local'|'network' = 'local') {
       receivedAt = performance.now();
-      update(s, id);
+      // Preview callers may mutate their layout object. Wire snapshots replace it.
+      update(s, id, source==='network');
     },
     dispose() {
       stopped = true;

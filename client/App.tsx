@@ -243,7 +243,7 @@ export default function App({
         }
         last.current = s;
         setSnapshot(s);
-        scene.current?.update(s, access.playerId);
+        scene.current?.update(s, access.playerId, 'network');
       });
       setStartIntent(null);setChoosingWeapons(false);
       r.send("sync");

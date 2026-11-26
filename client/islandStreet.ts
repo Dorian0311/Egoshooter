@@ -144,8 +144,8 @@ export function addIslandStreet(scene:T.Group){
         const wall=cuboid(x,y,z,w,h,d,facade),uv=wall.geometry.getAttribute('uv');
         for(let face=0;face<6;face++)for(let n=0;n<4;n++){
           const i=face*4+n,lettering=role==='sign'&&face===(s.front===1?4:5);
-          if(s.id==='diner'&&role==='side'&&x>s.x&&face===0){
-            // The east wall faces the open stretch of street toward the quay.
+          if(s.id==='diner'&&role==='side'&&x<s.x&&face===1){
+            // The west wall carries the full mural. The harbour side has the service hatch.
             uv.setXY(i,(5+670*uv.getX(i))/1024,1-(2428-376*uv.getY(i))/2432);
           }else{
             uv.setXY(i,.001+.998*uv.getX(i),facadeV(lettering?(3-index+.70+.298*uv.getY(i))/4:(.003+.99*uv.getY(i))/4));
@@ -364,6 +364,21 @@ export function addIslandStreet(scene:T.Group){
     cuboid(s.x,s.h-.13,edge+s.front*.085,s.w+.16,.15,.24,iron);
     cuboid(s.x,s.h-.21,edge+s.front*.085,s.w+.13,.055,.17,concrete);
     if(index===0){
+      // The kitchen's closed serving hatch opens visually onto the harbour alley.
+      // Its hood and ledger sit tight to the solid east wall, away from the front door.
+      const galleyX=s.x+s.w/2,galleyZ=s.z+.62;
+      const hatch=new T.PlaneGeometry(2.15,1.67),hatchUV=hatch.getAttribute('uv');
+      for(let i=0;i<hatchUV.count;i++)
+        hatchUV.setXY(i,(686+330*hatchUV.getX(i))/1024,1-(2338-283*hatchUV.getY(i))/2432);
+      const galley=solid(hatch,galleyX+.024,1.84,galleyZ,facade);
+      galley.rotation.y=Math.PI/2;galley.castShadow=true;
+      for(const side of [-1,1]){
+        cuboid(galleyX+.046,1.84,galleyZ+side*1.095,.115,1.75,.070,wood);
+        cuboid(galleyX+.103,2.55,galleyZ+side*.93,.14,.050,.039,iron).rotation.z=.46;
+      }
+      cuboid(galleyX+.12,1.36,galleyZ,.25,.057,2.20,cream);
+      cuboid(galleyX+.096,2.73,galleyZ,.25,.062,2.32,accent).rotation.z=-.12;
+      cuboid(galleyX+.211,2.69,galleyZ,.033,.077,2.32,cream);
       const blade=loader.load(base+'diner-sign.webp');blade.colorSpace=T.SRGBColorSpace;
       const face=new T.MeshStandardMaterial({map:blade,roughness:.65});
       const poleX=s.x-s.w*.43;

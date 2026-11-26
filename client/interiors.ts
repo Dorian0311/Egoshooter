@@ -4,6 +4,7 @@ import {eyePosition} from '../shared/injuries';
 import {batchStaticMeshes} from './scenery';
 import {createInteriorLighting,type InteriorLamp} from './interiorLighting';
 import {freezeStaticTransforms} from './staticTransforms';
+import {registerFixedRoom} from './staticRoomCulling';
 import * as T from 'three';
 import {doorBox,furnitureFor,initialInteriors,insideBuilding,interiorFixtures,roomThemes,type InteriorState} from '../shared/interiors';
 import type {World,Box} from '../shared/world';
@@ -97,6 +98,7 @@ export function createInteriors(scene:T.Scene,world:World){
    if(child instanceof T.Mesh&&child.material instanceof T.MeshStandardMaterial&&child.material.vertexColors)materials.push(child.material);
   }
   freezeStaticTransforms(room);
+  registerFixedRoom(scene,room);
  }
  batchStaticMeshes(root,new Set<T.Object3D>(doors.values()));
  const lighting=createInteriorLighting(root,lamps),origin={x:0,y:0,z:0};

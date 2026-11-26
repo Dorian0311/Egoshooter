@@ -59,6 +59,13 @@ export function createActorEquipment(root:T.Group,chains:Partial<Record<'armL'|'
   const x=digit===1||digit===2&&joint===1?.15:joint===1?.55:1.15;
   return {bone,x,z:digit===1?(bone.name.endsWith('.L')?.5:-.5):0};
  });
+ // Imported rigs can contain duplicate joint names. Use the same tie-break
+ // as findRigObject, once for the resident's fixed finger hierarchy.
+ const gestureFingers=new Map<string,T.Object3D>();
+ if(civilian)for(const bone of fingers){
+  const previous=gestureFingers.get(bone.name);
+  if(!previous||bone.children.length>previous.children.length)gestureFingers.set(bone.name,bone);
+ }
  for(const arm of Object.values(arms))if(arm){
   arm.hand.traverse(o=>{if(/Mid_1$|middle|finger3-1|Finger2(?![\w])/i.test(o.name)&&(!arm.finger||o.children.length>arm.finger.children.length))arm.finger=o;});
   arm.gripFinger=arm.hand.children.find(o=>o.name.startsWith('finger3-1'))??arm.finger??arm.hand.children.find(o=>o instanceof T.Bone);
@@ -98,7 +105,7 @@ export function createActorEquipment(root:T.Group,chains:Partial<Record<'armL'|'
   }
  }
  function gestureHand(arm:SavedArm,side:'armL'|'armR'){
-  const suffix=side==='armL'?'.L':'.R',middle=findRigObject(root,'finger3-1'+suffix),middleNext=findRigObject(root,'finger3-2'+suffix),index=findRigObject(root,'finger2-1'+suffix),pinky=findRigObject(root,'finger5-1'+suffix);
+  const suffix=side==='armL'?'.L':'.R',middle=gestureFingers.get('finger3-1'+suffix),middleNext=gestureFingers.get('finger3-2'+suffix),index=gestureFingers.get('finger2-1'+suffix),pinky=gestureFingers.get('finger5-1'+suffix);
   for(const finger of fingers)if(finger.name.endsWith(suffix)){const digit=Number(finger.name[6]),joint=Number(finger.name[8]);finger.rotation.set(digit===3?0:digit===1?joint===1?.7:1.0:joint===1?1.15:joint===2?1.35:.85,0,digit===1?(side==='armL'?.45:-.45):0);}
   if(!middle||!middleNext)return;arm.hand.updateWorldMatrix(true,true);const up=new T.Vector3(0,1,0).applyQuaternion(root.getWorldQuaternion(new T.Quaternion())),finger=middleNext.getWorldPosition(new T.Vector3()).sub(middle.getWorldPosition(new T.Vector3()));aimUpdatedBone(arm.hand,finger,up);
   if(index&&pinky){const across=index.getWorldPosition(new T.Vector3()).sub(pinky.getWorldPosition(new T.Vector3())),normal=across.cross(up).normalize(),wanted=new T.Vector3(0,0,-1).applyQuaternion(root.getWorldQuaternion(new T.Quaternion())),angle=Math.atan2(up.dot(normal.clone().cross(wanted)),normal.dot(wanted)),delta=new T.Quaternion().setFromAxisAngle(up,angle),world=arm.hand.getWorldQuaternion(new T.Quaternion()),parent=arm.hand.parent!.getWorldQuaternion(new T.Quaternion()).invert();arm.hand.quaternion.copy(parent.multiply(delta).multiply(world));arm.hand.updateWorldMatrix(false,true);}
