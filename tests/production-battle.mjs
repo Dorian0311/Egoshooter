@@ -105,7 +105,8 @@ try {
       assert.equal(source.split(anchor).length, 2, 'App snapshot hook changed');
       patched = true;
       return "import {interiorWorld as battleInteriorWorld} from '../shared/interiors';\n"+
-        source.replace(anchor, anchor+"\nwindow.observeHarbourBattle?.(own,s,scene.current,()=>battleInteriorWorld(getWorld(s.mapId),s.interiors).boxes);");
+        "import {difficultyRules as harbourBotRules} from '../shared/operationConfig';\n"+
+        source.replace(anchor, anchor+"\nwindow.observeHarbourBattle?.(own,s,scene.current,()=>battleInteriorWorld(getWorld(s.mapId),s.interiors).boxes,harbourBotRules[s.operation.config.difficulty].vision);");
     }
   }]});
   assert(patched, 'Missing App observation hook');

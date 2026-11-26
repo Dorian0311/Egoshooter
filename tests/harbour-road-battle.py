@@ -31,8 +31,9 @@ def observe(route):
     # Add read-only probes to the local Vite response, leaving gameplay and frame scheduling intact.
     response = route.fetch()
     source, count = re.subn(r"(scene\.current\?\.update\(s, (\w+)\.playerId, 'network'\);)",
-        r'\1 window.observeHarbourBattle(own,s,scene.current);', response.text())
+        r'\1 window.observeHarbourBattle(own,s,scene.current,undefined,harbourBotRules[s.operation.config.difficulty].vision);', response.text())
     assert count == 1, 'Snapshot observation point changed'
+    source = "import {difficultyRules as harbourBotRules} from '/shared/operationConfig.ts';\n" + source
     route.fulfill(response=response, body=source)
 
 
@@ -89,19 +90,37 @@ def activate_controls(page):
         return
 
 
-def walk(page, x, z, *, life=None, settle_ms=220):
-    deadline = time.monotonic() + 45
+def walk(page, x, z, *, life=None, settle_ms=220, route_deadline=math.inf):
+    deadline = min(time.monotonic() + 45, route_deadline)
     previous = None
     last_turn = 0
+    walking = sprinting = False
+    control_retries = 0
     try:
         while time.monotonic() < deadline:
-            px, pz, yaw, hp, current_life = page.evaluate('()=>{const p=harbourQA.player;return [p.x,p.z,p.yaw,p.hp,p.life]}')
+            px, pz, yaw, hp, current_life, controls = page.evaluate("""requirePointerLock=>{
+                const p=harbourQA.player;
+                const active=document.hasFocus()&&(document.pointerLockElement?.matches('.city-canvas')||
+                    !requirePointerLock&&document.activeElement?.matches('.city-canvas'));
+                return [p.x,p.z,p.yaw,p.hp,p.life,active];
+            }""",NATIVE_TURNS)
             if life is None:
                 life=current_life
             verify_life(hp,current_life,life,{'waypoint':[x,z],'observedPosition':[px,pz]},(px,pz))
             distance = math.hypot(px-x, pz-z)
             if distance < .60:
                 return
+            if not controls:
+                if control_retries == 2:
+                    raise AssertionError(('Game controls repeatedly lost during walk',[x,z],[px,pz]))
+                control_retries += 1
+                print('Restoring game controls at waypoint',[x,z],flush=True)
+                page.keyboard.up('Shift')
+                page.keyboard.up('w')
+                walking = sprinting = False
+                previous = None
+                activate_controls(page)
+                continue
             target = math.atan2(px-x, pz-z)
             # Reconcile after a server snapshot has caught up with our last mouse turn.
             reference = yaw if previous is None or time.monotonic()-last_turn>.36 else previous
@@ -112,11 +131,16 @@ def walk(page, x, z, *, life=None, settle_ms=220):
                 last_turn = time.monotonic()
             if hp<65:
                 page.keyboard.press('h')
-            if distance>4:
-                page.keyboard.down('Shift')
-            else:
-                page.keyboard.up('Shift')
-            page.keyboard.down('w')
+            wants_sprint = distance > 4
+            if wants_sprint != sprinting:
+                if wants_sprint:
+                    page.keyboard.down('Shift')
+                else:
+                    page.keyboard.up('Shift')
+                sprinting = wants_sprint
+            if not walking:
+                page.keyboard.down('w')
+                walking = True
             page.wait_for_timeout(60)
         controls=page.evaluate("""()=>{const p=harbourQA.player;return {
             focused:document.hasFocus(),locked:!!document.pointerLockElement,
@@ -136,7 +160,7 @@ def mouse(page, dx):
 
 
 def native_turn(page, cdp, x, y, direction):
-    page.evaluate('window.nativeTurn={first:null,end:0,firstAt:0,lastAt:0}')
+    page.evaluate('window.nativeTurn={first:null,end:0,firstAt:0,lastAt:0,deltaX:0,count:0}')
     start = time.perf_counter()
     last = 0
     while last < 1571:
@@ -146,15 +170,13 @@ def native_turn(page, cdp, x, y, direction):
             last = offset
         if last < 1571:
             time.sleep(.008)
-    page.evaluate("""async()=>{
-        const {first,end,firstAt,lastAt}=window.nativeTurn;
+    page.wait_for_function('nativeTurn.first!==null && harbourQA.scene.frameProfile().length>=nativeTurn.end',timeout=1500)
+    return page.evaluate("""()=>{
+        const {first,end,firstAt,lastAt,deltaX,count}=window.nativeTurn;
         delete window.nativeTurn;
-        if(first===null) throw Error('No trusted pointer movement reached the game');
-        while(harbourQA.scene.frameProfile().length<end){
-            await new Promise(resolve=>requestAnimationFrame(resolve));
-        }
         turnRanges.push([first,end]);
         nativeTurnSpans.push(lastAt-firstAt);
+        return {deltaX,count};
     }""")
 
 
@@ -209,7 +231,7 @@ def measure_turns(page, name):
                 page.mouse.down()
         if NATIVE_TURNS:
             direction=1 if n%2==0 else -1
-            native_turn(page,pointer,pointer_x,pointer_y,direction)
+            movement=native_turn(page,pointer,pointer_x,pointer_y,direction)
             pointer_x+=direction*1571
         elif FIXED_TURNS:
             # Same angular trajectory in real time at any refresh rate. The final
@@ -254,6 +276,8 @@ def measure_turns(page, name):
             }""",arg=[life,expected],timeout=1500)
         except PlaywrightTimeout as error:
             state=page.evaluate('()=>{const p=harbourQA.player;return {life:p.life,hp:p.hp,yaw:p.yaw,seq:p.seq,locked:!!document.pointerLockElement,phase:harbourQA.state.phase}}')
+            if NATIVE_TURNS:
+                state['pointerMovement']={**movement,'expectedDeltaX':direction*1571}
             raise AssertionError((name,n+1,expected,state)) from error
         hp,current_life=page.evaluate('[harbourQA.player.hp,harbourQA.player.life]')
         if not hp or current_life!=life:
@@ -345,6 +369,8 @@ with sync_playwright() as pw:
             if(turn.first===null){turn.first=count;turn.firstAt=event.timeStamp;}
             turn.end=count+1;
             turn.lastAt=event.timeStamp;
+            turn.deltaX+=event.movementX;
+            turn.count++;
         },true);""")
     page.add_init_script(f"localStorage.setItem('altstadt.graphics.v3',{json.dumps(quality)})")
     page.add_init_script("""if(PerformanceObserver.supportedEntryTypes.includes('long-animation-frame')){
@@ -394,8 +420,8 @@ with sync_playwright() as pw:
             }
             return log;
           }""".replace("split('\n')","split('\\n')"))
-    page.add_init_script("""window.observeHarbourBattle=(own,s,scene,worldBoxes)=>{
-        window.harbourQA={player:own,state:s,scene,worldBoxes};
+    page.add_init_script("""window.observeHarbourBattle=(own,s,scene,worldBoxes,botVision)=>{
+        window.harbourQA={player:own,state:s,scene,worldBoxes,botVision};
         """ + ("""            const probe=window.combatMotionProbe;
             if(probe && own && own.life===probe.life){
               probe.distance+=Math.hypot(own.x-probe.x,own.z-probe.z);
@@ -495,7 +521,7 @@ with sync_playwright() as pw:
         # Plan around the actual map colliders, including closed doors at this spawn.
         # All movement still goes through the mouse and keyboard.
         def find_route():
-            start, boxes, opponents = page.evaluate("""async()=>{
+            start, boxes, opponents, vision = page.evaluate("""async()=>{
               const qa=harbourQA;
               let boxes;
               if(qa.worldBoxes) boxes=qa.worldBoxes();
@@ -504,11 +530,13 @@ with sync_playwright() as pw:
                 const {interiorWorld}=await import('/shared/interiors.ts');
                 boxes=interiorWorld(getWorld('storm'),qa.state.interiors).boxes;
               }
+              const condition=qa.state.operation.condition;
+              const vision=condition==='fog'?25:condition==='night'?qa.botVision*.6:qa.botVision;
               return [[qa.player.x,qa.player.z],boxes
                 .filter(b=>b.y-b.h/2<1.75 && b.y+b.h/2>.29)
-                .map(b=>[b.x,b.z,b.w,b.d,b.y+b.h/2>1.25 && b.y-b.h/2<1.3 && b.kind!=='glass']),qa.state.players
+                .map(b=>[b.x,b.z,b.w,b.d,b.y+b.h/2>1.6 && b.y-b.h/2<1.6 && b.kind!=='glass']),qa.state.players
                 .filter(p=>p.kind==='bot'&&p.team!==qa.player.team&&p.connected&&p.hp>0)
-                .map(p=>[p.x,p.z])];
+                .map(p=>[p.x,p.z]),vision];
             }""")
             occupied=set()
             cover=set()
@@ -531,12 +559,12 @@ with sync_playwright() as pw:
                     exposure=0
                     for x,z in opponents:
                         distance=math.hypot(x-px,z-pz)
-                        if distance>=46:
+                        if distance>=vision:
                             continue
                         steps=math.ceil(distance*2)
                         if any((round(2*(px+(x-px)*i/steps)),round(2*(pz+(z-pz)*i/steps))) in cover for i in range(1,steps)):
                             continue
-                        exposure=max(exposure,(46-distance)/7)
+                        exposure=max(exposure,(vision-distance)/7)
                     threat[point]=exposure+(4 if point in exposed_cells else 0)
                 return threat[point]
             while opened:
@@ -585,13 +613,16 @@ with sync_playwright() as pw:
                 start=best
             return route
         attempts=6 if difficulty=='normal' else 4
+        route_deadline=time.monotonic()+180
         for attempt in range(attempts):
             try:
                 life=page.evaluate('harbourQA.player.life')
                 for _ in range(16):
+                    if time.monotonic()>=route_deadline:
+                        raise AssertionError(('Street approach exceeded 180 seconds',goal))
                     route=find_route()
                     if not route:
-                        walk(page,*goal,life=life)
+                        walk(page,*goal,life=life,route_deadline=route_deadline)
                         return
                     position=tuple(page.evaluate('[harbourQA.player.x,harbourQA.player.z]'))
                     covered=0
@@ -600,7 +631,7 @@ with sync_playwright() as pw:
                         covered+=math.dist(position,(x,z))
                         position=(x,z)
                         arrived=position==goal
-                        walk(page,x,z,life=life,settle_ms=220 if arrived else 70)
+                        walk(page,x,z,life=life,settle_ms=220 if arrived else 70,route_deadline=route_deadline)
                         if arrived:
                             return
                         # Bot positions have changed by the time we cross this section.
@@ -689,7 +720,14 @@ with sync_playwright() as pw:
         write_report(checkpoint,report)
     write_report(checkpoint,report)
     print('Harbour Road checkpoint:',checkpoint,flush=True)
-    approach(record_failure,(shops[0][2],-23))
+    if not NEAR_SPAWN:
+        page.evaluate('window.turnStarted=performance.now();harbourQA.scene.profileFrames(12000)')
+    try:
+        approach(record_failure,(shops[0][2],-23))
+    finally:
+        if not NEAR_SPAWN and not page.is_closed() and page.evaluate('window.harbourQA?.scene?.frameProfile().length>0'):
+            report['approach']=read_profile(page,'Regular spawn approach including route changes and respawn waits')
+            write_report(checkpoint,report)
     road_profiler=None
     if os.environ.get('BATTLE_CPU_PROFILE')=='1':
         road_profiler=page.context.new_cdp_session(page)
