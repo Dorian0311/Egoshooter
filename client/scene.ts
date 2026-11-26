@@ -454,6 +454,7 @@ export function createScene(
         g.add(human.group);g.userData.human=human;g.userData.details=createActorDetails(human.group);
         g.userData.anatomy=createAnatomy(human.group);
         g.userData.anatomy.setLost((g.userData.target as Player)?.injuries.lost??0);
+        g.userData.unregisterRig=graphics.registerWorldRig(human.group);
         return true;
       });
       if(added)await queueActorUpload(human.group);
@@ -647,7 +648,7 @@ export function createScene(
         let g = avatars.get(p.id);
         if (g && (g.userData.team !== p.team || g.userData.uniform !== p.uniform || g.userData.civilian !== (p.kind==='resident'))) {
           g.userData.nameplate?.dispose();
-          g.userData.details?.dispose();g.userData.anatomy?.dispose();g.userData.human?.dispose();scene.remove(g);
+          g.userData.unregisterRig?.();g.userData.details?.dispose();g.userData.anatomy?.dispose();g.userData.human?.dispose();scene.remove(g);
           g.traverse((o) => {
             if (o instanceof T.Mesh) o.geometry.dispose();
           });
@@ -669,7 +670,7 @@ export function createScene(
     for (const [id, g] of avatars)
       if (!actors.some((p) => p.id === id)) {
         g.userData.nameplate?.dispose();
-        g.userData.details?.dispose();g.userData.anatomy?.dispose();g.userData.human?.dispose();scene.remove(g);
+        g.userData.unregisterRig?.();g.userData.details?.dispose();g.userData.anatomy?.dispose();g.userData.human?.dispose();scene.remove(g);
         g.traverse((o) => {
           if (o instanceof T.Mesh) o.geometry.dispose();
         });
@@ -1124,7 +1125,7 @@ export function createScene(
       battleAudio.dispose();void audio?.close();
       fallbackHands.dispose();chainsaw.dispose();
       sceneAssets.dispose();
-      for(const avatar of avatars.values()){avatar.userData.nameplate?.dispose();avatar.userData.details?.dispose();avatar.userData.anatomy?.dispose();avatar.userData.human?.dispose();}
+      for(const avatar of avatars.values()){avatar.userData.unregisterRig?.();avatar.userData.nameplate?.dispose();avatar.userData.details?.dispose();avatar.userData.anatomy?.dispose();avatar.userData.human?.dispose();}
       for(const root of [scene,camera])root.traverse((o) => {
         if (o instanceof T.Mesh) {
           if(o instanceof T.InstancedMesh)o.dispose();

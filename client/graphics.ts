@@ -252,6 +252,7 @@ export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
   }
   return {
     setQuality,
+    registerWorldRig:render.skeletonUpdates.register,
     setResolutionScaling(value:boolean){resolutionScaling=value;resetScale=true;},
     setTimingEnabled(value:boolean){timingEnabled=value;gpuTiming.reset();timingFrame=0;},
     frameState,
@@ -361,8 +362,10 @@ export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
       if(skyOccluded)scene.background=null;
       try{
         if(ao.enabled&&!renderer.xr.isPresenting)rooms.begin(camera,updateShadow?clippedShadow:undefined,quality==='high');
+        render.groupActorUpdates=true;
         composer.render(dt);
       }finally{
+        render.groupActorUpdates=false;
         rooms.restore();
         if(skyOccluded)scene.background=sky;
         if(restrictedTarget){restrictedTarget.scissor.copy(savedShadowScissor);restrictedTarget.scissorTest=false;}

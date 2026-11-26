@@ -1,7 +1,10 @@
 import {Texture} from 'three';
 import {RenderPass} from 'three/examples/jsm/postprocessing/RenderPass.js';
+import {createWorldSkeletonUpdates} from './worldSkeletonUpdates';
 
 export class WorldRenderPass extends RenderPass {
+  readonly skeletonUpdates=createWorldSkeletonUpdates();
+  groupActorUpdates=false;
   afterWorld?: () => void;
   override render(...args: Parameters<RenderPass['render']>) {
     const [renderer] = args;
@@ -11,7 +14,8 @@ export class WorldRenderPass extends RenderPass {
       renderer.autoClearColor = false;
     }
     try {
-      super.render(...args);
+      if(this.groupActorUpdates&&!renderer.xr.isPresenting)this.skeletonUpdates.begin();
+      try{super.render(...args);}finally{this.skeletonUpdates.end();}
       this.afterWorld?.();
     } finally {
       renderer.autoClearColor = clearColor;

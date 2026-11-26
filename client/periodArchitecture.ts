@@ -167,6 +167,25 @@ export function createPeriodArchitecture(world:World){
         box(cx,2.89,face+.053,6.15,.055,.096,joinery);
         for(const pane of [-1,1])box(cx+pane*1.02,1.995,face+.045,.052,1.73,.084,joinery);
       }
+      // A book-shaped trade sign faces both directions along the street. Mount
+      // its iron bracket through the outer shop pier, above the public footway.
+      const signX=8.60,bookZ=wallZ+1.47;
+      box(signX,4.08,wallZ+.415,.16,.70,.12,iron);
+      box(signX,4.35,wallZ+1.22,.077,.085,1.69,iron);
+      box(signX,4.12,wallZ+.90,.055,.061,1.04,iron,-.47);
+      for(const leaf of [-1,1]){
+        box(signX,4.044,bookZ+leaf*.34,.033,.55,.037,iron);
+        const z=bookZ+leaf*.235;
+        const pageSlope=new T.Matrix4().makeShear(0,0,0,0,0,leaf*.20);
+        function half(y:number,thickness:number,height:number,width:number,color:string){
+          const piece=new T.BoxGeometry(thickness,height,width).applyMatrix4(pageSlope);
+          add(piece,signX,y,z,color);
+        }
+        half(3.55,.089,.49,.470,'#414c3d');
+        half(3.56,.105,.425,.437,leaf<0?'#d0bd89':'#ddd0ac');
+        // A short muted rule crosses each page on both sides of the sign.
+        half(3.60,.110,.013,.26,'#978456');
+      }
       for(const x of [-6.43,-2.70,2.70,6.43]){
         box(x,4.88,wallZ+.51,2.34,.12,.32,'#a5967d');
         if(Math.abs(x)>3)continue;
