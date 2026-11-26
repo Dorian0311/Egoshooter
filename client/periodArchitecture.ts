@@ -214,6 +214,19 @@ export function createPeriodArchitecture(world:World){
           cheekUv.setXY(i,(firstPixel+2+u*497)/1024,1-(254-v*251)/672);
           cheekTint.setXYZ(i,.92,.92,.92);
         }
+        // Fold the unlettered edge strips around the two upright ends. Both faces
+        // meet the front at the same texel, even where the concrete tapers.
+        for(const edge of [1,5]){
+          const start=points.length*2+edge*4;
+          for(let i=start;i<start+4;i++){
+            const x=pos[i*3],y=pos[i*3+1],z=pos[i*3+2];
+            const atLeft=x===minX;
+            const depth=wallZ+.83-.081*y-z;
+            const u=(atLeft?0:497)+(atLeft?1:-1)*depth*497/6.72;
+            cheekUv.setXY(i,(firstPixel+2+u)/1024,1-(254-(y-.04)*251/2.89)/672);
+            cheekTint.setXYZ(i,.92,.92,.92);
+          }
+        }
         for(const y of [.55,1.38,2.17]){
           const z=wallZ+.84-.081*y;
           box(wing*5.63,y,z,6.61,.027,.027,aggregate,0,0,true);

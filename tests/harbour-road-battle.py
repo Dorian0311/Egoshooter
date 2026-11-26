@@ -728,8 +728,12 @@ with sync_playwright() as pw:
             approach()
         sx,sz = page.evaluate('[harbourQA.player.x,harbourQA.player.z]')
         page.evaluate('window.turnStarted=performance.now();harbourQA.scene.profileFrames(3000)')
+        if DRAW_PROFILE:
+            page.evaluate('battleDrawProbe.start(harbourQA.scene.frameProfile(),true)')
         walk(page,sx+4,sz)
         entry=read_profile(page,map_id+' approach')
+        if DRAW_PROFILE:
+            entry['drawProfile']=page.evaluate('battleDrawProbe.finish([[0,harbourQA.scene.frameProfile().length]])')
         profiler=None
         if os.environ.get('BATTLE_CPU_PROFILE')=='1':
             profiler=page.context.new_cdp_session(page)

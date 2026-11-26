@@ -4,6 +4,7 @@ export function attachBattleDrawProbe(renderer) {
   const draw=renderer.renderBufferDirect;
   const use=gl.useProgram;
   let frameProfile, samples=[], switches=[], bucket, lastProgram=null;
+  let rootSamples,roots;
   const idsByProgram=new Map(),programsById=[null],descriptions=new Map();
   function programId(program) {
     if(!program) return 0;
@@ -45,14 +46,33 @@ export function attachBattleDrawProbe(renderer) {
     const shape=object.isSkinnedMesh?'skinned':object.isInstancedMesh?'instanced':'mesh';
     const key=phase+'/'+shape+'/'+(material.name||material.type);
     const row=sample[key]??={calls:0,wallMs:0,programBinds:0};
+    let rootRow;
+    if(rootSamples){
+      if(!roots.has(object)){
+        let root=object;
+        while(root.parent&&!root.parent.isScene)root=root.parent;
+        roots.set(object,root.name||'unlabelled world meshes');
+      }
+      const groups=rootSamples[frameProfile.length]??=Object.create(null);
+      rootRow=groups[phase+'/'+roots.get(object)]??={calls:0,wallMs:0};
+    }
     const outer=bucket;
     bucket=row;
     const start=performance.now();
     try { return draw.call(this,camera,scene,geometry,material,object,group); }
-    finally { row.wallMs+=performance.now()-start; row.calls++; bucket=outer; }
+    finally {
+      const elapsed=performance.now()-start;
+      row.wallMs+=elapsed; row.calls++;
+      if(rootRow){rootRow.wallMs+=elapsed;rootRow.calls++;}
+      bucket=outer;
+    }
   };
   return {
-    start(frames) { frameProfile=frames; samples=[]; switches=[]; },
+    start(frames,groupBySceneRoot=false) {
+      frameProfile=frames; samples=[]; switches=[];
+      rootSamples=groupBySceneRoot?[]:undefined;
+      roots=groupBySceneRoot?new WeakMap():undefined;
+    },
     finish(ranges) {
       const frames=frameProfile;
       frameProfile=undefined;
@@ -65,6 +85,11 @@ export function attachBattleDrawProbe(renderer) {
         total.calls+=value.calls; total.wallMs+=value.wallMs; total.programBinds+=value.programBinds;
       }
       const ranked=values=>Object.entries(values).sort((a,b)=>b[1].wallMs-a[1].wallMs);
+      const byRoot=rootSamples&&Object.create(null);
+      if(byRoot)for(const id of ids)for(const [key,value] of Object.entries(rootSamples[id]??{})){
+        const total=byRoot[key]??={calls:0,wallMs:0};
+        total.calls+=value.calls;total.wallMs+=value.wallMs;
+      }
       const totals={};
       for(const id of ids) for(const [pair,count] of Object.entries(switches[id]??{}))
         totals[pair]=(totals[pair]??0)+count;
@@ -78,6 +103,7 @@ export function attachBattleDrawProbe(renderer) {
       });
       const worst=ids.sort((a,b)=>frames[b+1].frameMs-frames[a+1].frameMs||frames[b].cpuMs-frames[a].cpuMs).slice(0,3);
       return {frames:ids.length,bySubmissionTime:ranked(rows).slice(0,12),programTransitions,
+        bySceneRoot:byRoot?ranked(byRoot).slice(0,16):undefined,
         worstIntervals:worst.map(i=>({nextFrameMs:frames[i+1].frameMs,cpuMs:frames[i].cpuMs,
           calls:frames[i].calls,topSubmissions:ranked(samples[i]??{}).slice(0,5)}))};
     }

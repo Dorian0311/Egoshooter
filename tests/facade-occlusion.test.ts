@@ -19,3 +19,16 @@ test('facade culling requires all transformed copies to fit within opaque wall c
  assert.equal(facadePartIsBuried(pane,part,[front,exposed],walls),false);
  assert.equal(facadePartIsBuried(pane,part,[doorway],walls),false);
 });
+
+test('thin Alpine front walls hide inset apartment glazing but preserve exposed copies',()=>{
+ const box={kind:'wall',x:5.5,y:2,z:8,w:7,h:4,d:.45};
+ const walls=opaqueWallCores([box],.060);
+ const pane=new Box3(new Vector3(-2.314871,.567751,-.134401),new Vector3(-.684867,2.027483,-.084400));
+ const part=new Matrix4().makeTranslation(1.50000024,0,0);
+ const front=new Matrix4().makeScale(3.5/3,4/3,1).setPosition(3.75,0,8.24);
+ assert.equal(facadePartIsBuried(pane,part,[front],walls),true);
+ assert.equal(facadePartIsBuried(pane,part,[front],opaqueWallCores([box])),false);
+ const exposed=front.clone().setPosition(3.75,0,8.32);
+ const doorway=front.clone().setPosition(1.5,0,8.24);
+ for(const other of [exposed,doorway])assert.equal(facadePartIsBuried(pane,part,[front,other],walls),false);
+});
