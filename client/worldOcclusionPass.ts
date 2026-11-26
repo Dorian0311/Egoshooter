@@ -19,4 +19,20 @@ export class WorldOcclusionPass extends SSAOPass {
     for (const primitive of this.hiddenPrimitives) primitive.visible = true;
     this.hiddenPrimitives.length = 0;
   }
+
+  override renderOverride(...args: Parameters<SSAOPass['renderOverride']>) {
+    const scene = this.scene;
+    const background = scene.background;
+    const updateMatrices = scene.matrixWorldAutoUpdate;
+    // The preceding world pass populated the matrices. Sky pixels have clear depth
+    // and are ignored by SSAO, so there's no need to draw the background a second time.
+    scene.matrixWorldAutoUpdate = false;
+    scene.background = null;
+    try {
+      super.renderOverride(...args);
+    } finally {
+      scene.background = background;
+      scene.matrixWorldAutoUpdate = updateMatrices;
+    }
+  }
 }

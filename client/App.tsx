@@ -19,7 +19,7 @@ import {WeaponPicker} from './WeaponPicker';
 import {validLoadout,type Loadout} from '../shared/weapons';
 import {LiveRooms} from './LiveRooms';
 import './mapCards.css';
-import React, { lazy, Suspense, useEffect, useRef, useState } from "react";
+import React, { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { Client, type Room } from "@colyseus/sdk";
 import { mergeSnapshot, type SnapshotPacket } from "../shared/protocol.ts";
 import type { Snapshot } from "../shared/game.ts";
@@ -230,7 +230,10 @@ export default function App({
         if(newLife||damage.length)setHits(old=>[...damage,...(newLife?[]:old.filter(hit=>s.now-hit.at<4000))].slice(0,3));
         if(own?.hp)setDeathReason('');
         const newKills=freshEvents.filter(e=>e.type==='kill').map(e=>{const victim=[...s.players,...s.npcs].find(p=>p.id===e.target)??s.corpses.find(c=>c.sourceId===e.target&&(!e.life||c.sourceLife===e.life));return {key:++feedSequence.current,killer:s.players.find(p=>p.id===e.id)?.name??(e.id?'Spieler':'Umwelt'),victim:victim?.name??'Spieler',victimUniform:victim?.uniform??'de-field',showFace:!!victim&&victim.kind!=='resident',weapon:weapons[e.weapon??0]?.name??'Nahkampf',headshot:e.hitZone==='head',mine:e.id===access.playerId,friendly:s.players.find(p=>p.id===e.id)?.team===own?.team,at:s.now};});
-        setKillfeed(old=>[...old.filter(e=>s.now-e.at<6500),...newKills].slice(-4));
+        setKillfeed(old=>{
+          if(!newKills.length&&!old.some(e=>s.now-e.at>=6500))return old;
+          return [...old.filter(e=>s.now-e.at<6500),...newKills].slice(-4);
+        });
         for(const event of freshEvents){
           if(event.type==='kill'&&event.id===access.playerId&&event.hitZone==='head')setHeadshotAt(s.now);
           if(event.type==='kill'&&event.target===access.playerId)setDeathReason(event.id?`Besiegt von ${s.players.find(p=>p.id===event.id)?.name??'Spieler'} mit ${weapons[event.weapon??0]?.name??'Nahkampf'}`:'Durch Umweltschaden gefallen');
@@ -276,6 +279,20 @@ export default function App({
   }
   const me = snapshot?.players.find((p) => p.id === access?.playerId),
     active = snapshot?.phase === "playing";
+  const health=Math.ceil(me?.hp??0),hasShield=!!me?.carriedCorpse,shield=me?.carriedCorpse?me.corpseShield:0;
+  const kills=me?.kills??0,deaths=me?.deaths??0,stamina=me?.stamina??SPRINT_DURATION_MS;
+  const sprinting=!!me?.sprinting,exhausted=!!me?.sprintExhausted;
+  // Movement snapshots update the scene at network rate. Rebuild these HUD
+  // subtrees only when a displayed field or the list of kills changes.
+  const feedDisplay=useMemo(()=>active&&<section className="combat-feed live-killfeed" aria-label="Live-Abschüsse"><header><span>ABSCHÜSSE</span><small>● LIVE</small></header><div role="log" aria-live="polite">{killfeed.length===0?<p className="killfeed-empty">Noch keine Abschüsse</p>:killfeed.map(item=><div key={item.key} className={`killfeed-entry ${item.mine?'is-mine':item.friendly?'is-friendly':'is-enemy'}`}><strong>{item.killer}</strong><span className="killfeed-weapon" title={item.weapon}>{item.headshot?'◎':'▸'}</span><b>{item.victim}</b></div>)}</div></section>,[active,killfeed]);
+  const statusDisplay=useMemo(()=>active&&<>
+    <div className="city-hud"><strong>{health}<small>GESUNDHEIT</small></strong>{hasShield&&<CorpseShield value={shield}/>}</div>
+    <div className="personal-score" aria-label="Eigene Abschüsse und Tode"><span><b>{kills}</b> KILLS</span><span><b>{deaths}</b> TODE</span></div>
+    <div className={`sprint-meter ${sprinting?'is-sprinting':''}`} aria-label="Sprint-Ausdauer">
+      <div><span>{sprinting?'SPRINT':exhausted?'ERHOLUNG':stamina<SPRINT_DURATION_MS?'AUSDAUER':'SPRINT BEREIT'}</span><small>{(stamina/1000).toFixed(1)} s</small></div>
+      <progress aria-label="Verbleibende Sprint-Ausdauer" max={SPRINT_DURATION_MS} value={stamina}/>
+    </div>
+  </>,[active,health,hasShield,shield,kills,deaths,sprinting,exhausted,stamina]);
   const defeated=killfeed.filter(item=>item.mine&&item.showFace&&snapshot&&snapshot.now-item.at<4500).at(-1);
   return (
     <div ref={gameRoot} className={`city-app ${active?"city-playing":""} ${!snapshot?"city-lobby":""}`}>
@@ -466,19 +483,14 @@ export default function App({
               <div className={`city-crosshair ${hitFeedback?"city-hit city-hit-"+hitFeedback:""}`}><i/><i/><i/><i/><b/></div>
               {settings.headshotSlowMotion&&headshotAt>0&&snapshot.now-headshotAt<850&&<div className="headshot-cinematic" key={headshotAt}><div><strong>KOPFTREFFER</strong><small>ZEITLUPE</small></div></div>}
               {defeated&&<VictimFace name={defeated.victim} uniform={defeated.victimUniform} headshot={defeated.headshot}/>}
-              <section className="combat-feed live-killfeed" aria-label="Live-Abschüsse"><header><span>ABSCHÜSSE</span><small>● LIVE</small></header><div role="log" aria-live="polite">{killfeed.length===0?<p className="killfeed-empty">Noch keine Abschüsse</p>:killfeed.map(item=><div key={item.key} className={`killfeed-entry ${item.mine?'is-mine':item.friendly?'is-friendly':'is-enemy'}`}><strong>{item.killer}</strong><span className="killfeed-weapon" title={item.weapon}>{item.headshot?'◎':'▸'}</span><b>{item.victim}</b></div>)}</div></section>
+              {feedDisplay}
               <HitReport hits={hits} now={snapshot.now} yaw={me?.yaw??0}/>
               {me?.uniform==='leatherface'&&<div className={`saw-power ${snapshot.now<me.powerUntil?'is-active':''}`}>
                 <strong>{snapshot.now<me.powerUntil?'POWERMODUS':snapshot.now<me.powerReadyAt?'ERHOLUNG':'KETTENSÄGE BEREIT'}</strong>
                 <progress max={1} value={snapshot.now<me.powerUntil?(me.powerUntil-snapshot.now)/SAW_POWER_MS:snapshot.now<me.powerReadyAt?1-(me.powerReadyAt-snapshot.now)/SAW_RECOVERY_MS:1}/>
                 <small>{snapshot.now<me.powerUntil?`${((me.powerUntil-snapshot.now)/1000).toFixed(1)} s Schub`:snapshot.now<me.powerReadyAt?`${Math.ceil((me.powerReadyAt-snapshot.now)/1000)} s bis zum nächsten Schub`:'Angriff halten · 2,2 s Schub · 7 s Erholung'}</small>
               </div>}
-              <div className="city-hud"><strong>{Math.ceil(me?.hp??0)}<small>GESUNDHEIT</small></strong>{me?.carriedCorpse&&<CorpseShield value={me.corpseShield}/>}</div>
-              <div className="personal-score" aria-label="Eigene Abschüsse und Tode"><span><b>{me?.kills??0}</b> KILLS</span><span><b>{me?.deaths??0}</b> TODE</span></div>
-              <div className={`sprint-meter ${me?.sprinting?'is-sprinting':''}`} aria-label="Sprint-Ausdauer">
-                <div><span>{me?.sprinting?'SPRINT':me?.sprintExhausted?'ERHOLUNG':(me?.stamina??SPRINT_DURATION_MS)<SPRINT_DURATION_MS?'AUSDAUER':'SPRINT BEREIT'}</span><small>{((me?.stamina??SPRINT_DURATION_MS)/1000).toFixed(1)} s</small></div>
-                <progress aria-label="Verbleibende Sprint-Ausdauer" max={SPRINT_DURATION_MS} value={me?.stamina??SPRINT_DURATION_MS}/>
-              </div>
+              {statusDisplay}
               {!me?.hp && (
                 <div className="city-respawn">
                   {deathReason&&<small className="death-reason">{deathReason}</small>}

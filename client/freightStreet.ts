@@ -114,3 +114,58 @@ export function freightStreet(world:World,granite:T.Texture|null){
   grime.name='Loading yard cart ruts and coal dust';grime.renderOrder=1;
   const group=new T.Group();group.name='Freight quarter streets';group.add(sidewalk,grime);return group;
 }
+
+/** Two continuous rail beds and the loading spur share a single material per half-yard.
+ * The nearly flush timbers receive building shadows, with their fastenings baked into the grain. */
+export function freightTracks(loadingSpur:boolean){
+  const root=new T.Group();
+  root.name='Freight yard trackwork';
+  const atlas=new T.TextureLoader().load('/shooter/environment/freight-track.webp');
+  atlas.colorSpace=T.SRGBColorSpace;atlas.anisotropy=4;
+  const material=new T.MeshStandardMaterial({map:atlas,vertexColors:true,roughness:.78});
+  const lines=[{z:-12,first:-117,last:117,gauge:.8},{z:12,first:-117,last:117,gauge:.8}];
+  if(loadingSpur)lines.push({z:-22,first:46,last:76,gauge:.72});
+  for(const half of [[-117,0],[0,117]]){
+    const positions:number[]=[],colors:number[]=[],uv:number[]=[],indices:number[]=[];
+    const tint=new T.Color();
+    type Vertex=readonly [number,number,number];
+    const blank=[.5,.028,.5,.028,.5,.028,.5,.028];
+    function quad(a:Vertex,b:Vertex,c:Vertex,d:Vertex,tone:string,coords=blank){
+      const start=positions.length/3;
+      positions.push(...a,...b,...c,...d);uv.push(...coords);tint.set(tone);
+      for(let i=0;i<4;i++)colors.push(tint.r,tint.g,tint.b);
+      indices.push(start,start+1,start+2,start,start+2,start+3);
+    }
+    for(const {z,first,last,gauge} of lines){
+      const left=Math.max(first,half[0]),right=Math.min(last,half[1]);
+      if(left>=right)continue;
+      const span=gauge/.615;
+      const tones=['#e4d9cb','#fff4e4','#d3cbbe','#eee6db'];
+      for(let i=0;first+.40+i*.82<last-.1;i++){
+        const x=first+.40+i*.82;if(x<left||x>=right)continue;
+        const shift=Math.sin(i*4.27+z)*.026;
+        const near=z-span+shift,far=z+span+shift,a=x-.12,b=x+.12;
+        const top=.055,v=1-((i%3)*80+3)/256,w=v-73/256;
+        quad([a,top,near],[a,top,far],[b,top,far],[b,top,near],tones[i%4],[.002,v,.998,v,.998,w,.002,w]);
+        quad([a,.001,near],[a,.001,far],[a,top,far],[a,top,near],'#59493d');
+        quad([b,.001,far],[b,.001,near],[b,top,near],[b,top,far],'#615044');
+      }
+      // Cross-section from one rail foot to the other. The iron web is rust-dark,
+      // while the running face catches the skylight at a low viewing angle.
+      const profile=[[ -.071,.057],[-.071,.072],[-.014,.087],[-.014,.143],[-.036,.148],[-.036,.168],
+        [.036,.168],[.036,.148],[.014,.143],[.014,.087],[.071,.072],[.071,.057]];
+      const iron=['#665648','#827060','#695342','#776352','#9c9180','#c6c1af','#9c9180','#776352','#695342','#827060','#665648'];
+      for(const side of [-1,1])for(let i=0;i<profile.length-1;i++){
+        const [p,h]=profile[i],[q,k]=profile[i+1],center=z+side*gauge;
+        quad([left,h,center+p],[left,k,center+q],[right,k,center+q],[right,h,center+p],iron[i]);
+      }
+    }
+    const geometry=new T.BufferGeometry();geometry.setIndex(indices);
+    geometry.setAttribute('position',new T.Float32BufferAttribute(positions,3));
+    geometry.setAttribute('uv',new T.Float32BufferAttribute(uv,2));
+    geometry.setAttribute('color',new T.Float32BufferAttribute(colors,3));
+    geometry.computeVertexNormals();geometry.computeBoundingSphere();
+    const tracks=new T.Mesh(geometry,material);tracks.receiveShadow=true;root.add(tracks);
+  }
+  return root;
+}

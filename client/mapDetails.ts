@@ -14,7 +14,7 @@ import {shoreRockFinish,texturedHeadland,islandHeadlands} from './coastalHeadlan
 import {addIslandStreet} from './islandStreet';
 import {inIslandStreet} from '../shared/islandStreet';
 import {createBattleTerrain} from './battleTerrain';
-import {freightStreet} from './freightStreet';
+import {freightStreet,freightTracks} from './freightStreet';
 import {freightCartSite,freightYard} from './freightYard';
 import {dampSurface} from './dampSurface';
 
@@ -298,6 +298,7 @@ export function createMapDetails(scene:T.Scene,world:World,get:(color:string)=>T
         box(x-8+n*4,1.5+floor*3,z-side*7.04,1.35,1.85,.12,window);
     }
     const station=world.buildings.find(b=>b.name==='GÜTERBAHNHOF');
+    root.add(freightTracks(!!station));
     if(station){
       const brick=material('#7b4737',.02,.9),iron=material('#384242',.66,.56);
       const roof=material('#466360',.45,.6),lamp=material('#f3d794',.10,.45);
@@ -328,8 +329,6 @@ export function createMapDetails(scene:T.Scene,world:World,get:(color:string)=>T
       for(const offset of [2.7,3.5,4.4]){
         box(x+offset,.026,front+2.70,.47,.047,.061,worn).castShadow=false;
       }
-      for(const rail of [-.72,.72])box(61,.035,-22+rail,30,.065,.075,iron);
-      for(let tie=0;tie<22;tie++)box(46+tie*1.35,.017,-22,.17,.031,2.1,get('#67513d'));
       // A raised loading shutter rides inside the existing doorway lintel.
       for(let slat=0;slat<6;slat++)
         box(x,2.85+slat*.065,front+.149,3.8,.058,.12,iron);
@@ -345,11 +344,6 @@ export function createMapDetails(scene:T.Scene,world:World,get:(color:string)=>T
         for(let joint=0;joint<8;joint++)
           box(x+side*5.3-2.8+joint*.8,.086,front+1.21,.024,.015,2.68,iron).castShadow=false;
       }
-    }
-    // Twin rail lines, sleepers and broken paving give the courtyard a clear use.
-    for(const z of [-12,12]){
-      for(const offset of [-.8,.8])box(0,.055,z+offset,234,.11,.09,steel);
-      for(let x=-116;x<=116;x+=1.4)box(x,.018,z,.22,.036,2.5,get('#67513d'));
     }
     for(const side of [-1,1])for(const z of [-31,-25]){
       // Chimneys sit on the now-accessible machine halls.

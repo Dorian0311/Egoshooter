@@ -38,7 +38,8 @@ export function createCrateShadows(renderer:T.WebGLRenderer,world:T.Scene,qualit
  color.matrixAutoUpdate=depth.matrixAutoUpdate=false;
  depth.visible=false;world.add(color,depth);
  let proxySource:T.Group|undefined;
- const positions:T.Vector3[]=[],cameraPosition=new T.Vector3();
+ const shadowCells:{positions:T.Vector3[];details:T.Object3D[];hulls:T.Object3D[];near:boolean}[]=[];
+ const cameraPosition=new T.Vector3();
  const shadowMap=renderer.shadowMap,render=shadowMap.render;
  function setDetailedCastShadow(value:boolean){
   for(const child of color.children)child.castShadow=value;
@@ -52,11 +53,21 @@ export function createCrateShadows(renderer:T.WebGLRenderer,world:T.Scene,qualit
   const fov=camera instanceof T.PerspectiveCamera?camera.getEffectiveFOV():72;
   const distance=14*Math.tan(T.MathUtils.degToRad(36))/Math.tan(T.MathUtils.degToRad(fov/2));
   const radiusSquared=distance*distance;
-  const nearby=positions.some(point=>point.distanceToSquared(cameraPosition)<radiusSquared);
-  if(nearby)setDetailedCastShadow(true);
-  else depth.visible=true;
+  for(const cell of shadowCells){
+   cell.near=cell.positions.some(point=>point.distanceToSquared(cameraPosition)<radiusSquared);
+   if(cell.near){
+    for(const mesh of cell.details)mesh.castShadow=true;
+    for(const hull of cell.hulls)hull.visible=false;
+   }else depth.visible=true;
+  }
   try{render.call(shadowMap,lights,scene,camera);}
-  finally{depth.visible=false;if(nearby)setDetailedCastShadow(false);}
+  finally{
+   depth.visible=false;
+   for(const cell of shadowCells)if(cell.near){
+    for(const mesh of cell.details)mesh.castShadow=false;
+    for(const hull of cell.hulls)hull.visible=true;
+   }
+  }
  };
  shadowMap.render=renderWithCrates;
  function setQuality(value:GraphicsQuality){
@@ -66,7 +77,6 @@ export function createCrateShadows(renderer:T.WebGLRenderer,world:T.Scene,qualit
  }
  return {
   load(source:T.Object3D,placements:T.Matrix4[]){
-   for(const placement of placements)positions.push(new T.Vector3().setFromMatrixPosition(placement));
    try{
     const hulls=createCrateShadowSource(source);
     proxySource=hulls;
@@ -80,9 +90,14 @@ export function createCrateShadows(renderer:T.WebGLRenderer,world:T.Scene,qualit
    }
    for(const cell of cells.values()){
     const first=color.children.length;instanceStaticModel(color,source,cell,quality==='ultra'||!proxySource);
-    lod.register(color.children.slice(first));
+    const details=color.children.slice(first);
+    lod.register(details);
+    if(proxySource){
+     const firstHull=depth.children.length;
+     instanceStaticModel(depth,proxySource,cell,true);
+     shadowCells.push({positions:cell.map(m=>new T.Vector3().setFromMatrixPosition(m)),details,hulls:depth.children.slice(firstHull),near:false});
+    }
    }
-   if(proxySource)instanceStaticModel(depth,proxySource,placements,true,32);
   },
   setQuality,
   setColorLod:(source:T.Object3D,asset:CrateIndexAsset)=>lod.load(source,asset),

@@ -46,3 +46,27 @@ test('crate shadow hulls keep the color geometry intact and switch only for the 
  assert.equal(world.children.length,0);
  geometry.dispose();material.dispose();
 });
+
+test('a near crate upgrades only its own cell, including when aiming or crossing between cells',()=>{
+ const world=new T.Scene(),camera=new T.PerspectiveCamera(72);
+ const passes:{full:boolean[];hulls:boolean[]}[]=[];
+ const shadowMap={autoUpdate:true,needsUpdate:false,render:(_lights:T.Light[],_scene:T.Scene,_camera:T.Camera)=>{
+  const full=world.getObjectByName('cover-crates')!,hulls=world.getObjectByName('cover-crate-shadow-hulls')!;
+  passes.push({full:full.children.map(mesh=>mesh.castShadow),hulls:hulls.children.map(hull=>hulls.visible&&hull.visible)});
+ }};
+ const crates=createCrateShadows({shadowMap} as unknown as T.WebGLRenderer,world,'high');
+ const geometry=new T.BoxGeometry(),material=new T.MeshBasicMaterial();
+ try{
+  crates.load(new T.Mesh(geometry,material),[0,20,50].map(x=>new T.Matrix4().makeTranslation(x,0,0)));
+  const render=(x:number,fov:number)=>{
+   camera.position.set(x,0,3);camera.fov=fov;camera.updateMatrixWorld(true);
+   shadowMap.render([],world,camera);
+  };
+  render(0,72);render(0,18);render(55,72);
+  assert.deepEqual(passes,[
+   {full:[true,false],hulls:[false,true]},
+   {full:[true,true],hulls:[false,false]},
+   {full:[false,true],hulls:[true,false]},
+  ]);
+ }finally{crates.dispose();geometry.dispose();material.dispose();}
+});
