@@ -128,7 +128,8 @@ try {
         assert.equal(source.split(capture).length,2,'GPU frame capture hook changed');
         assert.equal(source.split(submit).length,2,'GPU submit hook changed');
         gpuHooks++;
-        return 'let gpuFrameSequence=0;\n'+source.replace(sampling,'timingEnabled&&adaptive&&currentTimingFrame%17===0')
+        // Keep production sampling infrequent. The diagnostic build samples both shadow cadences and short stalls more often.
+        return 'let gpuFrameSequence=0;\n'+source.replace(sampling,'timingEnabled&&adaptive&&currentTimingFrame%5===0')
           .replace(capture,capture+'frameState.gpuFrameId=++gpuFrameSequence;frameState.gpuQueries=gpuTiming.takeSamples();')
           .replace(submit,'gpuTiming.begin(frameState.gpuFrameId);');
       }

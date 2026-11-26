@@ -32,14 +32,14 @@ export function createCologneBridgeSteel(){
   const rotation=new T.Quaternion(),color=new T.Color();
   const painted='#46554a',rim='#6f7969',recess='#343e37',connection='#594f45';
   type Point=[number,number,number];
-  function beam(a:Point,b:Point,width:number,depth:number,tint:string,rivetedPlate=false){
+  function beam(a:Point,b:Point,width:number,depth:number,tint:string,plateFace?:'x'|'z'){
     from.set(...a);to.set(...b);offset.subVectors(to,from);
     const length=offset.length();
     rotation.setFromUnitVectors(up,offset.divideScalar(length));
     const geometry=new T.BoxGeometry(width,length,depth);
     const uv=geometry.getAttribute('uv'),normal=geometry.getAttribute('normal');
     for(let i=0;i<uv.count;i++){
-      if(rivetedPlate&&Math.abs(normal.getZ(i))===1)uv.setXY(i,(8.5+47*uv.getX(i))/64,(8.5+47*uv.getY(i))/64);
+      if(plateFace&&Math.abs(plateFace==='x'?normal.getX(i):normal.getZ(i))===1)uv.setXY(i,(8.5+47*uv.getX(i))/64,(8.5+47*uv.getY(i))/64);
       else uv.setXY(i,3.5/64,3.5/64);
     }
     geometry.applyQuaternion(rotation).translate((a[0]+b[0])/2,(a[1]+b[1])/2,(a[2]+b[2])/2);
@@ -65,7 +65,7 @@ export function createCologneBridgeSteel(){
         const mid=(a+b)/2;
         if(panel&&panel<11){
           beam([a,.86,z],[a,y0-.14,z],.14,.20,painted);
-          beam([a,y0-.47,z-side*.28],[a,y0+.41,z-side*.28],.48,.06,rim,true);
+          beam([a,y0-.47,z-side*.28],[a,y0+.41,z-side*.28],.48,.06,rim,'z');
         }
         if(panel>=2&&panel<10){
           const diagonal=(panel<6?y1:y0)-.23;
@@ -78,6 +78,14 @@ export function createCologneBridgeSteel(){
     for(const panel of [3,6,9]){
       const y=height(panel)-.29;
       beam([x(panel),y,-8.71],[x(panel),y,8.71],.21,.24,painted);
+      // Riveted knees tie the overhead crossbeam to the two side posts.
+      // Their bearing plates face approaching traffic along the tracks.
+      for(const side of [-1,1]){
+        const postZ=8.78*side,innerZ=6.86*side;
+        beam([x(panel),y-1.24,postZ],[x(panel),y-.02,innerZ],.15,.19,painted);
+        beam([x(panel),y-1.50,postZ],[x(panel),y-.95,postZ],.23,.29,rim,'x');
+        beam([x(panel),y,innerZ-side*.25],[x(panel),y,innerZ+side*.25],.26,.30,rim,'x');
+      }
       const next=panel+1;
       if(panel!==9){
         beam([x(panel),y,-8.71],[x(next),height(next)-.29,8.71],.10,.15,recess);
