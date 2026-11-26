@@ -3,6 +3,7 @@ import {RoundedBoxGeometry} from 'three/examples/jsm/geometries/RoundedBoxGeomet
 import type {Box,World} from '../shared/world';
 import {batchStaticMeshes} from './scenery';
 import {createIslandQuay} from './islandQuay';
+import {coastalRadar} from './coastalRadar';
 import {harbourEntrance} from './harbourEntrance';
 import {createCoastalWater} from './coastalWater';
 import {projectBoxUVs} from './materials';
@@ -112,55 +113,7 @@ export function createMapDetails(scene:T.Scene,world:World,get:(color:string)=>T
       }
     }
     if(b.kind==='platform'){
-      const teal=material('#286d70',.35,.55),enamel=material('#e5d9b1',.18,.64);
-      box(b.x,b.y,b.z,b.w,b.h,b.d,enamel);
-      for(const side of [-1,1]){
-        const x=b.x+side*(b.w/2+.045),z=b.z+side*(b.d/2+.045);
-        box(x,b.y-.65,b.z,.09,.54,b.d,teal);
-        box(b.x,b.y-.65,z,b.w,.54,.09,teal);
-        box(x,b.y+.60,b.z,.10,.08,b.d,teal);
-        box(b.x,b.y+.60,z,b.w,.08,.10,teal);
-        for(const offset of [-.28,.28]){
-          const center=b.z+offset*b.d;
-          box(x+side*.05,b.y,center,.11,1.1,1.8,steel);
-          for(let slat=0;slat<6;slat++)
-            box(x+side*.12,b.y-.43+slat*.17,center,.09,.065,1.58,enamel);
-        }
-      }
-      for(const side of [-1,1])box(b.x,b.y+b.h/2-.08,b.z+side*b.d/2,b.w+.2,.16,.25,olive);
-      cylinder(0,5.5,0,.13,5,steel);
-      const pedestal=material('#437b7e',.48,.44);
-      const beacon=new T.MeshStandardMaterial({color:'#f2bc5b',emissive:'#ec8126',emissiveIntensity:.65,roughness:.42});
-      colors.set('radar-beacon',beacon);
-      for(const side of [-1,1]){
-        // Low curved service housings flank the mast while the stairs stay clear.
-        const housing=new T.Mesh(new T.CapsuleGeometry(.58,2.1,5,14),teal);
-        housing.rotation.z=Math.PI/2;
-        housing.position.set(b.x+side*4.45,3.57,b.z+1.83);
-        housing.castShadow=housing.receiveShadow=true;root.add(housing);
-        cylinder(b.x+side*5.36,4.25,b.z+1.83,.15,.20,steel,12);
-        cylinder(b.x+side*5.36,4.39,b.z+1.83,.11,.14,beacon,12).castShadow=false;
-      }
-      cylinder(b.x,3.12,b.z,.94,.24,steel,24);
-      cylinder(b.x,3.68,b.z,.56,1.02,pedestal,24);
-      cylinder(b.x,4.24,b.z,.72,.20,steel,24);
-      radarRotor=new T.Group();radarRotor.position.set(b.x,7.6,b.z);root.add(radarRotor);
-      const radar=new T.Group();radar.rotation.z=-.55;radarRotor.add(radar);
-      const dishMaterial=material('#c9d4c9',.55,.4);dishMaterial.side=T.DoubleSide;
-      const profile=Array.from({length:15},(_,i)=>new T.Vector2(i/14*1.7,Math.pow(i/14,2)*.55));
-      const dish=new T.Mesh(new T.LatheGeometry(profile,40),dishMaterial);dish.castShadow=true;radar.add(dish);
-      const rim=new T.Mesh(new T.TorusGeometry(1.7,.035,6,40),steel);rim.rotation.x=Math.PI/2;rim.position.y=.55;radar.add(rim);
-      const feed=new T.Mesh(new T.CylinderGeometry(.1,.08,.35,10),steel);feed.position.y=1.15;radar.add(feed);
-      for(let n=0;n<3;n++){
-        const angle=n*Math.PI*2/3,start=new T.Vector3(Math.cos(angle)*1.65,.55,Math.sin(angle)*1.65),end=new T.Vector3(0,1.15,0),direction=end.clone().sub(start);
-        const brace=new T.Mesh(new T.CylinderGeometry(.025,.025,direction.length(),6),steel);brace.position.copy(start).add(end).multiplyScalar(.5);brace.quaternion.setFromUnitVectors(new T.Vector3(0,1,0),direction.normalize());radar.add(brace);
-      }
-      box(0,3.2,0,1,.4,1,olive);
-      for(const side of [-1,1]){
-        const panel=box(side*3.2,3.85,-3,2.6,.12,1.8,material('#263f58',.4,.26));panel.rotation.x=-.25;
-        for(let n=0;n<7;n++)box(side*3.2-1.1+n*.35,3.94,-3,.025,.025,1.65,material('#87969f',.6,.35));
-      }
-      for(const x of [-1.6,1.6])box(x,3.8,1.5,.9,1.6,.7,olive);
+      const platform=coastalRadar(b);radarRotor=platform.rotor;root.add(platform.root);
     }
     if(b.kind==='ruin'){
       box(b.x,b.y,b.z,b.w,b.h,b.d,get('#c1b59a'));

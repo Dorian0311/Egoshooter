@@ -10,25 +10,31 @@ import {harvestAnimation} from './remainsAnimation';
 import {acquireWorldWeapon,prewarmWorldWeapons,type WorldWeapon} from './worldWeapons';
 
 export type ArmChain={upper:T.Object3D;lower:T.Object3D;hand:T.Object3D};
-type SavedArm=ArmChain&{rest:T.Quaternion[];reach:number;shoulder:T.Vector3;finger?:T.Object3D};
+type SavedArm=ArmChain&{rest:T.Quaternion[];reach:number;shoulder:T.Vector3;finger?:T.Object3D;gripFinger?:T.Object3D};
 const point=new T.Vector3(),a=new T.Vector3(),b=new T.Vector3(),c=new T.Vector3(),axis=new T.Vector3(),bend=new T.Vector3(),desired=new T.Vector3(),rotation=new T.Quaternion(),parentRotation=new T.Quaternion();
-function aimBone(bone:T.Object3D,from:T.Vector3,to:T.Vector3){
+const bindPosition=new T.Vector3(),bindScale=new T.Vector3(),segment=new T.Vector3(),goalDirection=new T.Vector3();
+// Callers have just updated the end of this chain, including every ancestor.
+function aimUpdatedBone(bone:T.Object3D,from:T.Vector3,to:T.Vector3){
  if(from.lengthSq()<1e-10||to.lengthSq()<1e-10)return;
- rotation.setFromUnitVectors(from.normalize(),to.normalize());bone.getWorldQuaternion(parentRotation);rotation.multiply(parentRotation);
- // IK queries update their ancestor chains. Descendants are updated by the
- // final scene traversal; walking every finger here repeats the same work.
- bone.parent?.getWorldQuaternion(parentRotation);bone.quaternion.copy(parentRotation.invert().multiply(rotation));bone.updateWorldMatrix(false,false);
+ rotation.setFromUnitVectors(from.normalize(),to.normalize());
+ bone.matrixWorld.decompose(bindPosition,parentRotation,bindScale);rotation.multiply(parentRotation);
+ if(bone.parent)bone.parent.matrixWorld.decompose(bindPosition,parentRotation,bindScale);
+ else parentRotation.identity();
+ bone.quaternion.copy(parentRotation.invert().multiply(rotation));bone.updateWorldMatrix(false,false);
 }
 /** Two-bone IK in world space also supports rigs with intermediate twist joints. */
 export function solveArm(chain:ArmChain,target:T.Vector3,pole:T.Vector3){
- chain.upper.getWorldPosition(a);chain.lower.getWorldPosition(b);chain.hand.getWorldPosition(c);
+ // Updating the wrist once includes the elbow, shoulder and any intermediate twist joints.
+ chain.hand.updateWorldMatrix(true,false);
+ a.setFromMatrixPosition(chain.upper.matrixWorld);b.setFromMatrixPosition(chain.lower.matrixWorld);c.setFromMatrixPosition(chain.hand.matrixWorld);
  const upper=a.distanceTo(b),lower=b.distanceTo(c);if(upper<.01||lower<.01)return;
  axis.copy(target).sub(a);const distance=T.MathUtils.clamp(axis.length(),Math.abs(upper-lower)+.001,upper+lower-.001);axis.normalize();
  bend.copy(pole).sub(a).addScaledVector(axis,-point.copy(pole).sub(a).dot(axis));if(bend.lengthSq()<.00001)bend.set(1,0,0).addScaledVector(axis,-axis.x);bend.normalize();
  const cosine=T.MathUtils.clamp((upper*upper+distance*distance-lower*lower)/(2*upper*distance),-1,1);
  desired.copy(a).addScaledVector(axis,upper*cosine).addScaledVector(bend,upper*Math.sqrt(1-cosine*cosine));
- aimBone(chain.upper,b.clone().sub(a),desired.clone().sub(a));chain.lower.getWorldPosition(b);chain.hand.getWorldPosition(c);
- desired.copy(a).addScaledVector(axis,distance);aimBone(chain.lower,c.clone().sub(b),desired.clone().sub(b));
+ aimUpdatedBone(chain.upper,segment.subVectors(b,a),goalDirection.subVectors(desired,a));
+ chain.hand.updateWorldMatrix(true,false);b.setFromMatrixPosition(chain.lower.matrixWorld);c.setFromMatrixPosition(chain.hand.matrixWorld);
+ desired.copy(a).addScaledVector(axis,distance);aimUpdatedBone(chain.lower,segment.subVectors(c,b),goalDirection.subVectors(desired,b));
 }
 export function findRigObject(root:T.Group,name:string){let match:T.Object3D|undefined;root.traverse(o=>{if(o.name===name&&(!match||o.children.length>match.children.length))match=o;});return match;}
 export function rigArm(root:T.Group,names:string[]):ArmChain|undefined{const [upper,lower,hand]=names.map(name=>findRigObject(root,name));return upper&&lower&&hand?{upper,lower,hand}:undefined;}
@@ -41,7 +47,10 @@ export function createActorEquipment(root:T.Group,chains:Partial<Record<'armL'|'
  root.updateWorldMatrix(true,true);
  const arms=Object.fromEntries(Object.entries(chains).filter(([,chain])=>!!chain).map(([key,chain])=>{const upper=root.worldToLocal(chain!.upper.getWorldPosition(new T.Vector3())),lower=root.worldToLocal(chain!.lower.getWorldPosition(new T.Vector3())),hand=root.worldToLocal(chain!.hand.getWorldPosition(new T.Vector3()));return [key,{...chain,rest:[chain!.upper.quaternion.clone(),chain!.lower.quaternion.clone(),chain!.hand.quaternion.clone()],reach:(upper.distanceTo(lower)+lower.distanceTo(hand))*.985,shoulder:upper}];})) as Partial<Record<'armL'|'armR',SavedArm>>;
  const fingers:T.Object3D[]=[],bonusFingers:{bone:T.Object3D;rest:T.Quaternion;angle:number}[]=[];root.traverse(o=>{if(/^finger\d-\d\.[LR]$/.test(o.name))fingers.push(o);const finger=o.name.match(/^UN_([LR])_F_(Index|Mid|Ring|Pinkie|Thumb)_([123])$/);if(finger)bonusFingers.push({bone:o,rest:o.quaternion.clone(),angle:(finger[1]==='L'?-1:1)*(finger[2]==='Thumb'?.4:finger[2]==='Index'&&finger[3]==='1'?.25:finger[3]==='1'?.65:finger[3]==='2'?1.1:.7)});});
- for(const arm of Object.values(arms))if(arm){arm.hand.traverse(o=>{if(/Mid_1$|middle|finger3-1|Finger2(?![\w])/i.test(o.name)&&(!arm.finger||o.children.length>arm.finger.children.length))arm.finger=o;});}
+ for(const arm of Object.values(arms))if(arm){
+  arm.hand.traverse(o=>{if(/Mid_1$|middle|finger3-1|Finger2(?![\w])/i.test(o.name)&&(!arm.finger||o.children.length>arm.finger.children.length))arm.finger=o;});
+  arm.gripFinger=arm.hand.children.find(o=>o.name.startsWith('finger3-1'))??arm.finger??arm.hand.children.find(o=>o instanceof T.Bone);
+ }
  const mount=new T.Group();mount.name='held-weapon';mount.userData.nonAnatomic=true;root.add(mount);
  const metal=new T.MeshStandardMaterial({color:'#333c3b',metalness:.7,roughness:.38}),wood=new T.MeshStandardMaterial({color:'#5d4731',roughness:.72}),polymer=new T.MeshStandardMaterial({color:'#242a27',roughness:.75}),starMaterial=new T.MeshStandardMaterial({color:'#b8c0c1',metalness:.9,roughness:.25});
  const geometries:T.BufferGeometry[]=[],models:T.Group[]=[];
@@ -66,14 +75,14 @@ export function createActorEquipment(root:T.Group,chains:Partial<Record<'armL'|'
  const reset=(arm:SavedArm)=>{arm.upper.quaternion.copy(arm.rest[0]);arm.lower.quaternion.copy(arm.rest[1]);arm.hand.quaternion.copy(arm.rest[2]);};
  const target=new T.Vector3(),pole=new T.Vector3(),forward=new T.Vector3(),handDirection=new T.Vector3(),right=new T.Vector3(),left=new T.Vector3(),offset=new T.Vector3(),localGrip=new T.Vector3();
  function grip(arm:SavedArm,localTarget:T.Vector3,side:number,up=false){
-  reset(arm);arm.upper.updateWorldMatrix(true,false);target.copy(localTarget);root.localToWorld(target);pole.set(side*.55,1.01,.12);root.localToWorld(pole);solveArm(arm,target,pole);
-  const finger=arm.hand.children.find(o=>o.name.startsWith('finger3-1'))??arm.finger??arm.hand.children.find(o=>o instanceof T.Bone);
-  if(finger){arm.hand.getWorldPosition(target);finger.getWorldPosition(handDirection).sub(target);forward.set(0,up?1:arm.finger&&side<0?.6:-.6,up?0:-.8).applyQuaternion(root.getWorldQuaternion(rotation));aimBone(arm.hand,handDirection,forward);}
+  reset(arm);target.copy(localTarget);root.localToWorld(target);pole.set(side*.55,1.01,.12);root.localToWorld(pole);solveArm(arm,target,pole);
+  const finger=arm.gripFinger;
+  if(finger){arm.hand.getWorldPosition(target);finger.getWorldPosition(handDirection).sub(target);forward.set(0,up?1:arm.finger&&side<0?.6:-.6,up?0:-.8).applyQuaternion(root.getWorldQuaternion(rotation));aimUpdatedBone(arm.hand,handDirection,forward);}
  }
  function gestureHand(arm:SavedArm,side:'armL'|'armR'){
   const suffix=side==='armL'?'.L':'.R',middle=findRigObject(root,'finger3-1'+suffix),middleNext=findRigObject(root,'finger3-2'+suffix),index=findRigObject(root,'finger2-1'+suffix),pinky=findRigObject(root,'finger5-1'+suffix);
   for(const finger of fingers)if(finger.name.endsWith(suffix)){const digit=Number(finger.name[6]),joint=Number(finger.name[8]);finger.rotation.set(digit===3?0:digit===1?joint===1?.7:1.0:joint===1?1.15:joint===2?1.35:.85,0,digit===1?(side==='armL'?.45:-.45):0);}
-  if(!middle||!middleNext)return;arm.hand.updateWorldMatrix(true,true);const up=new T.Vector3(0,1,0).applyQuaternion(root.getWorldQuaternion(new T.Quaternion())),finger=middleNext.getWorldPosition(new T.Vector3()).sub(middle.getWorldPosition(new T.Vector3()));aimBone(arm.hand,finger,up);
+  if(!middle||!middleNext)return;arm.hand.updateWorldMatrix(true,true);const up=new T.Vector3(0,1,0).applyQuaternion(root.getWorldQuaternion(new T.Quaternion())),finger=middleNext.getWorldPosition(new T.Vector3()).sub(middle.getWorldPosition(new T.Vector3()));aimUpdatedBone(arm.hand,finger,up);
   if(index&&pinky){const across=index.getWorldPosition(new T.Vector3()).sub(pinky.getWorldPosition(new T.Vector3())),normal=across.cross(up).normalize(),wanted=new T.Vector3(0,0,-1).applyQuaternion(root.getWorldQuaternion(new T.Quaternion())),angle=Math.atan2(up.dot(normal.clone().cross(wanted)),normal.dot(wanted)),delta=new T.Quaternion().setFromAxisAngle(up,angle),world=arm.hand.getWorldQuaternion(new T.Quaternion()),parent=arm.hand.parent!.getWorldQuaternion(new T.Quaternion()).invert();arm.hand.quaternion.copy(parent.multiply(delta).multiply(world));arm.hand.updateWorldMatrix(false,true);}
  }
  return {mount,update(p:Player,time:number,now:number){

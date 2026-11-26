@@ -93,6 +93,12 @@ function show() {
   if(mapId==='storm'&&!routeReview&&params.get('focus')==='harbour-quay'){
     Object.assign(player,{x:113,y:ground(113,-23,routeWorld),z:-23,yaw:-Math.PI/2,pitch:.035});
   }
+  if(mapId==='storm'&&!routeReview&&params.get('focus')==='radar-platform'){
+    Object.assign(player,{x:-19,y:ground(-19,3,routeWorld),z:3,yaw:-1.41,pitch:.28});
+  }
+  if(mapId==='storm'&&!routeReview&&params.get('focus')==='radar-deck'){
+    Object.assign(player,{x:-7,y:3,z:-5,yaw:-2.17,pitch:.12});
+  }
   const notice=islandShops.find(shop=>params.get('focus')==='notice-'+shop.id);
   if(mapId==='storm'&&notice)Object.assign(player,{x:notice.x-2.43,y:0,z:notice.z-notice.front*(notice.d/2-2.4),yaw:notice.front===1?0:Math.PI,pitch:.11});
   if(mapId==='storm'&&params.get('focus')==='water')Object.assign(player,{x:8,z:117,y:ground(8,117,routeWorld),yaw:Math.PI-.48,pitch:-.05});

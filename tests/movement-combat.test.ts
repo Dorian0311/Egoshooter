@@ -37,3 +37,16 @@ test('collision layouts are reused until a door or pane changes, including in-pl
 test('detached parts settle with their actual bounds above the floor and expire without leaking objects',()=>{
  const scene=new T.Scene(),world={...getWorld('cologne'),boxes:[]},gore=createGore(scene,()=>world),piece=new T.Group();piece.add(new T.Mesh(new T.BoxGeometry(.15,.8,.15),new T.MeshStandardMaterial()));piece.position.set(8,2,0);gore.add(piece,new T.Vector3(1,.1,0),new T.Vector3(8,2.4,0));for(let i=0;i<480;i++)gore.update(1/60);assert.ok(new T.Box3().setFromObject(piece).min.y>=-.002);assert.equal(scene.children.length,1);gore.update(3);assert.equal(scene.children.length,0);gore.dispose();
 });
+
+test('IK reads current ancestor matrices across intermediate twist bones on consecutive poses',()=>{
+ const parent=new T.Group(),upper=new T.Bone(),twist=new T.Bone(),lower=new T.Bone(),forearm=new T.Bone(),hand=new T.Bone();
+ parent.add(upper);upper.add(twist);twist.add(lower);lower.add(forearm);forearm.add(hand);
+ upper.position.set(.13,1.38,0);twist.position.x=.12;lower.position.x=.18;forearm.position.x=.14;hand.position.x=.16;
+ for(const yaw of [.3,-.9,1.2]){
+  parent.rotation.y=yaw;parent.position.set(yaw,2,4);twist.rotation.x=yaw*.2;forearm.rotation.x=-yaw*.1;
+  const target=parent.localToWorld(new T.Vector3(.19,1.12,-.32));
+  const pole=parent.localToWorld(new T.Vector3(.6,1,.1));
+  solveArm({upper,lower,hand},target,pole);
+  assert.ok(hand.getWorldPosition(new T.Vector3()).distanceTo(target)<.002);
+ }
+});

@@ -384,6 +384,9 @@ export function createHuman(data:HumanData|BonusCharacterData|CivilianCharacterD
  const held=createActorEquipment(group,{armL:rigArm(group,['upperarm01.L','lowerarm01.L','wrist.L']),armR:rigArm(group,['upperarm01.R','lowerarm01.R','wrist.R'])},civilian,false,purpose==='actor');
  group.userData.hasCrouchAnimation=!!motion;
  let previous=new T.Vector3(),speed=0,movementInitialized=!civilian;const rootHeight=named.get('root')?.position.y??0;
+ const fingerRest=Array.from(named).filter(([name])=>name.startsWith('finger')).map(([name,bone])=>({
+  bone,angle:name.startsWith('finger1-1')?0:(name.endsWith('.L')?1:-1)*.38
+ }));
  const upperPose=new T.Quaternion(),upperParent=new T.Quaternion(),leanPose=new T.Quaternion(),poseAxis=new T.Vector3(1,0,0);
  function update(player:Player,time:number,dt:number,now=time){
   civilianLook?.style(player.id);
@@ -405,7 +408,7 @@ export function createHuman(data:HumanData|BonusCharacterData|CivilianCharacterD
   if(civilian&&!motion){for(const side of ['L','R']){const sign=side==='L'?1:-1,shoulder=named.get(`upperarm01.${side}`),elbow=named.get(`lowerarm01.${side}`);if(shoulder){shoulder.rotation.set(-walk*sign*.55,0,sign*.65);}if(elbow)elbow.rotation.x=.14;} }
   if(civilian&&!motion){const hip=named.get('root');if(hip)hip.position.y=rootHeight-(1-Math.cos(walk))*.88;for(const side of ['L','R']){const foot=named.get(`foot.${side}`);if(foot)foot.rotation.x=-(named.get(`upperleg01.${side}`)?.rotation.x??0)-(named.get(`lowerleg01.${side}`)?.rotation.x??0);}}
   if(!motion||civilian)headBone.rotation.x=-player.pitch*.35;
-  for(const [name,bone]of named)if(name.startsWith('finger'))bone.rotation.set(0,0,name.startsWith('finger1-1')?0:(name.endsWith('.L')?1:-1)*.38);
+  for(const finger of fingerRest)finger.bone.rotation.set(0,0,finger.angle);
   applyActionPose(group,player,time,now);held.update(player,time,now);
   if(motion)bootContact.update(player.y,player.grounded&&player.hp>0&&!player.crouching&&(motion.state()==='walk'||motion.state()==='jog'),player.yaw+motion.groundYaw());
  }

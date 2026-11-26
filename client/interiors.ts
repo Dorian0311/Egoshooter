@@ -1,4 +1,5 @@
 import {createWindowPanes} from './windowPanes';
+import {createGlassShards} from './glassShards';
 import {eyePosition} from '../shared/injuries';
 import {batchStaticMeshes} from './scenery';
 import {createInteriorLighting,type InteriorLamp} from './interiorLighting';
@@ -84,7 +85,7 @@ export function createInteriors(scene:T.Scene,world:World){
  marks.instanceMatrix.setUsage(T.DynamicDrawUsage);
  const markMatrix=new T.Matrix4();
  let markIndex=0,marksChanged=false;
- const shards:{mesh:T.Mesh;velocity:T.Vector3;life:number}[]=[];const shardGeometry=new T.TetrahedronGeometry(.06);const shardMat=material(0xb4d4cc);
+ const shards=createGlassShards(root);
  const doorStates=new Map<string,boolean>();
  function sync(next:InteriorState|undefined){
   if(next)state=next;
@@ -106,12 +107,12 @@ export function createInteriors(scene:T.Scene,world:World){
   interaction(p:Player,yaw:number){
    const eye=eyePosition(p);return fixtures.filter(f=>f.type!=='glass').map(f=>{const x=f.type==='door'?f.box.x+1.7:f.box.x,dx=x-eye.x,dz=f.box.z-eye.z;return {f,distance:Math.hypot(dx,dz,f.box.y-eye.y),dot:dx*-Math.sin(yaw)+dz*-Math.cos(yaw)};}).filter(v=>v.distance<2.7&&v.dot>.1).sort((a,b)=>a.distance-b.distance)[0]?.f;
   },label(id:string){return id.startsWith('door')?(state.doors[id]?'Tür schließen':'Tür öffnen'):(state.lights[id]?'Licht ausschalten':'Licht einschalten');},
-  impact(e:GameEvent){if(!e.point)return;if(e.type==='shot'){marks.setMatrixAt(markIndex%48,markMatrix.makeTranslation(...e.point));marks.count=Math.min(48,++markIndex);marksChanged=true;}if(e.type==='glass'){for(let n=0;n<12&&shards.length<72;n++){const mesh=new T.Mesh(shardGeometry,shardMat);mesh.position.set(...e.point);root.add(mesh);shards.push({mesh,velocity:new T.Vector3(Math.sin(n*7)*2,Math.cos(n)*2,Math.cos(n*7)*2),life:1.4});}}},
+  impact(e:GameEvent){if(!e.point)return;if(e.type==='shot'){marks.setMatrixAt(markIndex%48,markMatrix.makeTranslation(...e.point));marks.count=Math.min(48,++markIndex);marksChanged=true;}if(e.type==='glass')shards.emit(e.point);},
   update(p:Player|undefined,time:number,dt:number){
    if(marksChanged){marks.instanceMatrix.needsUpdate=true;marks.computeBoundingSphere();marksChanged=false;}
    lighting.update(p??origin,time,state);
    const room=p?insideBuilding(world,p.x,p.z):-1;dust.visible=room>=0&&state.lights[`light-${room}`]!==false;
    if(room>=0){const b=world.buildings[room],floor=(p?.y??0)>=3.8?4:0;for(let n=0;n<72;n++){dustPositions[n*3]=b.x+Math.sin(n*12.3+time*.00007)*5;dustPositions[n*3+1]=floor+.3+((n*.173+time*.00004)%3);dustPositions[n*3+2]=b.z+Math.cos(n*8.7+time*.0001)*5;}dustGeometry.attributes.position.needsUpdate=true;dustGeometry.boundingSphere!.center.set(b.x,floor+1.8,b.z);}
-   for(let n=shards.length-1;n>=0;n--){const s=shards[n];s.life-=dt;if(s.life<=0){s.mesh.removeFromParent();shards.splice(n,1);continue;}s.velocity.y-=9.8*dt;s.mesh.position.addScaledVector(s.velocity,dt);s.mesh.rotation.x+=dt*3;}
-  },dispose(){lighting.dispose();panes.dispose();root.traverse(o=>{if(o instanceof T.Mesh||o instanceof T.Points)o.geometry.dispose();});materials.forEach(m=>m.dispose());textures.forEach(t=>t.dispose());shardGeometry.dispose();marks.dispose();root.removeFromParent();}};
+   shards.update(dt);
+  },dispose(){lighting.dispose();panes.dispose();shards.dispose();root.traverse(o=>{if(o instanceof T.Mesh||o instanceof T.Points)o.geometry.dispose();});materials.forEach(m=>m.dispose());textures.forEach(t=>t.dispose());marks.dispose();root.removeFromParent();}};
 }

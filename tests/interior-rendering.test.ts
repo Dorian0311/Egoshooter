@@ -1,6 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import * as T from 'three';
+import {createGlassShards} from '../client/glassShards';
 import {createInteriorLighting} from '../client/interiorLighting';
 import {createInteriors} from '../client/interiors';
 import {bakeShopLights} from '../client/shopLighting';
@@ -8,6 +9,30 @@ import {createWeaponScene} from '../client/weaponScene';
 import {instanceStaticModel,batchStaticMeshes} from '../client/scenery';
 import {getWorld} from '../shared/world';
 import {initialInteriors,interiorFixtures} from '../shared/interiors';
+
+test('window debris uses one bounded instance batch, including after expiration',()=>{
+ const root=new T.Group(),shards=createGlassShards(root);
+ const mesh=root.children[0] as T.InstancedMesh;
+ const matrix=new T.Matrix4(),position=new T.Vector3();
+ shards.emit([10,3,5]);
+ shards.update(.7);
+ assert.equal(mesh.count,12);
+ for(let i=0;i<8;i++)shards.emit([20,3,5]);
+ shards.update(.1);
+ assert.equal(root.children.length,1);
+ assert.equal(mesh.count,72);
+ shards.update(.65);
+ assert.equal(mesh.count,60);
+ mesh.getMatrixAt(0,matrix);
+ assert.ok(position.setFromMatrixPosition(matrix).x>17);
+ shards.update(.8);
+ assert.equal(mesh.count,0);
+ assert.equal(mesh.visible,false);
+ shards.emit([30,3,5]);shards.update(1/60);
+ assert.equal(mesh.count,12);
+ shards.dispose();
+ assert.equal(root.children.length,0);
+});
 
 test('baked shop lighting shares one atlas and leaves exterior paving alone',()=>{
  const street=new T.Group(),original=new T.MeshStandardMaterial();
