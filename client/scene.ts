@@ -1,7 +1,7 @@
 import {weaponSlot,fallbackSidearm,SNIPER_ID,G43_SCOPE_ID,ROCKET_ID} from '../shared/weapons';
 import {createCatSilencer} from './catSilencer';
 import {createHarbourClaims} from './harbourClaims';
-import {islandShops} from '../shared/islandStreet';
+import {closedShopViewDepth,shopOpeningInView,streetRooms} from './shopView';
 import {nearbyBoxes} from '../shared/boxIndex';
 import {createBattleAudio,advanceFootstep,footstepMaterial,type StepState} from './battleAudio';
 import {createAnatomy} from './anatomy';
@@ -101,12 +101,6 @@ export function createScene(
     :undefined;
   camera.rotation.order = "YXZ";
   const island=mapId==='storm';
-  const streetRooms=island?islandShops.map(shop=>{
-    const front=shop.z+shop.front*shop.d/2;
-    return {shop,opening:new T.Box3(
-      new T.Vector3(shop.x-shop.w/2,0,front-.30),
-      new T.Vector3(shop.x+shop.w/2,shop.h,front+.30))};
-  }):[];
   const daylight=island?.70:.64;
   const skyLight=new T.HemisphereLight(island?'#c2d8f2':'#cfdaeb',island?'#9b8f77':'#827662',daylight);
   const daylightSky=skyLight.color.clone(),daylightGround=skyLight.groundColor.clone();
@@ -834,8 +828,9 @@ export function createScene(
     const room=island?streetRooms.find(({shop:s})=>eye.y>.12&&eye.y<s.h-.3&&
       Math.abs(eye.x-s.x)<s.w/2-.4&&Math.abs(eye.z-s.z)<s.d/2-.4):undefined;
     if(island){
-      // The short far plane still spans the entire room, including its facade on the next turn.
-      const far=room&&!actorFrustum.intersectsBox(room.opening)?24:350;
+      // Keep the full depth when the next projection may widen out of weapon zoom.
+      const far=room&&camera.fov>=(inspectionView?50:settings.fov)&&!shopOpeningInView(actorFrustum,room.opening)
+        ?closedShopViewDepth(camera,room.shop):350;
       if(camera.far!==far){
         camera.far=far;camera.updateProjectionMatrix();
         actorFrustum.setFromProjectionMatrix(actorProjection.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse));
@@ -1010,7 +1005,7 @@ export function createScene(
     mapDetails.update(t/1000);
     environmentUpgrade.update(camera.position,quality);
     sceneAssets.updateCrates(camera,aimBlend>.04);
-    graphics.render(dt,pose?.aimBlend??0,!menu,cpuTimes.at(-1),frameMs/1000,viewport,weapon.visible);
+    graphics.render(dt,pose?.aimBlend??0,!menu,cpuTimes.at(-1),frameMs/1000,viewport,weapon.visible,Math.max(24,camera.far));
     const cpuMs=performance.now()-cpuStarted;
     cpuTimes.push(cpuMs);if(cpuTimes.length>180)cpuTimes.shift();
     if(frameProfile.length<profileLimit)frameProfile.push({frameMs,cpuMs,...graphics.frameState,steps,calls:renderer.info.render.calls,triangles:renderer.info.render.triangles,programs:renderer.info.programs?.length??0,detailDrawsSkipped});

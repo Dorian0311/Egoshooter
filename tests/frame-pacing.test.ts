@@ -6,6 +6,7 @@ import {createActorDetails} from '../client/actorDetails';
 import {createGpuTiming} from '../client/gpuTiming';
 import {ResolutionGovernor} from '../client/graphicsSettings';
 import {ShadowCadence} from '../client/shadowCadence';
+import {closedShopViewDepth,shopOpeningInView,streetRooms} from '../client/shopView';
 
 test('cached static transforms preserve world placement and still follow a moving parent',()=>{
  const parent=new T.Group(),root=new T.Group(),mesh=new T.Mesh(new T.BoxGeometry(),new T.MeshBasicMaterial());parent.add(root);root.add(mesh);parent.position.x=10;mesh.position.set(2,3,4);
@@ -26,6 +27,37 @@ test('hidden render rigs skip matrix propagation and immediately catch up when v
  assert.equal(bone.matrixWorld.elements[12],20);
  details.dispose();root.visible=false;parent.position.x=30;scene.updateMatrixWorld(true);
  assert.equal(bone.matrixWorld.elements[12],30);
+});
+
+test('blocked shop views keep every room corner and trim within the far plane',()=>{
+ const camera=new T.PerspectiveCamera();
+ for(const {shop} of streetRooms){
+  camera.position.set(shop.x-shop.w*.33,1.65,shop.z+shop.front);
+  for(let i=0;i<24;i++){
+   camera.rotation.set(i%2?.6:-.6,i*Math.PI/12,0,'YXZ');
+   camera.updateMatrixWorld();
+   const far=closedShopViewDepth(camera,shop);
+   assert.ok(far>0&&far<24);
+   for(const x of [-shop.w/2-.2,shop.w/2+.2])for(const y of [-.2,shop.h+.2])for(const z of [-shop.d/2-.2,shop.d/2+.2]){
+    const vertex=new T.Vector3(shop.x+x,y,shop.z+z).applyMatrix4(camera.matrixWorldInverse);
+    assert.ok(-vertex.z<far);
+   }
+  }
+ }
+});
+
+test('a fast turn reopens the shop view even when the old far plane stops before the doorway',()=>{
+ const {shop,opening}=streetRooms[1],camera=new T.PerspectiveCamera(72,16/9,.08,2);
+ const frustum=new T.Frustum(),projection=new T.Matrix4();
+ camera.position.set(shop.x,1.65,shop.z-shop.front*3.5);
+ camera.lookAt(shop.x,1.65,shop.z+shop.front*4);
+ camera.updateMatrixWorld();
+ frustum.setFromProjectionMatrix(projection.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse));
+ assert.equal(frustum.intersectsBox(opening),false);
+ assert.equal(shopOpeningInView(frustum,opening),true);
+ camera.rotateY(Math.PI);camera.updateMatrixWorld();
+ frustum.setFromProjectionMatrix(projection.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse));
+ assert.equal(shopOpeningInView(frustum,opening),false);
 });
 
 test('automatic shadows never redraw on consecutive slow frames and retain a 30 Hz ceiling',()=>{

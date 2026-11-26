@@ -36,8 +36,6 @@ export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
   weaponPass.clear=false;weaponPass.clearDepth=true;
   const ao = new WorldOcclusionPass(scene, camera, 1, 1, 24);
   ao.kernelRadius = .65;
-  ao.minDistance = .001;
-  ao.maxDistance = .025;
   const bloom = new UnrealBloomPass(new T.Vector2(1, 1), .075, .3, 1.65);
   const smaa = new SMAAPass(1, 1);
   // SMAA reads only red and green edge flags. RG16F preserves their filtered values.
@@ -197,7 +195,7 @@ export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
     warmup,warmupWorldDraw,
     weaponFov:()=>weaponCamera.fov,
     stats:()=>({quality,antialias:fxaa.enabled?'fxaa':'smaa',aaPasses:Number(fxaa.enabled)+Number(smaa.enabled),scale:ratio/Math.max(.01,renderPixelRatio(quality,window.devicePixelRatio,width,height)),pixelRatio:ratio,gpuMs:gpuTiming.state.ms}),
-    render(dt: number,aimBlend=0,adaptive=true,cpuMs?:number,frameSeconds=dt,viewport?:{width:number;height:number},weaponVisible=true) {
+    render(dt: number,aimBlend=0,adaptive=true,cpuMs?:number,frameSeconds=dt,viewport?:{width:number;height:number},weaponVisible=true,occlusionFar=camera.far) {
       const w = Math.max(1, viewport?.width??renderer.domElement.clientWidth);
       const h = Math.max(1, viewport?.height??renderer.domElement.clientHeight);
       // A few asynchronous samples/second are enough for the quality governor;
@@ -233,6 +231,11 @@ export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
         }
         uniforms.cameraNear.value=ao.depthRenderMaterial.uniforms.cameraNear.value=camera.near;
         uniforms.cameraFar.value=ao.depthRenderMaterial.uniforms.cameraFar.value=camera.far;
+        // SSAO compares normalized depth intervals. Keep the old world-space
+        // distances when a closed interior shortens the perspective frustum.
+        const depthScale=(occlusionFar-camera.near)/(camera.far-camera.near);
+        ao.minDistance=.001*depthScale;
+        ao.maxDistance=.025*depthScale;
       }
       // Snap in LIGHT space, not world space, so shadows remain stable while moving.
       if(cpuMs!==undefined&&Number.isFinite(cpuMs))frameCpuAverage+=(Math.min(50,cpuMs)-frameCpuAverage)*.1;

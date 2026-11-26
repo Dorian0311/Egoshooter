@@ -213,16 +213,37 @@ export function addIslandStreet(scene:T.Group){
         }
       }
     }
-    const poster=document.createElement('canvas');poster.width=640;poster.height=320;
-    const ctx=poster.getContext('2d')!;
-    ctx.fillStyle=['#304b42','#21485a','#583735'][index];ctx.fillRect(0,0,640,320);
-    ctx.strokeStyle='#cfaf72';ctx.lineWidth=6;ctx.strokeRect(12,12,616,296);
-    ctx.textAlign='center';ctx.fillStyle='#f4e6bc';ctx.font='bold 45px Georgia';
-    ctx.fillText(['TODAY AT THE DINER','HARBOUR SUPPLY','COAST RECORDS'][index],320,73);
-    ctx.font='30px Georgia';
-    const lines=[['House breakfast ........ 4.95','Grilled cheese ........ 3.25','Fresh coffee ........ 1.00'],['MARINE HARDWARE','Rope  /  paint  /  tackle','Orders collected at the counter'],['NEW ARRIVALS','Jazz   /   Soul   /   Rock','Listening desk open daily']][index];
-    lines.forEach((line,n)=>ctx.fillText(line,320,140+n*55));
-    const texture=new T.CanvasTexture(poster);texture.colorSpace=T.SRGBColorSpace;
+    let texture:T.Texture;
+    if(s.id==='harbour-supply'){
+      texture=loader.load(base+'chandlery-samples.webp');texture.anisotropy=4;
+      const wall=-s.d/2+.29;
+      for(const side of [-1,1]){
+        detail(side*1.70,2.29,wall,.085,1.81,.11,wood);
+        detail(0,2.29+side*.865,wall,3.47,.08,.11,wood);
+      }
+      // Rope for sale hangs beside the sample plate. Flatten the coil toward the
+      // wall, keeping a true silhouette and a short loose end at either side.
+      detail(2.22,2.74,wall+.052,.27,.18,.12,wood);
+      detail(2.22,2.71,wall+.17,.055,.06,.25,iron);
+      for(let turn=0;turn<4;turn++){
+        const coil=solid(new T.TorusGeometry(.265,.025,5,22),s.x+2.22+turn*.008,2.34-turn*.013,s.z+s.front*(wall+.13+turn*.036),trim);
+        coil.scale.set(1,.37/.265,1);coil.rotation.z=.07-turn*.047;
+      }
+      detail(2.40,1.95,wall+.22,.044,.39,.046,trim).rotation.z=.22;
+      detail(2.06,2.00,wall+.19,.048,.28,.043,trim).rotation.z=-.17;
+    }else{
+      const diner=s.id==='diner',poster=document.createElement('canvas');poster.width=640;poster.height=320;
+      const ctx=poster.getContext('2d')!;
+      ctx.fillStyle=diner?'#304b42':'#583735';ctx.fillRect(0,0,640,320);
+      ctx.strokeStyle='#cfaf72';ctx.lineWidth=6;ctx.strokeRect(12,12,616,296);
+      ctx.textAlign='center';ctx.fillStyle='#f4e6bc';ctx.font='bold 45px Georgia';
+      ctx.fillText(diner?'TODAY AT THE DINER':'COAST RECORDS',320,73);
+      ctx.font='30px Georgia';
+      const lines=diner?['House breakfast ........ 4.95','Grilled cheese ........ 3.25','Fresh coffee ........ 1.00']:['NEW ARRIVALS','Jazz   /   Soul   /   Rock','Listening desk open daily'];
+      lines.forEach((line,n)=>ctx.fillText(line,320,140+n*55));
+      texture=new T.CanvasTexture(poster);
+    }
+    texture.colorSpace=T.SRGBColorSpace;
     const board=new T.Mesh(new T.PlaneGeometry(3.35,1.68),new T.MeshBasicMaterial({map:texture}));
     board.rotation.y=s.front===1?0:Math.PI;board.position.set(s.x,2.29,s.z-s.front*(s.d/2-.255));street.add(board);
     const back=-s.d/2+.27;

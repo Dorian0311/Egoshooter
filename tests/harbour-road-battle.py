@@ -7,6 +7,7 @@ import re
 import time
 from pathlib import Path
 from playwright.sync_api import TimeoutError as PlaywrightTimeout, sync_playwright
+from harbour_frame_metrics import moving_frames
 
 
 PRODUCTION = os.environ.get('BATTLE_PRODUCTION') == '1'
@@ -86,7 +87,7 @@ def measure(page, name):
 
 
 def measure_turns(page, name):
-    page.evaluate('window.turnStarted=performance.now();harbourQA.scene.profileFrames(3000)')
+    page.evaluate('window.turnStarted=performance.now();window.turnRanges=[];harbourQA.scene.profileFrames(3000)')
     life,start = page.evaluate('[harbourQA.player.life,harbourQA.player.yaw]')
     turns=int(os.environ.get('BATTLE_TURNS','12'))
     assert 1<=turns<=80
@@ -96,8 +97,16 @@ def measure_turns(page, name):
                 page.keyboard.press('r')
             if n%12<8:
                 page.mouse.down()
-        for _ in range(6):
-            mouse(page, (1 if n%2==0 else -1)*262)
+        for step in range(6):
+            page.evaluate("""([dx,step])=>{
+                const count=()=>harbourQA.scene.frameProfile().length;
+                if(step===0) turnRanges.push([count(),null]);
+                document.dispatchEvent(new MouseEvent('mousemove',{movementX:dx,bubbles:true}));
+                if(step===5) {
+                    const range=turnRanges.at(-1);
+                    requestAnimationFrame(()=>{range[1]=count()});
+                }
+            }""", [(1 if n%2==0 else -1)*262, step])
             page.wait_for_timeout(15)
         if COMBAT_MOVEMENT:
             page.mouse.up()
@@ -114,15 +123,17 @@ def measure_turns(page, name):
         hp,current_life=page.evaluate('[harbourQA.player.hp,harbourQA.player.life]')
         if not hp or current_life!=life:
             raise TurnLifeInterrupted((name,n+1,life,current_life,hp))
-    return dict(read_profile(page, name),turns=turns)
+    return dict(read_profile(page, name, during_turn=True),turns=turns)
 
 
-def read_profile(page, name):
+def read_profile(page, name, during_turn=False):
     frames = page.evaluate('harbourQA.scene.frameProfile()')
     ms = sorted(f['frameMs'] for f in frames)
     result = dict(site=name, frames=len(ms), fps=round(1000*len(ms)/sum(ms),1),
                   p95=ms[math.ceil(len(ms)*.95)-1], p99=ms[math.ceil(len(ms)*.99)-1], worst=max(ms),
                   over33=sum(t>33 for t in ms), cpuMs=round(sum(f['cpuMs'] for f in frames)/len(ms),1), calls=round(sum(f['calls'] for f in frames)/len(ms)),scale=frames[-1]['pixelRatio'],gpuMs=frames[-1].get('gpuMs'))
+    if during_turn:
+        result['activeTurn'] = moving_frames(frames, page.evaluate('turnRanges'))
     print(result, flush=True)
     for i in sorted(range(1,len(frames)),key=lambda i:frames[i]['frameMs'],reverse=True)[:3]:
         if frames[i]['frameMs']>45:
@@ -254,7 +265,15 @@ with sync_playwright() as pw:
         print('Startdiagnose:',page.locator('body').inner_text()[-1000:],flush=True)
         raise
     page.evaluate('''Promise.race([harbourQA.scene.worldPrepared,new Promise((_,reject)=>setTimeout(()=>reject(Error("Scene warmup timeout")),90000))])''')
-    print(page.evaluate("()=>{const gl=document.querySelector('canvas').getContext('webgl2');return gl.getParameter(gl.getExtension('WEBGL_debug_renderer_info').UNMASKED_RENDERER_WEBGL)}"),flush=True)
+    renderer_info=page.evaluate("""()=>{
+        const gl=document.querySelector('.city-canvas').getContext('webgl2');
+        const ext=gl.getExtension('WEBGL_debug_renderer_info');
+        return {renderer:gl.getParameter(ext?.UNMASKED_RENDERER_WEBGL??gl.RENDERER),
+            timerQuerySupported:!!gl.getExtension('EXT_disjoint_timer_query_webgl2'),
+            quality:harbourQA.scene.getRenderStats().quality};
+    }""")
+    assert renderer_info['quality']==quality,(renderer_info,quality)
+    print(renderer_info,flush=True)
     bots = page.evaluate("harbourQA.state.players.filter(p=>p.kind==='bot').length")
     assert bots == (enemies or 7), bots
     page.locator('canvas').last.click(force=True)
@@ -348,7 +367,7 @@ with sync_playwright() as pw:
                 profile_start=profile['startTime']/1000-navigation*1000
             (OUT/f'{map_id}-profile-timing.json').write_text(json.dumps(dict(start=profile_start,tasks=turn['longTasks'])))
             profiler.detach()
-        result=dict(bots=bots,width=width,height=height,quality=quality,entry=entry,turn=turn)
+        result=dict(bots=bots,width=width,height=height,quality=quality,renderer=renderer_info,entry=entry,turn=turn)
         suffix='-combat' if COMBAT_MOVEMENT else ''
         report=OUT/f'{map_id}-{bots}-bots-{width}x{height}{suffix}{quality_suffix}.json'
         report.write_text(json.dumps(result,indent=2))
@@ -425,6 +444,6 @@ with sync_playwright() as pw:
         (OUT/'storm-shops-profile-timing.json').write_text(json.dumps(dict(start=profile_start)))
         road_profiler.detach()
     suffix=f'-{condition}' if condition else ''
-    report=dict(bots=bots,width=width,height=height,quality=quality,condition=condition or 'standard',results=results)
+    report=dict(bots=bots,width=width,height=height,quality=quality,renderer=renderer_info,condition=condition or 'standard',results=results)
     (OUT/f'report-{bots}-bots-{width}x{height}{suffix}{quality_suffix}.json').write_text(json.dumps(report,indent=2))
     browser.close()
