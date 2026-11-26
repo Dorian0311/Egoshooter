@@ -32,14 +32,29 @@ function surfaceMap(material:T.MeshStandardMaterial,slot:'map'|'normalMap',name:
  }).catch(()=>{/* Keep the neutral base if a texture is unavailable. */});
 }
 
+// Opaque albedo alpha stores the local roughness reduction. Reading the
+// existing map sample keeps both the texture count and fetch count unchanged.
+function packedFinish(material:T.MeshStandardMaterial){
+ material.onBeforeCompile=shader=>{
+  shader.fragmentShader=shader.fragmentShader.replace('#include <roughnessmap_fragment>',`#include <roughnessmap_fragment>
+#ifdef USE_MAP
+ roughnessFactor=clamp(roughnessFactor+sampledDiffuseColor.a-1.0,0.04,1.0);
+ diffuseColor.a=opacity;
+#endif`);
+ };
+ material.customProgramCacheKey=()=>'viewmodel-packed-roughness-v1';
+}
+
 export function handSurface(){
  const material=new T.MeshStandardMaterial({name:'viewmodel-skin',roughness:.68,envMapIntensity:.44,vertexColors:true});
+ packedFinish(material);
  surfaceMap(material,'map','hand-skin');surfaceMap(material,'normalMap','hand-skin-normal');material.normalScale.setScalar(.54);
  return material;
 }
 
 export function sleeveSurface(color:T.ColorRepresentation,geometry:T.BufferGeometry){
  const material=new T.MeshStandardMaterial({name:'viewmodel-sleeve',color,roughness:.94});
+ packedFinish(material);
  surfaceMap(material,'map','jacket-twill');surfaceMap(material,'normalMap','jacket-twill-normal');material.normalScale.setScalar(.70);
  // GLBs exported for different weapon families orient their cuff at opposite ends.
  const position=geometry.getAttribute('position');geometry.computeBoundingBox();

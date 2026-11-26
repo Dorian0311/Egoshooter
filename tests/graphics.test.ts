@@ -3,6 +3,7 @@ import test from 'node:test';
 import { parseGraphicsQuality, renderPixelRatio,ResolutionGovernor } from '../client/graphicsSettings.ts';
 import {addMilitaryRoofs} from '../client/militaryRoofs';
 import * as T from 'three';
+import {createMuzzleEffects} from '../client/muzzleEffects';
 import { addFacadeDetails, addAlpineBackdrop, createRiver, batchStaticMeshes, instanceStaticModel } from '../client/scenery.ts';
 import { getWorld } from '../shared/world.ts';
 
@@ -90,6 +91,34 @@ test('river stays below the playable bridge and advances its animation uniform',
   river.update(12);
   assert.equal(shader.uniforms.riverTime.value, 12);
   assert.ok(shader.vertexShader.includes('vec3 objectNormal'));
+});
+
+test('tracers batch shots with independent ages and release expired slots',()=>{
+  const oldDocument=Object.getOwnPropertyDescriptor(globalThis,'document');
+  const context={createRadialGradient:()=>({addColorStop(){}}),fillRect(){}};
+  Object.defineProperty(globalThis,'document',{configurable:true,value:{createElement:()=>({getContext:()=>context})}});
+  try{
+    const scene=new T.Scene(),effect=createMuzzleEffects(scene);
+    const tracer=effect.group.getObjectByName('instanced-tracers') as T.InstancedMesh;
+    const opacity=tracer.geometry.getAttribute('beamOpacity');
+    const point=new T.Vector3(0,1,0),direction=new T.Vector3(0,0,-1);
+    const end=new T.Vector3(0,1,-10);
+    effect.emit(point,direction,end);
+    effect.update(.08);
+    effect.emit(point,direction,end);
+    effect.update(.02);
+    assert.equal(tracer.count,2);
+    assert.ok(opacity.getX(0)<opacity.getX(1));
+    effect.update(.06);
+    assert.equal(tracer.count,1);
+    effect.update(.08);
+    assert.equal(tracer.count,0);
+    assert.equal(tracer.visible,false);
+    effect.dispose();
+  }finally{
+    if(oldDocument)Object.defineProperty(globalThis,'document',oldDocument);
+    else Reflect.deleteProperty(globalThis,'document');
+  }
 });
 
 test('static batching preserves world positions and replaceable cover meshes', () => {

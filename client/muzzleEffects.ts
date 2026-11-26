@@ -28,12 +28,22 @@ export function createMuzzleEffects(scene:T.Scene){
   }));
   const particles:Particle[]=[];
   const beamGeometry=new T.CylinderGeometry(1,1,1,6,1,true);
-  const beams=Array.from({length:32},()=>{
-    const material=new T.MeshBasicMaterial({color:'#ffe2a3',transparent:true,depthWrite:false,blending:T.AdditiveBlending,toneMapped:false});
-    const mesh=new T.Mesh(beamGeometry,material);
-    mesh.visible=false;group.add(mesh);
-    return {mesh,life:0};
-  });
+  const beamCapacity=32;
+  const beamOpacity=new T.InstancedBufferAttribute(new Float32Array(beamCapacity),1).setUsage(T.DynamicDrawUsage);
+  beamGeometry.setAttribute('beamOpacity',beamOpacity);
+  const beamMaterial=new T.MeshBasicMaterial({color:'#ffe2a3',transparent:true,depthWrite:false,blending:T.AdditiveBlending,toneMapped:false});
+  beamMaterial.onBeforeCompile=shader=>{
+    shader.vertexShader='attribute float beamOpacity; varying float vBeamOpacity;\n'+shader.vertexShader
+      .replace('#include <begin_vertex>','#include <begin_vertex>\nvBeamOpacity=beamOpacity;');
+    shader.fragmentShader='varying float vBeamOpacity;\n'+shader.fragmentShader
+      .replace('#include <color_fragment>','#include <color_fragment>\ndiffuseColor.a*=vBeamOpacity;');
+  };
+  const tracerBatch=new T.InstancedMesh(beamGeometry,beamMaterial,beamCapacity);
+  tracerBatch.name='instanced-tracers';tracerBatch.count=0;tracerBatch.visible=false;tracerBatch.frustumCulled=false;
+  tracerBatch.instanceMatrix.setUsage(T.DynamicDrawUsage);
+  group.add(tracerBatch);
+  const beams=Array.from({length:beamCapacity},()=>({matrix:new T.Matrix4(),life:0}));
+  const beamPose=new T.Object3D();
   const axis=new T.Vector3(0,1,0),offset=new T.Vector3();
   const beamDuration=.145;
   const light=new T.PointLight(0xffb64c,0,4,2);light.layers.enable(1);scene.add(light);let lightLife=0;
@@ -49,12 +59,13 @@ export function createMuzzleEffects(scene:T.Scene){
       if(length>.08&&offset.dot(direction)>0){
         const beam=beams.find(entry=>entry.life<=0);
         if(beam){
-          const {mesh}=beam;
-          beam.life=beamDuration;mesh.visible=true;mesh.material.opacity=.95;
-          mesh.position.copy(position).addScaledVector(offset,.5);
-          mesh.quaternion.setFromUnitVectors(axis,offset.multiplyScalar(1/length));
+          beam.life=beamDuration;
+          beamPose.position.copy(position).addScaledVector(offset,.5);
+          beamPose.quaternion.setFromUnitVectors(axis,offset.multiplyScalar(1/length));
           const radius=Math.max(.012,Math.min(.025,length*.00055));
-          mesh.scale.set(radius,length,radius);
+          beamPose.scale.set(radius,length,radius);
+          beamPose.updateMatrix();
+          beam.matrix.copy(beamPose.matrix);
         }
       }
       for(let i=0;i<5;i++){
@@ -65,22 +76,33 @@ export function createMuzzleEffects(scene:T.Scene){
         p.velocity.x+=(Math.random()-.5)*.12;p.velocity.y+=.16;
       }
       if(end&&surface){
-        for(let n=0;n<3;n++){
-          const spark=surface==='metal';
-          const p=particle(spark,spark?(n===0?.19:.085):.095+n*.025,spark?.13:.28+n*.04,spark?colors[n===0?3:4]:dust[surface]);
-          p.position.copy(end).addScaledVector(direction,-.07);
-          p.velocity.set((n-1)*.8,n*.45+.18,(1-n)*.6).addScaledVector(direction,-1.1);
+        const metal=surface==='metal';
+        for(let n=0;n<(metal?3:4);n++){
+          const p=particle(metal,metal?(n===0?.15:.065):.065+n*.037,
+            metal?.11+n*.031:.24+n*.065,metal?colors[n===0?3:4]:dust[surface]);
+          const spray=(n%2===0?-1:1)*(.36+.29*n);
+          p.position.copy(end).addScaledVector(direction,-.065);
+          p.velocity.set(spray,.16+n*(metal?.38:.25),spray*.67).addScaledVector(direction,metal?-1.43:-.52);
         }
       }
       light.position.copy(position);light.intensity=2.5;lightLife=.055;
     },
     update(dt:number){
       lightLife-=dt;if(lightLife<=0)light.intensity=0;
+      let activeBeams=0;
       for(const beam of beams){
         if(beam.life<=0)continue;
         beam.life=Math.max(0,beam.life-dt);
-        beam.mesh.visible=beam.life>0;
-        beam.mesh.material.opacity=.95*(beam.life/beamDuration);
+        if(beam.life===0)continue;
+        tracerBatch.setMatrixAt(activeBeams,beam.matrix);
+        beamOpacity.setX(activeBeams,.95*beam.life/beamDuration);
+        activeBeams++;
+      }
+      tracerBatch.count=activeBeams;
+      tracerBatch.visible=activeBeams>0;
+      if(activeBeams){
+        tracerBatch.instanceMatrix.needsUpdate=true;
+        beamOpacity.needsUpdate=true;
       }
       let remaining=0;
       for(const p of particles){
@@ -100,7 +122,7 @@ export function createMuzzleEffects(scene:T.Scene){
     },
     dispose(){
       smokeBatch.dispose();flashBatch.dispose();group.removeFromParent();
-      for(const {mesh} of beams)mesh.material.dispose();
+      tracerBatch.dispose();beamMaterial.dispose();
       beamGeometry.dispose();texture.dispose();light.removeFromParent();
     },
   };

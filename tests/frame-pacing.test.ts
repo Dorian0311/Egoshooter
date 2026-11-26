@@ -57,6 +57,15 @@ test('resolution feedback preserves quality on CPU stalls and recovers only with
  for(let i=0;i<620;i++)gpuBound.update(1/60,true,8,6);assert.ok(gpuBound.scale>.55);
 });
 
+test('CPU-bound frames with moderate GPU usage retain detail, while sustained GPU pressure reduces it',()=>{
+ const cpuBound=new ResolutionGovernor(),gpuBound=new ResolutionGovernor();
+ for(let i=0;i<900;i++){
+  cpuBound.update(1/42,true,14,21);
+  gpuBound.update(1/51,true,19,7);
+ }
+ assert.equal(cpuBound.scale,1);assert.equal(gpuBound.scale,.55);
+});
+
 function fakeGpu(supported=true){
  const queries:{ready:boolean;ns:number;deleted:boolean}[]=[],canvas=new EventTarget();let reads=0,disjoint=false,lost=false;
  const gl={canvas,QUERY_RESULT_AVAILABLE:1,QUERY_RESULT:2,

@@ -51,6 +51,9 @@ function show() {
     const cinema=getWorld(mapId).buildings.find(building=>building.name==='UNION-LICHTSPIELE')!;
     Object.assign(player,{x:cinema.x+3,y:0,z:cinema.z+23,yaw:.14,pitch:.14});
   }
+  if(view.value==='frontline'&&params.get('focus')==='freight-yard'){
+    Object.assign(player,{x:28.4,y:0,z:3,yaw:-.16,pitch:-.09});
+  }
   if(view.value==='interior')Object.assign(player,{x:-48,y:0,z:5,yaw:0,pitch:-.08});
   if(view.value==='upstairs')Object.assign(player,{x:-48,y:4.125,z:-29,yaw:0,pitch:-.08});
   if(view.value==='station')Object.assign(player,{x:48,y:0,z:-29,yaw:0,pitch:-.08});

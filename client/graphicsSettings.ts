@@ -39,7 +39,8 @@ export class ResolutionGovernor {
     // Leave headroom for 60 Hz presentation instead of settling at 55–57 FPS.
     if(mean>1/58){
       // Lowering resolution cannot fix CPU/scheduling stalls with an idle GPU.
-      if(gpu===undefined||gpu>12){const next=Math.max(.55,Math.round((this.scale-.10)*100)/100);if(next<this.scale)this.recoveryDelay=6;this.scale=next;}
+      const cpuLimited=cpu!==undefined&&cpu>=1000/60&&gpu!==undefined&&gpu<15;
+      if(!cpuLimited&&(gpu===undefined||gpu>12)){const next=Math.max(.55,Math.round((this.scale-.10)*100)/100);if(next<this.scale)this.recoveryDelay=6;this.scale=next;}
       this.stable=0;
     }
     else if(mean<1/59&&this.recoveryDelay===0&&(gpu===undefined||gpu<11.5)&&(cpu===undefined||cpu<12)){

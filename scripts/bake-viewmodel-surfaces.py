@@ -24,6 +24,13 @@ def save(name, rgb):
     Image.fromarray(np.uint8(np.clip(rgb,0,255))).save(OUT/(name+'.webp'),quality=89,method=6)
 
 
+def finish_map(name,rgb,polish):
+    # Alpha is packed roughness reduction for opaque surfaces. Moderate precision
+    # keeps the gradients smooth while the existing normal map resolves the fibres.
+    alpha=np.rint(np.clip(1-polish,0,1)*127)*2+1
+    save(name,np.dstack((rgb,alpha)))
+
+
 def normal(name,height,strength):
     dy,dx=np.gradient(height)
     direction=np.stack((-dx*strength,dy*strength,np.ones_like(height)),axis=-1)
@@ -54,7 +61,11 @@ pores=np.maximum(0,noise(211)-.13)
 mottle=noise(22)*5+noise(66)*2
 skin=(np.array([185,140,114])+patch*.85+mottle[:,:,None]+knuckles[:,:,None]*[9,-6,-7]
       -creases[:,:,None]*[23,26,23]-vein[:,:,None]*[8,4,2]-pores[:,:,None]*[15,12,10])
-save('hand-skin',skin)
+# Gentle, broad highlights across the fingers and back of the hand. Folds and
+# fine folds interrupt that highlight; skin keeps its colour in diffuse light.
+contact=ridge(x+.022,.050)*ridge(y-.052,.048)
+skin_polish=np.clip(.055+.11*contact+.095*knuckles-.058*creases,0,.25)
+finish_map('hand-skin',skin,skin_polish)
 normal('hand-skin-normal',knuckles*1.8-creases*.72+vein*.23-pores*.43,1.05)
 
 # Cylinder UVs unwrap from shoulder at v=0 to wrist at v=1. Cuff seam
@@ -77,5 +88,9 @@ for lane in [.287,.305,.750,.765]:
     seam=ridge(u-lane,.003)
     tone-=seam*17;tone+=seam*phase*35
     relief+=seam*(phase*.70-.18)
-save('jacket-twill',np.repeat(tone[:,:,None],3,axis=2))
+# Worn cuff edges and raised stitching catch narrow highlights. Recessed
+# panels stay matte and the broader worn band survives mip filtering.
+edge=ridge(v-.024,.015)+.62*ridge(v-.14,.012)
+cloth_polish=np.clip(.024+.075*cuff+.10*edge+.05*panel+.022*twill,0,.22)
+finish_map('jacket-twill',np.repeat(tone[:,:,None],3,axis=2),cloth_polish)
 normal('jacket-twill-normal',relief,1.15)
