@@ -53,6 +53,7 @@ export function createActorEquipment(root:T.Group,chains:Partial<Record<'armL'|'
  root.userData.armChains=chains;
  root.updateWorldMatrix(true,true);
  const arms=Object.fromEntries(Object.entries(chains).filter(([,chain])=>!!chain).map(([key,chain])=>{const upper=root.worldToLocal(chain!.upper.getWorldPosition(new T.Vector3())),lower=root.worldToLocal(chain!.lower.getWorldPosition(new T.Vector3())),hand=root.worldToLocal(chain!.hand.getWorldPosition(new T.Vector3()));return [key,{...chain,rest:[chain!.upper.quaternion.clone(),chain!.lower.quaternion.clone(),chain!.hand.quaternion.clone()],reach:(upper.distanceTo(lower)+lower.distanceTo(hand))*.985,shoulder:upper}];})) as Partial<Record<'armL'|'armR',SavedArm>>;
+ const equippedArms=Object.values(arms),worldToActor=new T.Matrix4();
  const fingers:T.Object3D[]=[],bonusFingers:{bone:T.Object3D;rest:T.Quaternion;angle:number}[]=[];root.traverse(o=>{if(/^finger\d-\d\.[LR]$/.test(o.name))fingers.push(o);const finger=o.name.match(/^UN_([LR])_F_(Index|Mid|Ring|Pinkie|Thumb)_([123])$/);if(finger)bonusFingers.push({bone:o,rest:o.quaternion.clone(),angle:(finger[1]==='L'?-1:1)*(finger[2]==='Thumb'?.4:finger[2]==='Index'&&finger[3]==='1'?.25:finger[3]==='1'?.65:finger[3]==='2'?1.1:.7)});});
  const gripFingers=fingers.map(bone=>{
   const digit=Number(bone.name[6]),joint=Number(bone.name[8]);
@@ -134,7 +135,11 @@ export function createActorEquipment(root:T.Group,chains:Partial<Record<'armL'|'
   mount.position.set(hasLost(p,'armR')?-.14:.14,crawl?1.48:p.crouching?.88:p.sprinting?1.03:1.19,(crawl?.06:-.26)+recoil*.035);mount.position.y-=Math.sin(transition*Math.PI)*.12;
   mount.rotation.set((crawl?Math.PI/2:0)+p.pitch-(p.sprinting?.28:0)-(reloading?.25:0)-recoil*.055,0,reloading?.18:0);
   // updateMatrix is explicit: the IK targets must match this frame's weapon pose.
-  for(const arm of Object.values(arms))if(arm)root.worldToLocal(arm.upper.getWorldPosition(arm.shoulder));
+  if(equippedArms.length){
+   root.updateWorldMatrix(true,false);
+   worldToActor.copy(root.matrixWorld).invert();
+   for(const arm of equippedArms)arm.upper.getWorldPosition(arm.shoulder).applyMatrix4(worldToActor);
+  }
   mount.updateMatrix();
   const missingRight=hasLost(p,'armR'),supportZ=weapons[p.weapon].kind==='pistol'?-.025:-.22;
   for(let iteration=0;iteration<4;iteration++){

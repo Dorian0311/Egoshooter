@@ -25,9 +25,13 @@ export function addRhineQuays(face:Face){
     // Stagger joints between low and high courses instead of stretching a district tile over each wall.
     for(let row=0;row<3;row++){
       const bottom=[-4.58,-3.18,-1.49][row],high=[-3.18,-1.49,-.11][row];
-      for(let start=-126-row%2*2.8;start<126;start+=5.6){
-        const z0=Math.max(-126,start),z1=Math.min(126,start+5.6);
-        if(z1-z0>.03)front(.036,z0,z1,bottom,high,14,[.44,.77,.96][row]);
+      let start=-126-(row%2)*1.75;
+      for(let section=0;start<126;section++){
+        const length=3.55+.52*Math.sin(section*1.91+row*.83+side*.7);
+        const z0=Math.max(-126,start),z1=Math.min(126,start+length);
+        const shade=[.46,.76,.94][row]+.038*Math.sin(section*1.57+row*2.14);
+        if(z1-z0>.03)front(.036,z0,z1,bottom,high,14,shade);
+        start+=length;
       }
     }
     for(let z=-126;z<126;z+=2.4){

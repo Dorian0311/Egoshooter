@@ -392,6 +392,38 @@ export function addIslandStreet(scene:T.Group){
     texture.colorSpace=T.SRGBColorSpace;
     const board=new T.Mesh(new T.PlaneGeometry(3.35,1.68),new T.MeshBasicMaterial({map:texture}));
     board.rotation.y=s.front===1?0:Math.PI;board.position.set(s.x,2.29,s.z-s.front*(s.d/2-.255));street.add(board);
+    if(s.id==='harbour-supply'){
+      const boardUV=board.geometry.getAttribute('uv');
+      for(let i=0;i<boardUV.count;i++)boardUV.setY(i,1-(1-boardUV.getY(i))*700/848);
+      // Paired navigation lights are shop stock on the existing display sills.
+      // Concentric prisms, a chimney and guard rods give the lenses a true silhouette.
+      const brass=paint('#a98a58'),bronze=paint('#696346'),rackZ=edge+.105;
+      for(const [number,side] of [1,-1].entries()){
+        const x=s.x+side*4.42,glass=paint(number?'#408b72':'#b9503e');
+        cuboid(x,1.032,rackZ,.91,.144,.40,wood);
+        cuboid(x,1.111,rackZ,.95,.044,.43,brass);
+        cylinder(x,1.18,rackZ,.187,.212,.10,bronze);
+        cylinder(x,1.243,rackZ,.21,.198,.057,brass);
+        const profile=[new T.Vector2(.154,0)];
+        for(let ring=0;ring<5;ring++){
+          const y=ring*.060;
+          profile.push(new T.Vector2(.168,y+.006),new T.Vector2(.187,y+.024),new T.Vector2(.157,y+.056));
+        }
+        solid(new T.LatheGeometry(profile,12),x,1.272,rackZ,glass);
+        cylinder(x,1.60,rackZ,.145,.216,.072,brass);
+        cylinder(x,1.672,rackZ,.102,.13,.09,bronze);
+        cylinder(x,1.733,rackZ,.065,.15,.047,brass);
+        for(let guard=0;guard<4;guard++){
+          const a=(guard+.5)*Math.PI/2;
+          cuboid(x+.182*Math.cos(a),1.433,rackZ+.182*Math.sin(a),.021,.33,.021,brass);
+        }
+        const bail=solid(new T.TorusGeometry(.102,.012,4,14,Math.PI),x,1.735,rackZ,bronze);
+        bail.rotation.y=side*.33;
+        const tag=new T.PlaneGeometry(.83,.151),uv=tag.getAttribute('uv');
+        for(let i=0;i<uv.count;i++)uv.setXY(i,(6+number*700+686*uv.getX(i))/1400,(8+132*uv.getY(i))/848);
+        const sign=new T.Mesh(tag,board.material);sign.position.set(x,1.031,rackZ-.204);sign.rotation.y=Math.PI;street.add(sign);
+      }
+    }
     if(s.id==='coast-records'){
       const boardUV=board.geometry.getAttribute('uv');
       for(let i=0;i<boardUV.count;i++)boardUV.setY(i,1/3+boardUV.getY(i)*2/3);

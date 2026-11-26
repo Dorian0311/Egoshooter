@@ -465,7 +465,10 @@ with sync_playwright() as pw:
                 best=start+1
                 for end in range(len(path)-1,start+1,-1):
                     xb,zb=path[end]
-                    stride=math.ceil(2*math.hypot(xb-xa,zb-za))
+                    length=math.hypot(xb-xa,zb-za)
+                    if length>24:
+                        continue
+                    stride=math.ceil(2*length)
                     limit=max(map(danger,path[start:end+1]))+.25
                     segment=((round(xa+(xb-xa)*i/stride),round(za+(zb-za)*i/stride))
                              for i in range(1,stride+1))
@@ -475,18 +478,33 @@ with sync_playwright() as pw:
                 route.append(path[best])
                 start=best
             return route
-        for attempt in range(4):
+        attempts=6 if difficulty=='normal' else 4
+        for attempt in range(attempts):
             try:
                 life=page.evaluate('harbourQA.player.life')
-                route=find_route()
-                print('Street approach',route,flush=True)
-                for i,(x,z) in enumerate(route):
-                    walk(page,x,z,life=life,settle_ms=220 if i==len(route)-1 else 70)
-                return
+                for _ in range(16):
+                    route=find_route()
+                    if not route:
+                        walk(page,*goal,life=life)
+                        return
+                    position=tuple(page.evaluate('[harbourQA.player.x,harbourQA.player.z]'))
+                    covered=0
+                    print('Street approach',route,flush=True)
+                    for x,z in route:
+                        covered+=math.dist(position,(x,z))
+                        position=(x,z)
+                        arrived=position==goal
+                        walk(page,x,z,life=life,settle_ms=220 if arrived else 70)
+                        if arrived:
+                            return
+                        # Bot positions have changed by the time we cross this section.
+                        if covered>=20:
+                            break
+                raise AssertionError(('Street approach did not reach goal',goal,position))
             except (AssertionError,PlaywrightTimeout) as event:
                 if on_failure:
                     on_failure('street approach',attempt+1,event)
-                if not isinstance(event,TurnLifeInterrupted) or attempt==3:
+                if not isinstance(event,TurnLifeInterrupted) or attempt==attempts-1:
                     raise
                 if event.position:
                     # On retry, prefer a detour past the last exposed stretch.
