@@ -1,7 +1,25 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { Color, Group, LineSegments, Mesh, PerspectiveCamera, Points, RedFormat, RGBAFormat, Scene, WebGLRenderTarget, type WebGLRenderer } from 'three';
+import { Color, Group, LineSegments, Mesh, PerspectiveCamera, Points, RedFormat, RGBAFormat, Scene, Vector4, WebGLRenderTarget, type WebGLRenderer } from 'three';
 import { WorldOcclusionPass } from '../client/worldOcclusionPass';
+
+test('AO sample projection preserves screen coordinates with zoom and an asymmetric perspective', () => {
+  const camera = new PerspectiveCamera(72, 16 / 9, .1, 350);
+  const pass = new WorldOcclusionPass(new Scene(), camera, 1, 1, 4);
+  try {
+    assert.match(pass.ssaoMaterial.fragmentShader, /cameraProjectionMatrix\[2\]\.xy \* samplePoint\.z/);
+    camera.zoom = 3;
+    camera.filmOffset = 4;
+    camera.setViewOffset(1920, 1080, 60, 30, 1400, 900);
+    camera.updateProjectionMatrix();
+    const m = camera.projectionMatrix.elements;
+    for (const [x, y, z] of [[.02, -.04, -.25], [-1, 2, -12], [8, -5, -230]]) {
+      const clip = new Vector4(x,y,z,1).applyMatrix4(camera.projectionMatrix);
+      assert.equal((m[0]*x + m[8]*z)/-z, clip.x/clip.w);
+      assert.equal((m[5]*y + m[9]*z)/-z, clip.y/clip.w);
+    }
+  } finally { pass.dispose(); }
+});
 
 test('AO buffers store one channel and the normal diagnostic keeps all color channels', () => {
   const pass = new WorldOcclusionPass(new Scene(), new PerspectiveCamera(), 4, 4, 4);

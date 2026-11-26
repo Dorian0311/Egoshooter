@@ -30,7 +30,11 @@ export function createPeriodArchitecture(world:World){
     const station=/BAHNHOF|KÖLN-DEUTZ/.test(b.name);
     const deutz=world.id==='cologne'&&b.name==='DEUTZER BAHNHOF';
     const illuminated=deutz||cinema;
-    const trim=illuminated?material.clone():material;
+    const trim=illuminated||fortress?material.clone():material;
+    if(fortress){
+      trim.map=new T.TextureLoader().load('/shooter/environment/alpine-fort-casement.webp');
+      trim.map.colorSpace=T.SRGBColorSpace;trim.map.anisotropy=4;
+    }
     if(illuminated)trim.onBeforeCompile=shader=>{
       shader.uniforms.periodNight=night.intensity;
       shader.vertexShader='attribute float lampGlass; varying float vLampGlass;\n'+shader.vertexShader;
@@ -46,6 +50,11 @@ export function createPeriodArchitecture(world:World){
       quaternion.setFromEuler(angles.set(rx,0,rz));
       g.applyMatrix4(matrix.compose(translation.set(x,y,z),quaternion,scale));
       const p=g.getAttribute('position'),n=g.getAttribute('normal'),rgb=new Float32Array(p.count*3);
+      if(fortress){
+        // All unprinted trim shares the atlas's white margin and retains its vertex paint.
+        const uv=g.getAttribute('uv');
+        for(let i=0;i<uv.count;i++)uv.setXY(i,1020/1024,.5);
+      }
       tint.set(color);
       for(let i=0;i<p.count;i++){
         const wear=.90+.045*Math.sin(p.getX(i)*2.21+p.getY(i)*.87+p.getZ(i)*1.79)+.055*n.getY(i);
@@ -83,6 +92,15 @@ export function createPeriodArchitecture(world:World){
         const cheek=new T.BufferGeometry();cheek.setAttribute('position',new T.Float32BufferAttribute(pos,3));
         cheek.setAttribute('uv',new T.Float32BufferAttribute(uv,2));cheek.setIndex(index);cheek.computeVertexNormals();
         add(cheek,0,0,0,concrete);
+        // The six front vertices belong exclusively to the battered face. Fit the formwork
+        // to the wall instead of mirroring its stencil or projecting it over the chamfers.
+        const cheekUv=cheek.getAttribute('uv'),cheekTint=cheek.getAttribute('color');
+        const firstPixel=wing<0?4:510,minX=wing<0?-8.98:2.26;
+        for(let i=0;i<points.length;i++){
+          const u=(pos[i*3]-minX)/6.72,v=(pos[i*3+1]-.04)/2.89;
+          cheekUv.setXY(i,(firstPixel+2+u*497)/1024,(2+v*251)/256);
+          cheekTint.setXYZ(i,.92,.92,.92);
+        }
         for(const y of [.55,1.38,2.17]){
           const z=wallZ+.84-.081*y;
           box(wing*5.63,y,z,6.61,.027,.027,aggregate,0,0,true);

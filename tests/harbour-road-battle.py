@@ -60,7 +60,7 @@ def walk(page, x, z, *, life=None):
             px, pz, yaw, hp, current_life = page.evaluate('()=>{const p=harbourQA.player;return [p.x,p.z,p.yaw,p.hp,p.life]}')
             if life is None:
                 life=current_life
-            verify_life(hp,current_life,life,(x,z))
+            verify_life(hp,current_life,life,{'waypoint':[x,z],'observedPosition':[px,pz]})
             distance = math.hypot(px-x, pz-z)
             if distance < .60:
                 return
@@ -340,7 +340,7 @@ with sync_playwright() as pw:
     page.wait_for_timeout(300)
     assert page.evaluate('harbourQA.state.mapId') == map_id
     print(map_id,'battle started with',bots,'bots',flush=True)
-    def approach():
+    def approach(on_failure=None):
         # Plan around the actual map colliders, including closed doors at this spawn.
         # All movement still goes through the mouse and keyboard.
         def find_route():
@@ -397,8 +397,10 @@ with sync_playwright() as pw:
                 for x,z in route:
                     walk(page,x,z,life=life)
                 return
-            except TurnLifeInterrupted as event:
-                if attempt==3:
+            except (AssertionError,PlaywrightTimeout) as event:
+                if on_failure:
+                    on_failure('street approach',attempt+1,event)
+                if not isinstance(event,TurnLifeInterrupted) or attempt==3:
                     raise
                 print('Anmarsch nach Gefechtstod erneut geplant:',event,flush=True)
                 recover_life(page)
@@ -457,10 +459,15 @@ with sync_playwright() as pw:
     checkpoint=report_path.with_name(f'{report_path.stem}-{run_id}.partial.json')
     results = []
     report=dict(bots=bots,width=width,height=height,quality=quality,renderer=renderer_info,
-                condition=condition or 'standard',runId=str(run_id),complete=False,results=results)
+                condition=condition or 'standard',runId=str(run_id),complete=False,results=results,routeFailures=[])
+    def record_failure(stage,attempt,event):
+        # Persist before any recovery, including the final exhausted attempt.
+        report['routeFailures'].append(dict(stage=stage,attempt=attempt,error=type(event).__name__,
+                                            detail=str(event)[:650]))
+        write_report(checkpoint,report)
     write_report(checkpoint,report)
     print('Harbour Road checkpoint:',checkpoint,flush=True)
-    approach()
+    approach(record_failure)
     road_profiler=None
     if os.environ.get('BATTLE_CPU_PROFILE')=='1':
         road_profiler=page.context.new_cdp_session(page)
@@ -491,12 +498,13 @@ with sync_playwright() as pw:
                 results.append(dict(entry=entry,turn=result,exit=read_profile(page,name+' exit'),attempt=attempt+1))
                 write_report(checkpoint,report)
                 break
-            except TurnLifeInterrupted as event:
-                if attempt==2:
+            except (AssertionError,PlaywrightTimeout) as event:
+                record_failure(name,attempt+1,event)
+                if not isinstance(event,TurnLifeInterrupted) or attempt==2:
                     raise
                 print(name,'nach Gefechtstod erneut gestartet:',event,flush=True)
                 recover_life(page)
-                approach()
+                approach(record_failure)
         print('Exited',name,flush=True)
     page.screenshot(path=str(OUT/f'island-live-{width}x{height}.jpg'),type='jpeg',quality=88)
     if os.environ.get('HARBOUR_CLAIMS')=='1':

@@ -1,4 +1,4 @@
-import { LinearFilter, RedFormat, type Object3D } from 'three';
+import { LinearFilter, PerspectiveCamera, RedFormat, type Object3D } from 'three';
 import { SSAOPass } from 'three/examples/jsm/postprocessing/SSAOPass.js';
 
 /** Only visible points and lines need a visibility override in the normal/depth pass. */
@@ -13,6 +13,14 @@ export class WorldOcclusionPass extends SSAOPass {
 
   constructor(...args: ConstructorParameters<typeof SSAOPass>) {
     super(...args);
+    if (this.camera instanceof PerspectiveCamera) {
+      // The sampling loop uses clip X, Y and W only. Include the two lens offsets for asymmetric views.
+      this.ssaoMaterial.fragmentShader = this.ssaoMaterial.fragmentShader.replace(
+        'cameraProjectionMatrix * vec4( samplePoint, 1.0 )',
+        `vec4(vec2(cameraProjectionMatrix[0][0], cameraProjectionMatrix[1][1]) * samplePoint.xy
+          + cameraProjectionMatrix[2].xy * samplePoint.z, 0.0, -samplePoint.z)`,
+      );
+    }
     // Both fullscreen targets contain a single occlusion factor. Scene depth lives on the normal target.
     for (const target of [this.ssaoRenderTarget, this.blurRenderTarget]) {
       target.texture.format = RedFormat;
