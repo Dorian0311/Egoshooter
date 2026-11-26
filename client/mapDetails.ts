@@ -18,7 +18,7 @@ import {freightStreet,freightTracks} from './freightStreet';
 import {freightCartSite,freightYard} from './freightYard';
 import {dampSurface} from './dampSurface';
 
-export const detailedPropKinds=new Set(['sandbags','container','truck','ruin','tree','platform','coastal-portal','shop','street-pole']);
+export const detailedPropKinds=new Set(['sandbags','container','truck','ruin','tree','platform','coastal-portal','shop','street-pole','wagon']);
 
 /** All substantial playable props follow shared collision boxes. Small dressing
  * stays below step height, on existing walls, or beyond the walking boundary. */
@@ -119,15 +119,31 @@ export function createMapDetails(scene:T.Scene,world:World,get:(color:string)=>T
       box(b.x,b.y,b.z,b.w,b.h,b.d,get('#c1b59a'));
       for(let n=0;n<7;n++){const chunk=box(b.x-b.w/2+(n+.5)*b.w/7,b.y+b.h/2+(n%3)*.11,b.z,.55,.25+(n%3)*.12,b.d*.9,get('#9d8b75'));chunk.rotation.z=(n%2?.1:-.1);}
     }
-    if(war&&b.kind==='wagon'){
-      // Existing shared body collider remains the full extent of the rail car.
-      for(const side of [-1,1])for(const x of [-3.7,3.7]){const wheel=cylinder(b.x+x,.45,b.z+side*1.30,.5,.22,steel,16);wheel.rotation.x=Math.PI/2;}
-      const frame=material('#343d3b',.52,.62),boards=[material('#6d4634',.03,.94),material('#80553d',.03,.94),material('#67432f',.03,.94)];
+    if(b.kind==='wagon'){
+      // The rail car keeps its shared cover collider, including its undercarriage.
+      const frame=material('#343d3b',.52,.62),boards=get('#67513d');
+      const bodyBottom=.62,bodyTop=b.y+b.h/2-.12,bodyHeight=bodyTop-bodyBottom;
+      const gauge=world.id==='frontline'&&b.z===-22?.72:.8;
+      box(b.x,bodyBottom+bodyHeight/2,b.z,b.w,bodyHeight,b.d,boards);
+      for(const x of [-b.w*.37,b.w*.37]){
+        const axle=cylinder(b.x+x,.46,b.z,.10,2*gauge+.16,frame,12);axle.rotation.x=Math.PI/2;
+        for(const side of [-1,1]){
+          const wheel=cylinder(b.x+x,.46,b.z+side*gauge,.30,.16,steel,16);wheel.rotation.x=Math.PI/2;
+          box(b.x+x,.50,b.z+side*(gauge+.1),.56,.16,.15,frame);
+        }
+      }
+      box(b.x,.54,b.z,b.w,.14,b.d-.12,frame);
       for(const side of [-1,1]){
         const z=b.z+side*(b.d/2+.029);
-        for(let i=0;i<24;i++)
-          box(b.x-b.w/2+(i+.5)*b.w/24,b.y+.10,z,b.w/24-.012,b.h-.50,.065,boards[(i*7+Math.floor(i/4))%3]);
-        for(const y of [.37,2.74])box(b.x,y,z+side*.05,b.w,.13,.12,frame);
+        for(const y of [bodyBottom+.09,bodyTop-.035])box(b.x,y,z+side*.05,b.w,.13,.12,frame);
+        for(const y of [1.04,1.47,1.90,2.33]){
+          box(b.x,y,z,b.w-.30,.018,.015,frame).castShadow=false;
+          box(b.x+side*(b.w/2+.017),y,b.z,.015,.018,b.d-.30,frame).castShadow=false;
+        }
+        for(const flank of [-1,1]){
+          const end=box(b.x+side*(b.w/2+.037),1.62,b.z+flank*b.d*.29,.10,bodyHeight,.10,frame);
+          end.rotation.x=flank*.13;
+        }
         for(const offset of [-1.42,1.42]){
           box(b.x+offset,1.56,z+side*.07,.11,2.12,.11,frame);
           const brace=box(b.x+offset*2.05,1.55,z+side*.055,.13,2.58,.1,frame);
@@ -136,9 +152,16 @@ export function createMapDetails(scene:T.Scene,world:World,get:(color:string)=>T
         box(b.x+.91,1.39,z+side*.10,.23,.1,.10,frame);
         box(b.x-3.62,1.91,z+side*.064,.86,.36,.023,material('#312f29')).castShadow=false;
       }
-      box(b.x,2.87,b.z,b.w+.16,.19,b.d+.17,frame);
-      for(const side of [-1,1])box(b.x+side*(b.w/2+.09),.64,b.z,.25,.23,.22,frame);
-      for(const x of [-4.8,4.8])box(b.x+x,b.y,b.z+b.d/2+.05,.1,b.h,.08,steel);
+      box(b.x,bodyTop+.079,b.z,b.w+.16,.17,b.d+.17,frame);
+      for(const side of [-1,1]){
+        box(b.x+side*(b.w/2+.09),.58,b.z,.25,.23,.22,frame);
+        for(const flank of [-1,1]){
+          const buffer=cylinder(b.x+side*(b.w/2+.14),.60,b.z+flank*.86,.13,.28,steel);buffer.rotation.z=Math.PI/2;
+        }
+      }
+      for(const side of [-1,1])for(const end of [-1,1]){
+        box(b.x+end*(b.w/2-.16),bodyBottom+bodyHeight/2,b.z+side*(b.d/2+.03),.10,bodyHeight,.08,steel);
+      }
     }
   }
   let ocean:ReturnType<typeof createCoastalWater>|undefined;

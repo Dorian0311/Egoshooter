@@ -51,7 +51,16 @@ export function createCharacterMotion(root:T.Group,bones:Map<string,T.Bone>,data
   const brakeTarget=groundFactor*T.MathUtils.clamp((previousSpeed-speed)/step*.007,0,.12);
   braking+=(brakeTarget-braking)*(1-Math.exp(-step*14));
   const next:MotionName=!player.grounded?'air':landing>0&&!moving?'land':player.crouching?(moving?'crouchWalk':'crouchIdle'):moving?(player.sprinting||speed>5.2?'sprint':speed>2.4?'jog':'walk'):'idle';
-  if(next!==current){actions.get(current)?.fadeOut(.16);actions.get(next)!.reset().setEffectiveWeight(1).fadeIn(.16).play();current=next;}
+  if(next!==current){
+   const outgoing=actions.get(current)!,incoming=actions.get(next)!;
+   outgoing.fadeOut(.16);incoming.reset();
+   // Both running clips lead with the same leg. Preserve its stride phase
+   // when switching speed so the crossfade does not restart the opposite step.
+   if((current==='jog'&&next==='sprint')||(current==='sprint'&&next==='jog')){
+    incoming.time=outgoing.time/outgoing.getClip().duration*incoming.getClip().duration;
+   }
+   incoming.setEffectiveWeight(1).fadeIn(.16).play();current=next;
+  }
   // Calibrated on the retargeted boot's ground-contact phase in metres per clip second.
   const action=actions.get(current)!,nominal=current==='walk'?.95:current==='jog'?4.8:current==='sprint'?6.2:current==='crouchWalk'?1.6:0;
   const forwardSpeed=(dx*-Math.sin(player.yaw)+dz*-Math.cos(player.yaw))/step;

@@ -44,6 +44,7 @@ import {createRiver,addFacadeDetails,addAlpineBackdrop,batchStaticMeshes} from '
 import {createCologneCathedral} from './cologneCathedral';
 import {alpinePassGround} from './alpinePassGround';
 import {createCologneBridgeSteel} from './cologneBridge';
+import {cologneBridgeTracks} from './freightStreet';
 import {createMaterials,projectBoxUVs} from './materials.ts';
 import {addArchitecture,facadeColor} from './architecture.ts';
 import {createRockGeometry} from './rockGeometry.ts';
@@ -138,9 +139,7 @@ export function createScene(
   const river=mapId==='cologne'?createRiver(scene):undefined;
   if(mapId==='cologne'){
     cube(-53,-.2,0,46,.4,150,'#77766b');cube(53,-.2,0,46,.4,150,'#77766b');
-    scene.add(createCologneBridgeSteel());
-    for(const z of [-5.5,-3,3,5.5])cube(0,.06,z,61,.12,.1,'#4b4d43');
-    for(let x=-30;x<=30;x+=1)for(const z of [-4.25,4.25])cube(x,.025,z,.2,.05,3.3,'#594b37');
+    scene.add(createCologneBridgeSteel(),cologneBridgeTracks());
     scene.add(createCologneCathedral(mat('#827866').map!));
   }else if(mapId==='alpine'){
     renderer.setClearColor('#bac9d2');scene.fog=new T.Fog('#bac9d2',85,310);
@@ -826,7 +825,9 @@ export function createScene(
     if(inspectionView){camera.position.set(...inspectionView.position);camera.lookAt(...inspectionView.target);}
     if(!readOnly&&settings.cameraShake&&t-shakeAt<180){const amount=(1-(t-shakeAt)/180)*settings.cameraShake*shakeStrength;camera.rotation.z+=Math.sin(t*.07)*.012*amount;camera.position.y+=Math.sin(t*.09)*.012*amount;}
     if(local&&!local.hp&&!local.downedUntil&&snapshot?.operation.config.kind==='coop'){const ally=snapshot.players.find(p=>p.kind==='human'&&p.hp>0&&p.id!==local?.id);if(ally){camera.position.set(ally.x,ally.y+actorEyeHeight(ally),ally.z);camera.rotation.set(ally.pitch,ally.yaw,0);}}
-    camera.updateMatrixWorld();
+    // The frustum needs only the camera inverse. The viewmodel pass updates its
+    // descendants after this frame's weapon animation has been applied.
+    camera.updateWorldMatrix(true,false);
     actorFrustum.setFromProjectionMatrix(actorProjection.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse));
     // A shop has one open facade. Solid walls and ceiling hide the island when that facade leaves the view.
     const eye=camera.position;
@@ -958,7 +959,7 @@ export function createScene(
     const ammoDisplay=!car&&local?.hp&&snapshot?.phase==='playing'&&!saw&&!special?'block':'none';
     if(ammoReadout.style.display!==ammoDisplay)ammoReadout.style.display=ammoDisplay;
     if(local&&!saw&&!car){
-      weapon.updateWorldMatrix(true,false);weapon.localToWorld(ammoAnchor.set(.34,-.15,-.52));
+      weapon.localToWorld(ammoAnchor.set(.34,-.15,-.52));
       const projected=projectWeaponMuzzle(ammoAnchor,camera,62-12*(pose?.aimBlend??0)).project(camera);
       const anchorX=Math.max(.56,Math.min(.91,(projected.x+1)/2))*viewport.width;
       ammoReadout.style.left=`${Math.max(12,Math.min(viewport.width-ammoWidth-16,anchorX+12))}px`;

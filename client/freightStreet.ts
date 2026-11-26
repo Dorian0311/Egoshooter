@@ -118,14 +118,23 @@ export function freightStreet(world:World,granite:T.Texture|null){
 /** Two continuous rail beds and the loading spur share a single material per half-yard.
  * The nearly flush timbers receive building shadows, with their fastenings baked into the grain. */
 export function freightTracks(loadingSpur:boolean){
+  const lines=[{z:-12,first:-117,last:117,gauge:.8},{z:12,first:-117,last:117,gauge:.8}];
+  if(loadingSpur)lines.push({z:-22,first:46,last:76,gauge:.72});
+  return trackwork('Freight yard trackwork',lines,[[-117,0],[0,117]]);
+}
+
+export function cologneBridgeTracks(){
+  const lines=[{z:-5,first:-31,last:31,gauge:.8},{z:5,first:-31,last:31,gauge:.8}];
+  return trackwork('Cologne bridge trackwork',lines,[[-31,31]]);
+}
+
+function trackwork(name:string,lines:{z:number;first:number;last:number;gauge:number}[],sections:[number,number][]){
   const root=new T.Group();
-  root.name='Freight yard trackwork';
+  root.name=name;
   const atlas=new T.TextureLoader().load('/shooter/environment/freight-track.webp');
   atlas.colorSpace=T.SRGBColorSpace;atlas.anisotropy=4;
   const material=new T.MeshStandardMaterial({map:atlas,vertexColors:true,roughness:.78});
-  const lines=[{z:-12,first:-117,last:117,gauge:.8},{z:12,first:-117,last:117,gauge:.8}];
-  if(loadingSpur)lines.push({z:-22,first:46,last:76,gauge:.72});
-  for(const half of [[-117,0],[0,117]]){
+  for(const [sectionStart,sectionEnd] of sections){
     const positions:number[]=[],colors:number[]=[],uv:number[]=[],indices:number[]=[];
     const tint=new T.Color();
     type Vertex=readonly [number,number,number];
@@ -137,7 +146,7 @@ export function freightTracks(loadingSpur:boolean){
       indices.push(start,start+1,start+2,start,start+2,start+3);
     }
     for(const {z,first,last,gauge} of lines){
-      const left=Math.max(first,half[0]),right=Math.min(last,half[1]);
+      const left=Math.max(first,sectionStart),right=Math.min(last,sectionEnd);
       if(left>=right)continue;
       const span=gauge/.615;
       const tones=['#e4d9cb','#fff4e4','#d3cbbe','#eee6db'];

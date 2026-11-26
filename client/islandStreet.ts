@@ -182,7 +182,7 @@ export function addIslandStreet(scene:T.Group){
         for(let n=0;n<15;n++){
           const sleeve=cuboid(x,h+.17,z+(n-7)*.23,.68,.45,.035,[accent,iron,cream,wood][n%4]);
           sleeve.rotation.x=-.17;
-          if(n%4===0||n===14){
+          if(n>0&&(n%4===0||n===14)){
             const facing=s.front;
             const cover=label(x,h+.17,sleeve.position.z+facing*.024,.45,.43,facing===1?0:Math.PI,4+Math.floor(n/4)%4);
             cover.rotation.order='YXZ';cover.rotation.x=-.17*facing;
@@ -286,6 +286,33 @@ export function addIslandStreet(scene:T.Group){
     texture.colorSpace=T.SRGBColorSpace;
     const board=new T.Mesh(new T.PlaneGeometry(3.35,1.68),new T.MeshBasicMaterial({map:texture}));
     board.rotation.y=s.front===1?0:Math.PI;board.position.set(s.x,2.29,s.z-s.front*(s.d/2-.255));street.add(board);
+    if(s.id==='coast-records'){
+      const boardUV=board.geometry.getAttribute('uv');
+      for(let i=0;i<boardUV.count;i++)boardUV.setY(i,1/3+boardUV.getY(i)*2/3);
+      function jacket(x:number,y:number,z:number,size:number,yaw:number,cell:number){
+        const geometry=new T.PlaneGeometry(size,size),uv=geometry.getAttribute('uv');
+        for(let i=0;i<uv.count;i++)uv.setXY(i,(cell+.005+.99*uv.getX(i))/4,(.005+.99*uv.getY(i))/3);
+        const print=new T.Mesh(geometry,board.material);
+        print.position.set(x,y,z);print.rotation.order='YXZ';print.rotation.y=yaw;street.add(print);return print;
+      }
+      for(const [wallIndex,bin] of parts.filter(p=>p.role==='bin').entries()){
+        const side=bin.x<s.x?-1:1,wallX=s.x+side*(s.w/2-.29);
+        // Enlarged sleeve prints and their actual records are paired on walnut rails above the bins.
+        cuboid(wallX,1.77,bin.z,.16,.10,3.57,wood);
+        for(const [slot,offset] of [-.83,.83].entries()){
+          const z=bin.z+offset,cell=wallIndex*2+slot,frameX=wallX-side*.037;
+          cuboid(frameX,2.32,z,.083,1.08,1.43,iron).castShadow=false;
+          jacket(frameX-side*.048,2.32,z-.16,.87,-side*Math.PI/2,cell);
+          const recordZ=z+.47,discX=frameX-side*.055;
+          const record=solid(new T.CylinderGeometry(.157,.157,.014,18),discX,2.32,recordZ,vinyl);
+          record.rotation.z=Math.PI/2;
+          const centre=solid(new T.CylinderGeometry(.053,.053,.019,12),discX-side*.004,2.32,recordZ,slot?cream:accent);
+          centre.rotation.z=Math.PI/2;
+        }
+        // The first item in each crate faces the street for browsing.
+        jacket(bin.x,bin.h+.17,bin.z-7*.23-.026,.43,Math.PI,wallIndex*2).rotation.x=.17;
+      }
+    }
     const back=-s.d/2+.27;
     const panel=detail(0,.59,back,s.w-.48,1.18,.055,paintedBoards);
     const panelUV=panel.geometry.getAttribute('uv');
