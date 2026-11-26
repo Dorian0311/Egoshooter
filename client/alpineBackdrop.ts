@@ -125,6 +125,53 @@ function firGeometry(){
   g.setAttribute('uv',new T.Float32BufferAttribute(uv,2));g.setIndex(indices);return g;
 }
 
+function applyFirSnow({data,width,height}:ImageData){
+  const linear=Float32Array.from({length:256},(_,i)=>{
+    const s=i/255;
+    return s<=.04045?s/12.92:((s+.055)/1.055)**2.4;
+  });
+  const encoded=Uint8Array.from({length:4096},(_,i)=>{
+    const c=i/4095;
+    return Math.round(255*(c<=.0031308?12.92*c:1.055*c**(1/2.4)-.055));
+  });
+  const smooth=T.MathUtils.smoothstep;
+  const highlights=linear.map(g=>smooth(g,.054,.104));
+  const offsets=Float32Array.from({length:width},(_,x)=>{
+    const u=(x+.5)/width,side=(u*2%1)*2-1;
+    return -.12*side*side*6.5+.17*side+(u>=.5?.32:0);
+  });
+  for(let y=0;y<height;y++){
+    const tier=(1-(y+.5)/height)*6.5;
+    for(let x=0,i=y*width*4;x<width;x++,i+=4){
+      const green=data[i+1];
+      if(!data[i+3]||!highlights[green])continue;
+      const t=tier+offsets[x],band=Math.abs(t-Math.floor(t)-.5);
+      if(band>=.30)continue;
+      const frost=(1-smooth(band,.07,.30))*highlights[green]*smooth(linear[green]-linear[data[i]],.003,.018);
+      if(!frost)continue;
+      data[i]=encoded[Math.min(4095,Math.round((linear[data[i]]+.19*frost)*4095))];
+      data[i+1]=encoded[Math.min(4095,Math.round((linear[green]+.22*frost)*4095))];
+      data[i+2]=encoded[Math.min(4095,Math.round((linear[data[i+2]]+.24*frost)*4095))];
+    }
+  }
+}
+
+function prepareFirAtlas(texture:T.Texture){
+  const image=texture.image as HTMLImageElement;
+  try{
+    const canvas=document.createElement('canvas');
+    canvas.width=image.naturalWidth;canvas.height=image.naturalHeight;
+    const ctx=canvas.getContext('2d',{willReadFrequently:true});
+    if(!ctx)return;
+    ctx.drawImage(image,0,0);
+    const pixels=ctx.getImageData(0,0,canvas.width,canvas.height);
+    applyFirSnow(pixels);ctx.putImageData(pixels,0,0);
+    texture.image=canvas;
+  }catch{
+    // Keep the loaded atlas if the browser cannot read or allocate the canvas.
+  }
+}
+
 /** Twin ridges outside the square fort perimeter. Ground and snow cover share one draw. */
 export function addAlpineBackdrop(scene:T.Scene,rock?:T.Texture,snow?:T.Texture){
   const segments=192,rings=24,positions:number[]=[],uv:number[]=[],indices:number[]=[];
@@ -176,11 +223,12 @@ export function addAlpineBackdrop(scene:T.Scene,rock?:T.Texture,snow?:T.Texture)
                             mix(drift,vec3(.92,.96,.99),.33),snowLine);`);
   };
   const mountain=new T.Mesh(geo,material);mountain.name='Ubaye limestone ridges and snowfields';scene.add(mountain);
-  const canopy=typeof document==='undefined'?null:new T.TextureLoader().load('/shooter/environment/alpine-firs.webp');
+  const canopy=typeof document==='undefined'?null:new T.TextureLoader().load('/shooter/environment/alpine-firs.webp',prepareFirAtlas);
   if(canopy)canopy.colorSpace=T.SRGBColorSpace;
-  const trees=new T.InstancedMesh(firGeometry(),new T.MeshStandardMaterial({
+  const firMaterial=new T.MeshStandardMaterial({
     map:canopy,color:canopy?'#ffffff':'#415b4b',alphaTest:.27,roughness:1,
-  }),120);
+  });
+  const trees=new T.InstancedMesh(firGeometry(),firMaterial,120);
   const object=new T.Object3D(),groundRay=new T.Ray(new T.Vector3(),new T.Vector3(0,-1,0));
   const vertices=geo.getAttribute('position'),triangles=geo.getIndex()!;
   const v0=new T.Vector3(),v1=new T.Vector3(),v2=new T.Vector3(),hit=new T.Vector3();

@@ -9,7 +9,7 @@
 // BATTLE_SNAPSHOT_PROFILE=1 times client snapshot merge, HUD/event dispatch, scene sync and the test observer.
 // BATTLE_GL_STALLS=1 records existing WebGL calls taking over 2 ms and shadow/composer CPU time.
 // BATTLE_WEAPON_SHADOW=1 also checks exact Kar98k shadow program reuse in the real battle.
-// BATTLE_STARTUP_SHADER=1 verifies shader readiness before play; timeout blocks the asset to test fallback.
+// BATTLE_STARTUP_SHADER=1 checks shader and Alpine atlas readiness before play; timeout tests fallback.
 // HARBOUR_NEAR_SPAWN=1 starts the tester behind the Diner on the isolated server.
 // BATTLE_SEED sets the isolated server's starting random sequence for comparable runs.
 // Bots, difficulty, damage and movement retain their normal game rules.
@@ -72,6 +72,11 @@ try {
     name:'local-battle-observation', enforce:'pre',
     transform(source, id) {
       const path=id.replaceAll('\\','/');
+      if(traceStartup&&path.endsWith('/client/alpineBackdrop.ts')){
+        const anchor='texture.image=canvas;';
+        assert.equal(source.split(anchor).length,2,'Fir atlas timing hook changed');
+        return source.replace(anchor,anchor+'window.battleFirAtlasPrepared=performance.now();');
+      }
       if(traceStartup&&path.endsWith('/client/scene.ts')){
         const anchor='graphics.warmupWorldDraw([],true,probe);';
         assert.equal(source.split(anchor).length,2,'Civilian warmup hook changed');

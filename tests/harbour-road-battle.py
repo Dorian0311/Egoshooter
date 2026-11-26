@@ -559,6 +559,10 @@ with sync_playwright() as pw:
         startup_shader=page.evaluate('({wait:window.battleCivilianShaderWaiting,prepared:window.battleCivilianShaderReady,playing:window.battlePlayingAt})')
         assert startup_shader.get('prepared') is not None and startup_shader['prepared']<=startup_shader['playing'],startup_shader
         print('Civilian shader prepared before start',startup_shader,flush=True)
+        if map_id=='alpine':
+            fir_atlas=page.evaluate('window.battleFirAtlasPrepared')
+            assert fir_atlas is not None and fir_atlas<=startup_shader['playing'],(fir_atlas,startup_shader)
+            startup_shader['firAtlasPrepared']=fir_atlas
     page.evaluate('''Promise.race([harbourQA.scene.worldPrepared,new Promise((_,reject)=>setTimeout(()=>reject(Error("Scene warmup timeout")),90000))])''')
     renderer_info=page.evaluate("""()=>{
         const gl=document.querySelector('.city-canvas').getContext('webgl2');
