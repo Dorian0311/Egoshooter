@@ -86,6 +86,6 @@ diffuseColor.rgb*=mix(.88,1.05,battleN);
  mesh.name='shared-heightfield-'+world.id;
  mesh.receiveShadow=true;
  // Let opaque buildings fill depth before shading the terrain behind them.
- if(world.id==='storm')mesh.renderOrder=1;
+ if(world.id==='storm'||world.id==='frontline')mesh.renderOrder=1;
  return {mesh,dispose(){control?.dispose();material.dispose();}};
 }

@@ -48,6 +48,51 @@ export function addRhineQuays(face:Face){
       }
       block(0,.46,z-.56,z+.56,-.47,-.24,14,1.03);
     }
+    if(side===1){
+      for(const z of [-12,12]){
+        // Clipped corners carry the east-bank pilasters up from the river.
+        // Above the coping the entire portal stays over water, outside the deck.
+        const x=28.20;
+        function course(y:number,rx:number,rz:number):Point[]{
+          const cut=Math.min(rx,rz)*.28;
+          return [[x-rx+cut,y,z+rz],[x+rx-cut,y,z+rz],[x+rx,y,z+rz-cut],[x+rx,y,z-rz+cut],
+            [x+rx-cut,y,z-rz],[x-rx+cut,y,z-rz],[x-rx,y,z-rz+cut],[x-rx,y,z+rz-cut]];
+        }
+        const courses:[number,number,number,number][]=[
+          [-4.46,1.82,1.68,.58],[-1.62,1.75,1.58,.71],[-.31,1.76,1.58,.88],[.08,1.43,1.43,.94],
+          [.52,1.42,1.42,1.02],[.63,1.30,1.30,.83],[1.02,1.30,1.30,.90],[1.10,1.23,1.23,1.04],
+          [3.42,1.19,1.19,.90],[4.76,1.17,1.17,.94],[4.84,1.30,1.30,.80],[5.03,1.35,1.35,1.05],
+          [5.13,1.23,1.23,.91],[5.49,1.22,1.22,.83],[5.59,1.33,1.33,1.06],[5.98,.94,.94,.98]
+        ];
+        const [baseY,baseX,baseZ]=courses[0];
+        let lower=course(baseY,baseX,baseZ);
+        for(const [y,rx,rz,tone] of courses.slice(1)){
+          const upper=course(y,rx,rz);
+          for(let j=0;j<8;j++){
+            const k=(j+1)%8;
+            face([lower[j],lower[k],upper[k],upper[j]],14,tone);
+          }
+          lower=upper;
+        }
+        for(let j=0;j<8;j++)face([lower[j],lower[(j+1)%8],[x,6.20,z]],9,.90);
+        // Blind round-headed panels on both approaches, enclosed by projecting
+        // stone jambs and wedge-shaped arch stones. Keep their faces streetward.
+        for(const view of [-1,1]){
+          const at=(depth:number,y:number,width:number):Point=>[x+view*depth,y,z-view*width];
+          const coreY=3.03,inner=.52,outer=.68;
+          const ring=(r:number,a:number)=>at(1.253,coreY+r*Math.sin(a),r*Math.cos(a));
+          face([at(1.23,1.47,-inner),at(1.23,1.47,inner),at(1.23,coreY,inner),at(1.23,coreY,-inner)],9,.51);
+          for(let i=0;i<9;i++){
+            const a=i*Math.PI/9,b=(i+1)*Math.PI/9;
+            face([at(1.23,coreY,0),at(1.23,coreY+inner*Math.sin(a),inner*Math.cos(a)),
+              at(1.23,coreY+inner*Math.sin(b),inner*Math.cos(b))],9,.51);
+            face([ring(inner,a),ring(outer,a),ring(outer,b),ring(inner,b)],14,i===4?1.11:.99);
+          }
+          for(const start of [-outer,inner])
+            face([at(1.25,1.43,start),at(1.25,1.43,start+outer-inner),at(1.25,coreY,start+outer-inner),at(1.25,coreY,start)],14,.98);
+        }
+      }
+    }
     for(const z of (side===1?[-51,-22,46]:[-43,26,57])){
       const cy=-2.42,r=.63,outer=.86;
       front(.095,z-r,z+r,cy-.72,cy,9,.22);
