@@ -827,10 +827,13 @@ export function createScene(
     const eye=camera.position;
     const room=island?streetRooms.find(({shop:s})=>eye.y>.12&&eye.y<s.h-.3&&
       Math.abs(eye.x-s.x)<s.w/2-.4&&Math.abs(eye.z-s.z)<s.d/2-.4):undefined;
+    let occlusionFar=camera.far;
     if(island){
       // Keep the full depth when the next projection may widen out of weapon zoom.
-      const far=room&&camera.fov>=(inspectionView?50:settings.fov)&&!shopOpeningInView(actorFrustum,room.opening)
+      const far=room&&camera.fov>=(inspectionView?50:settings.fov)&&!room.openings.some(opening=>shopOpeningInView(actorFrustum,opening))
         ?closedShopViewDepth(camera,room.shop):350;
+      // Preserve the previous world-space AO range while looking at the front wall.
+      occlusionFar=room&&far<350&&!shopOpeningInView(actorFrustum,room.facade)?24:350;
       if(camera.far!==far){
         camera.far=far;camera.updateProjectionMatrix();
         actorFrustum.setFromProjectionMatrix(actorProjection.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse));
@@ -1005,7 +1008,7 @@ export function createScene(
     mapDetails.update(t/1000);
     environmentUpgrade.update(camera.position,quality);
     sceneAssets.updateCrates(camera,aimBlend>.04);
-    graphics.render(dt,pose?.aimBlend??0,!menu,cpuTimes.at(-1),frameMs/1000,viewport,weapon.visible,Math.max(24,camera.far),!!room&&camera.far<350);
+    graphics.render(dt,pose?.aimBlend??0,!menu,cpuTimes.at(-1),frameMs/1000,viewport,weapon.visible,occlusionFar,!!room&&camera.far<350);
     const cpuMs=performance.now()-cpuStarted;
     cpuTimes.push(cpuMs);if(cpuTimes.length>180)cpuTimes.shift();
     if(frameProfile.length<profileLimit)frameProfile.push({frameMs,cpuMs,...graphics.frameState,steps,calls:renderer.info.render.calls,triangles:renderer.info.render.triangles,programs:renderer.info.programs?.length??0,detailDrawsSkipped});

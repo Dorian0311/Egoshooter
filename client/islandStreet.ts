@@ -46,7 +46,7 @@ export function addIslandStreet(scene:T.Group){
   const concrete=paint('#b6ac99'),trim=paint('#e6cf98'),iron=paint('#555c58');
   const paving=loader.load(base+'concrete.webp');
   paving.colorSpace=T.SRGBColorSpace;paving.wrapS=paving.wrapT=T.RepeatWrapping;
-  paving.repeat.set(8,1);paving.anisotropy=4;
+  paving.anisotropy=4;
   const pavingMaterial=new T.MeshStandardMaterial({map:paving,roughness:.98});
   for(const side of [-1,1]){
     const kerb=-23+side*4.62;
@@ -58,7 +58,7 @@ export function addIslandStreet(scene:T.Group){
     for(let i=0;i<profile.length-1;i++){
       const [start,low,v0]=profile[i],[end,high,v1]=profile[i+1],n=points.length/3;
       points.push(-32,low,side*start,-32,high,side*end,32,high,side*end,32,low,side*start);
-      texcoords.push(0,1-v0/688,0,1-v1/688,1,1-v1/688,1,1-v0/688);
+      texcoords.push(0,1-v0/960,0,1-v1/960,8,1-v1/960,8,1-v0/960);
       if(side===1)indices.push(n,n+1,n+2,n,n+2,n+3);
       else indices.push(n,n+2,n+1,n,n+3,n+2);
     }
@@ -90,10 +90,11 @@ export function addIslandStreet(scene:T.Group){
   }
   const manhole=new T.Mesh(new T.CylinderGeometry(.39,.39,.018,20),gutter);
   manhole.position.set(57.2,.061,-24.85);manhole.receiveShadow=true;street.add(manhole);
-  for(let i=-3;i<=3;i++){
-    const halfWidth=Math.sqrt(.35**2-(i*.092)**2);
-    cuboid(57.2,.073,-24.85+i*.092,halfWidth*2,.005,.021,grate);
-  }
+  // The local foundry cast its name, the port anchor and the lifting eyes into the iron lid.
+  const lid=new T.CircleGeometry(.382,32),lidUV=lid.getAttribute('uv');
+  for(let i=0;i<lidUV.count;i++)
+    lidUV.setXY(i,(12+248*lidUV.getX(i))/1536,1-(948-248*lidUV.getY(i))/960);
+  const cover=solid(lid,57.2,.071,-24.85,pavingMaterial);cover.rotation.x=-Math.PI/2;
   const atlas=loader.load(base+'shops.webp');atlas.colorSpace=T.SRGBColorSpace;atlas.anisotropy=4;
   const facade=new T.MeshStandardMaterial({map:atlas,roughness:.93});
   const prints=loader.load(base+'interior-prints.webp');

@@ -52,7 +52,7 @@ test('blocked shop views keep every room corner and trim within the far plane',(
 });
 
 test('a fast turn reopens the shop view even when the old far plane stops before the doorway',()=>{
- const {shop,opening}=streetRooms[1],camera=new T.PerspectiveCamera(72,16/9,.08,2);
+ const {shop,openings:[opening]}=streetRooms[1],camera=new T.PerspectiveCamera(72,16/9,.08,2);
  const frustum=new T.Frustum(),projection=new T.Matrix4();
  camera.position.set(shop.x,1.65,shop.z-shop.front*3.5);
  camera.lookAt(shop.x,1.65,shop.z+shop.front*4);
@@ -68,6 +68,22 @@ test('a fast turn reopens the shop view even when the old far plane stops before
  camera.updateMatrixWorld();
  frustum.setFromProjectionMatrix(projection.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse));
  assert.equal(shopOpeningInView(frustum,opening),false);
+});
+
+test('solid fascia and sills are excluded from the shop openings',()=>{
+ const {shop,openings}=streetRooms[1],camera=new T.PerspectiveCamera(8,16/9,.08,24);
+ const frustum=new T.Frustum(),projection=new T.Matrix4();
+ function seesOpening(x:number,y:number,lookX:number,lookY:number){
+  camera.position.set(shop.x+x,y,shop.z+shop.front*2.8);
+  camera.lookAt(shop.x+lookX,lookY,shop.z+shop.front*4);
+  camera.updateMatrixWorld();
+  frustum.setFromProjectionMatrix(projection.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse));
+  return openings.some(opening=>shopOpeningInView(frustum,opening));
+ }
+ assert.equal(seesOpening(0,3.8,0,4.25),false);
+ assert.equal(seesOpening(3,.25,3,.25),false);
+ assert.equal(seesOpening(0,.25,0,.25),true);
+ assert.equal(seesOpening(3,1.65,3,1.65),true);
 });
 
 test('automatic shadows never redraw on consecutive slow frames and retain a 30 Hz ceiling',()=>{

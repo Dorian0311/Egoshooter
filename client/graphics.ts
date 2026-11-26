@@ -11,7 +11,7 @@ import {createWeaponScene} from './weaponScene';
 import {createGpuTiming} from './gpuTiming';
 import {withBodyDistanceUpload} from './actorDetails';
 import {ShadowCadence} from './shadowCadence';
-import {createReceiverShadowFrustum} from './receiverShadowFrustum';
+import {createReceiverShadowFrustum,setReceiverShadowScissor} from './receiverShadowFrustum';
 
 // Keep the environment's lighting while preventing its sky from covering the
 // world during the second, depth-cleared first-person render.
@@ -75,14 +75,9 @@ export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
   const gpuTiming=createGpuTiming(renderer.getContext() as WebGL2RenderingContext);
   const shadowCadence=new ShadowCadence();let timingFrame=0,timingEnabled=true;
   const receiverFrustum=createReceiverShadowFrustum(),lightFrustum=sun.shadow.getFrustum;
-  let clipReceivers=false,includeWeapon=false;
-  sun.shadow.getFrustum=()=>{
-    const full=lightFrustum.call(sun.shadow);
-    if(!clipReceivers)return full;
-    // Account for biased receiver positions and the outer PCFSoft taps.
-    const padding=Math.abs(sun.shadow.normalBias)+3*shadowExtent*2/sun.shadow.mapSize.x;
-    return receiverFrustum(full,camera,includeWeapon?weaponCamera:undefined,padding);
-  };
+  let clippedShadow:T.Frustum|undefined;
+  const savedShadowScissor=new T.Vector4();
+  sun.shadow.getFrustum=()=>clippedShadow??lightFrustum.call(sun.shadow);
   let frameCpuAverage=0;
   const frameState={shadowUpdated:false,resized:false,pixelRatio:0,gpuMs:undefined as number|undefined};
   scene.add(sun.target);
@@ -280,13 +275,28 @@ export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
       }
       if(timingEnabled&&adaptiveQuality&&adaptive&&currentTimingFrame%17===0)gpuTiming.begin();
       // These presets refresh the map on every frame, including the first view back outside.
-      clipReceivers=(quality==='high'||quality==='ultra')&&camera.far<shadowExtent;
-      includeWeapon=weaponVisible;
+      let restrictedTarget:T.WebGLRenderTarget|undefined;
+      if((quality==='high'||quality==='ultra')&&camera.far<shadowExtent){
+        sun.updateWorldMatrix(true,false);
+        sun.shadow.updateMatrices(sun);
+        const full=lightFrustum.call(sun.shadow);
+        // Cover biased receiver positions and every PCFSoft tap before restricting writes.
+        const padding=Math.abs(sun.shadow.normalBias)+3*shadowExtent*2/sun.shadow.mapSize.x;
+        clippedShadow=receiverFrustum(full,camera,weaponVisible?weaponCamera:undefined,padding);
+        const target=sun.shadow.map;
+        if(target&&!target.scissorTest){
+          savedShadowScissor.copy(target.scissor);
+          setReceiverShadowScissor(target.scissor,full,clippedShadow,target.width,target.height,shadowExtent*2);
+          target.scissorTest=true;
+          restrictedTarget=target;
+        }
+      }
       const sky=scene.background;
       if(skyOccluded)scene.background=null;
       try{composer.render(dt);}finally{
         if(skyOccluded)scene.background=sky;
-        clipReceivers=false;gpuTiming.end();
+        if(restrictedTarget){restrictedTarget.scissor.copy(savedShadowScissor);restrictedTarget.scissorTest=false;}
+        clippedShadow=undefined;gpuTiming.end();
       }
     },
     dispose() {

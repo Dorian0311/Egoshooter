@@ -1,12 +1,24 @@
 import {Box3, Vector3, type Camera, type Frustum} from 'three';
-import {islandShops} from '../shared/islandStreet';
+import {islandShops,shopParts} from '../shared/islandStreet';
 
 export const streetRooms=islandShops.map(shop=>{
+ const parts=shopParts(shop),sign=parts.find(part=>part.role==='sign')!;
+ const top=sign.y-sign.h/2,padding=.015;
+ const podium=parts.find(part=>part.role==='sill')!;
+ const left=parts.find(part=>part.role==='post'&&part.x<shop.x)!;
+ const right=parts.find(part=>part.role==='post'&&part.x>shop.x)!;
+ const span=(min:number,max:number,bottom:number)=>new Box3(
+  new Vector3(min-padding,bottom-padding,sign.z-sign.d/2-padding),
+  new Vector3(max+padding,top+padding,sign.z+sign.d/2+padding),
+ );
+ const sillHeight=podium.y+podium.h/2;
  const front=shop.z+shop.front*shop.d/2;
- return {
-  shop,
-  opening:new Box3(new Vector3(shop.x-shop.w/2,0,front-.30),new Vector3(shop.x+shop.w/2,shop.h,front+.30)),
- };
+ const facade=new Box3(new Vector3(shop.x-shop.w/2,0,front-.30),new Vector3(shop.x+shop.w/2,shop.h,front+.30));
+ return {shop,facade,openings:[
+  span(left.x+left.w/2,right.x-right.w/2,0),
+  span(shop.x-shop.w/2+.24,left.x-left.w/2,sillHeight),
+  span(right.x+right.w/2,shop.x+shop.w/2-.24,sillHeight),
+ ]};
 });
 
 /** Visibility through the facade depends on the view angles, not on last frame's far plane. */
