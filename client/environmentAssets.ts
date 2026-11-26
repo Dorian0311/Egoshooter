@@ -41,6 +41,9 @@ export function loadEnvironmentUpgrade(scene:T.Scene,world:World,renderer:T.WebG
  const configure=(model:T.Group,foliage=false)=>model.traverse(o=>{if(o instanceof T.Mesh)for(const material of Array.isArray(o.material)?o.material:[o.material]){
   for(const texture of Object.values(material))if(texture instanceof T.Texture)texture.anisotropy=anisotropy;
   if(!foliage&&material instanceof T.MeshStandardMaterial)applySurfaceFinish(material,true);
+  // The factory asset's glass triangles lie in one plane. Rendering both
+  // faces together keeps two-sided lighting without a second transparent draw.
+  if(material.transparent&&material.name==='modular_factory_facade_windows_glass')material.forceSinglePass=true;
   // Cutout leaves sort correctly across instances and cast leaf-shaped shadows.
   if(foliage&&material.transparent){material.transparent=false;material.alphaTest=.4;material.depthWrite=true;material.needsUpdate=true;}
  }});

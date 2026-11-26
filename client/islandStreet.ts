@@ -311,13 +311,23 @@ export function addIslandStreet(scene:T.Group){
       const frameWidth=s.w/2-1.30;
       const frameX=s.x+direction*(1.16+frameWidth/2);
       const frontZ=edge+s.front*.126;
-      cuboid(outerX,y/2,frontZ,.20,y,.18,wood);
-      cuboid(outerX,y/2,frontZ+s.front*.104,.040,y-.12,.034,accent);
+      const diner=s.id==='diner';
+      cuboid(outerX,y/2,frontZ,.20,y,.18,diner?chrome:wood).castShadow=!diner;
+      cuboid(outerX,y/2,frontZ+s.front*.104,.040,y-.12,.034,diner?cream:accent);
       cuboid(frameX,.18,frontZ,frameWidth,.17,.092,iron);
-      cuboid(frameX,.83,frontZ,frameWidth,.073,.095,wood);
+      cuboid(frameX,.83,frontZ,frameWidth,.073,.095,diner?chrome:wood);
       for(let panel=0;panel<3;panel++){
         const center=frameX+frameWidth*((panel+.5)/3-.5);
         const panelWidth=frameWidth/3-.075;
+        if(diner){
+          // Fired tile bulkhead and separate steel expansion joints under the enamel sign.
+          // The original facade atlas also supplies the lettering, so both share its batch.
+          const tiles=new T.PlaneGeometry(frameWidth/3,.59),uv=tiles.getAttribute('uv');
+          for(let i=0;i<uv.count;i++)uv.setXY(i,.002+.996*uv.getX(i),1-(494-316*uv.getY(i))/2048);
+          solid(tiles,center,.525,frontZ+.085,facade).castShadow=true;
+          cuboid(center-frameWidth/6+.011,.525,frontZ+.089,.023,.60,.033,chrome).castShadow=false;
+          continue;
+        }
         cuboid(center,.477,frontZ+s.front*.03,panelWidth,.43,.085,wood);
         cuboid(center,.48,frontZ+s.front*.081,panelWidth-.105,.32,.034,accent);
         cuboid(center,.614,frontZ+s.front*.110,panelWidth-.155,.038,.024,trim);

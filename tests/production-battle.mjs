@@ -3,6 +3,7 @@
 // --check verifies the bundle, compressed delivery and account ticket without starting a browser.
 // The Python harness accepts the same BATTLE_* and HARBOUR_* options as in development.
 // Set BATTLE_FIXED_TURNS=1 for repeatable 100 ms sweeps from the same compass heading.
+// Set BATTLE_DRAW_PROFILE=1 to trace CPU draw submission and actual WebGL program binds.
 import assert from 'node:assert/strict';
 import {spawn} from 'node:child_process';
 import {randomBytes} from 'node:crypto';
@@ -46,10 +47,18 @@ process.once('SIGTERM', () => {process.exitCode=143; stop();});
 try {
   assert(process.argv.slice(2).every(arg=>arg==='--check'), 'Expected --check or no arguments');
   assert(process.env.BATTLE_SHADER_PROFILE!=='1','Shader material tagging requires the development build');
-  let patched = false;
+  let patched = false, drawPatched=false;
+  const traceDraws=process.env.BATTLE_DRAW_PROFILE==='1';
   await build({root, mode:'production', logLevel:'warn', build:{outDir:dist}, plugins:[{
     name:'local-battle-observation', enforce:'pre',
     transform(source, id) {
+      if(traceDraws && id.replaceAll('\\','/').endsWith('/client/scene.ts')) {
+        const marker=/^  const renderer = new T\.WebGLRenderer\([^\n]+;$/gm;
+        assert.equal([...source.matchAll(marker)].length,1,'Scene renderer hook changed');
+        drawPatched=true;
+        return "import {attachBattleDrawProbe} from '../tests/battle-draw-probe.mjs';\n"+
+          source.replace(marker,'$&\nwindow.battleDrawProbe=attachBattleDrawProbe(renderer);');
+      }
       if(!id.replaceAll('\\','/').endsWith('/client/App.tsx')) return;
       const anchor = 'scene.current?.update(s, access.playerId);';
       assert.equal(source.split(anchor).length, 2, 'App snapshot hook changed');
@@ -59,6 +68,7 @@ try {
     }
   }]});
   assert(patched, 'Missing App observation hook');
+  assert.equal(drawPatched,traceDraws,'Missing scene renderer hook');
   await child(process.execPath, [join(root,'scripts/compress-client.mjs')], {cwd:scratch}).done;
 
   const reservation = createServer();

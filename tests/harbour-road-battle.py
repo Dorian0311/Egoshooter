@@ -16,6 +16,8 @@ OUT = Path('artifacts/harbour-battle') / ('production' if PRODUCTION else '')
 OUT.mkdir(parents=True, exist_ok=True)
 COMBAT_MOVEMENT = os.environ.get('BATTLE_COMBAT_MOVEMENT') == '1'
 FIXED_TURNS = os.environ.get('BATTLE_FIXED_TURNS') == '1'
+DRAW_PROFILE = os.environ.get('BATTLE_DRAW_PROFILE') == '1'
+assert not DRAW_PROFILE or PRODUCTION, 'BATTLE_DRAW_PROFILE requires the separate production harness'
 
 
 def observe(route):
@@ -105,6 +107,8 @@ def measure_turns(page, name):
             raise TurnLifeInterrupted((name,'align',life))
     pose=page.evaluate('()=>{const {x,z,yaw}=harbourQA.player;return {x,z,yaw}}')
     page.evaluate('window.turnStarted=performance.now();window.turnRanges=[];harbourQA.scene.profileFrames(3000)')
+    if DRAW_PROFILE:
+        page.evaluate('battleDrawProbe.start(harbourQA.scene.frameProfile())')
     life,start = page.evaluate('[harbourQA.player.life,harbourQA.player.yaw]')
     turns=int(os.environ.get('BATTLE_TURNS','12'))
     assert 1<=turns<=80
@@ -173,7 +177,9 @@ def read_profile(page, name, during_turn=False):
                   over33=sum(t>33 for t in ms), cpuMs=round(sum(f['cpuMs'] for f in frames)/len(ms),1), calls=round(sum(f['calls'] for f in frames)/len(ms)),scale=frames[-1]['pixelRatio'],gpuMs=frames[-1].get('gpuMs'))
     if during_turn:
         result['activeTurn'] = moving_frames(frames, page.evaluate('turnRanges'))
-    print(result, flush=True)
+        if DRAW_PROFILE:
+            result['drawProfile'] = page.evaluate('battleDrawProbe.finish(turnRanges)')
+    print({k:v for k,v in result.items() if k!='drawProfile'}, flush=True)
     for i in sorted(range(1,len(frames)),key=lambda i:frames[i]['frameMs'],reverse=True)[:3]:
         if frames[i]['frameMs']>45:
             result.setdefault('slowFrames',[]).append(dict(ms=frames[i]['frameMs'], previous=frames[i-1]))
@@ -194,6 +200,8 @@ with sync_playwright() as pw:
     quality=os.environ.get('BATTLE_GRAPHICS','performance')
     assert quality in ('auto','performance','high','ultra'),quality
     quality_suffix=('' if quality=='performance' else '-'+quality)+('-fixed-turns' if FIXED_TURNS else '')
+    if DRAW_PROFILE:
+        quality_suffix+='-draw-profile'
     page = browser.new_page(viewport=dict(width=width,height=height), device_scale_factor=1)
     page.add_init_script(f"localStorage.setItem('altstadt.graphics.v3',{json.dumps(quality)})")
     page.add_init_script("""if(PerformanceObserver.supportedEntryTypes.includes('long-animation-frame')){
