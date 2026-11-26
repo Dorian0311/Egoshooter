@@ -4,6 +4,7 @@ import { parseGraphicsQuality, renderPixelRatio,ResolutionGovernor } from '../cl
 import {addMilitaryRoofs} from '../client/militaryRoofs';
 import * as T from 'three';
 import {createMuzzleEffects} from '../client/muzzleEffects';
+import {createBlastEffects} from '../client/blastEffects';
 import {dampSurface} from '../client/dampSurface';
 import { addFacadeDetails, addAlpineBackdrop, createRiver, batchStaticMeshes, instanceStaticModel } from '../client/scenery.ts';
 import { getWorld } from '../shared/world.ts';
@@ -137,6 +138,22 @@ test('surface dampness restores dry colors and roughness without recompiling',()
   assert.equal(material.roughness,.9);
   assert.equal(material.version,version);
   material.dispose();
+});
+
+test('explosion fire clears before the shared dust batch and respects effect capacity',()=>{
+  const scene=new T.Scene(),effect=createBlastEffects(scene);
+  const [fire,smoke]=effect.group.children as T.Mesh<T.InstancedBufferGeometry>[];
+  for(let i=0;i<17;i++)effect.emit([i,0,0],3,100);
+  effect.update(150);
+  assert.equal(fire.geometry.instanceCount,36);
+  assert.equal(smoke.geometry.instanceCount,60);
+  effect.update(480);
+  assert.equal(fire.visible,false);
+  assert.equal(smoke.geometry.instanceCount,60);
+  effect.update(1780);
+  assert.equal(smoke.visible,false);
+  effect.dispose();
+  assert.equal(scene.children.length,0);
 });
 
 test('static batching preserves world positions and replaceable cover meshes', () => {

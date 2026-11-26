@@ -26,6 +26,7 @@ export function createPeriodArchitecture(world:World){
     let timetable:T.Mesh|undefined;
     const upper=b.upper?8:4,wallX=b.w/2,wallZ=b.d/2,gableZ=wallZ+.52;
     const alpine=world.id==='alpine',cinema=b.name==='UNION-LICHTSPIELE';
+    const fortress=alpine&&b.name==='ROCHE-LA-CROIX';
     const station=/BAHNHOF|KÖLN-DEUTZ/.test(b.name);
     const deutz=world.id==='cologne'&&b.name==='DEUTZER BAHNHOF';
     const illuminated=deutz||cinema;
@@ -56,6 +57,67 @@ export function createPeriodArchitecture(world:World){
     function box(x:number,y:number,z:number,w:number,h:number,d:number,c:string,rx=0,rz=0,near=false){
       add(new T.BoxGeometry(w,h,d),x,y,z,c,rx,rz,near);
     }
+    if(fortress){
+      const concrete='#a4a497',aggregate='#797d72',armour='#535e55';
+      // The two flared concrete cheeks stand against solid masonry. Their battered faces
+      // recede with height; the existing central doorway and its nameplate remain exposed.
+      for(const wing of [-1,1]){
+        const points:[number,number][]=[[2.26,.04],[8.98,.04],[8.98,2.49],[8.41,2.93],[3.05,2.93],[2.26,2.45]];
+        const pos:number[]=[],uv:number[]=[],index:number[]=[];
+        const vertex=(n:number,forward:boolean):[number,number,number]=>{
+          const [x,y]=points[n];
+          return [wing*x,y,wallZ+(forward?.83-.081*y:.15)];
+        };
+        function face(vertices:[number,number,number][]){
+          if(wing<0)vertices.reverse();
+          const base=pos.length/3;
+          for(const v of vertices){pos.push(...v);uv.push(v[0]*.25,v[1]*.25);}
+          for(let j=1;j<vertices.length-1;j++)index.push(base,base+j,base+j+1);
+        }
+        face(points.map((_,i)=>vertex(i,true)));
+        face(points.map((_,i)=>vertex(points.length-1-i,false)));
+        for(let i=0;i<points.length;i++){
+          const next=(i+1)%points.length;
+          face([vertex(i,false),vertex(next,false),vertex(next,true),vertex(i,true)]);
+        }
+        const cheek=new T.BufferGeometry();cheek.setAttribute('position',new T.Float32BufferAttribute(pos,3));
+        cheek.setAttribute('uv',new T.Float32BufferAttribute(uv,2));cheek.setIndex(index);cheek.computeVertexNormals();
+        add(cheek,0,0,0,concrete);
+        for(const y of [.55,1.38,2.17]){
+          const z=wallZ+.84-.081*y;
+          box(wing*5.63,y,z,6.61,.027,.027,aggregate,0,0,true);
+          for(const dx of [3.13,5.67,8.27])add(new T.CylinderGeometry(.047,.047,.022,8),wing*dx,y+.15,z-.005,aggregate,Math.PI/2,0,true);
+        }
+        // Recessed louvres on the non-opening wall bay, protected by a projecting brow.
+        const ventX=wing*5.56;
+        box(ventX,1.88,wallZ+.73,2.20,.51,.17,armour);
+        for(let j=0;j<3;j++)box(ventX,1.735+j*.145,wallZ+.835,1.90,.078,.083,'#808477',-.31);
+        box(ventX,2.20,wallZ+.75,2.43,.13,.39,aggregate);
+        box(ventX,2.277,wallZ+.75,2.43,.032,.38,'#d7dedc');
+        // The continuous, low stone plinth meets the existing side sills below their openings.
+        for(let row=0;row<3;row++)for(let i=0;i<9;i++){
+          const start=Math.max(-wallZ,-wallZ+i*1.92-(row%2)*.67);
+          const end=Math.min(wallZ,-wallZ+(i+1)*1.92-(row%2)*.67);
+          if(end>start+.05)box(wing*(wallX+.28),.175+row*.303,(start+end)/2,.23,.276,end-start-.026,
+            ['#827e6e','#918b78','#9e9987'][(i+row*2)%3],0,0,true);
+        }
+      }
+      box(0,4.02,wallZ+.57,8.13,.17,.75,armour);
+      box(0,4.24,wallZ+.49,8.84,.32,1.26,concrete);
+      box(0,4.422,wallZ+.56,8.90,.055,1.20,'#e1e7e5');
+      // Low armoured observation bell set into a snow-lipped collar on the west roof shoulder.
+      const cx=-4.9,cz=-2.6,seat=upper+1.85;
+      add(new T.CylinderGeometry(1.72,1.92,.72,24),cx,seat-.24,cz,aggregate);
+      add(new T.CylinderGeometry(1.74,1.76,.105,24),cx,seat+.12,cz,'#d7e0df');
+      const profile=[[1.47,0],[1.47,.37],[1.40,.67],[1.19,.93],[.89,1.15],[.47,1.29],[.002,1.34]];
+      add(new T.LatheGeometry(profile.map(([r,h])=>new T.Vector2(r,h)),24),cx,seat+.12,cz,armour);
+      add(new T.CylinderGeometry(1.48,1.49,.085,24),cx,seat+.25,cz,'#434b46');
+      for(let i=0;i<5;i++){
+        const a=(i-2)*.62;
+        const port=new T.BoxGeometry(.37,.105,.09).rotateY(a);
+        add(port,cx+1.445*Math.sin(a),seat+.59,cz+1.445*Math.cos(a),'#333d38');
+      }
+    }
     if(alpine){
       const run=wallX+.5;
       for(const slope of [-1,1]){
@@ -81,9 +143,13 @@ export function createPeriodArchitecture(world:World){
       const run=wallX+.52,angle=Math.atan2(2.4,run);
       for(const wing of [-1,1]){
         box(wing*run/2,upper+1.51,face,Math.hypot(run,2.4)+.10,.16,.18,
-          alpine?timber:shed?brick:stone,0,-wing*angle);
+          fortress?'#899083':alpine?timber:shed?brick:stone,0,-wing*angle);
       }
-      if(alpine){
+      if(fortress){
+        box(0,upper+1.18,face,2.74,.78,.17,'#888b7e');
+        box(0,upper+1.16,face+side*.11,2.39,.56,.10,'#455148');
+        for(let n=0;n<4;n++)box(0,upper+.97+n*.13,face+side*.18,2.28,.054,.10,'#81897a',-side*.23,0,true);
+      }else if(alpine){
         // A louvred attic vent bordered by heavy timber and deep projecting purlin ends.
         box(0,upper+1.25,face,2.3,1.12,.085,'#49473d');
         for(const x of [-1.19,1.19])box(x,upper+1.25,face+side*.055,.11,1.35,.14,timber);

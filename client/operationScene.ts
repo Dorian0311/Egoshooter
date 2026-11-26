@@ -4,6 +4,7 @@ import type {Snapshot,Player} from '../shared/game';
 import {eyePosition} from '../shared/injuries';
 import {throwingStarQuaternion} from './projectileMotion';
 import {createMedicalCrates} from './medicalCrate';
+import {createBlastEffects} from './blastEffects';
 export function createThrowingStarGeometry(){
  const cells=new Set<string>(['0,0']);for(let r=0;r<4;r++)for(const [x,y]of [[0,1],[0,2],[1,2],[2,2]]){let a=x,b=y;for(let n=0;n<r;n++)[a,b]=[b,-a];cells.add(`${a},${b}`);}
  const edges=new Map<string,[[number,number],[number,number]]>();
@@ -18,19 +19,11 @@ export function createOperationScene(scene:T.Scene){
  const box=new T.BoxGeometry(.55,.45,.55),ribbonA=new T.BoxGeometry(.57,.47,.07),ribbonB=new T.BoxGeometry(.07,.47,.57),star=createThrowingStarGeometry();
  const medicalCrates=createMedicalCrates(),gadgets=createGadgetModels();
  const pickups=new Map<string,T.Group>(),projectiles=new Map<string,T.Object3D>(),cars=new Map<string,T.Group>();let snapshot:Snapshot|null=null,received=0;
- const blastGeometry=new T.SphereGeometry(1,12,8);
+ const blasts=createBlastEffects(root);
  const warningGeometry=new T.SphereGeometry(.045,8,6),warningMaterial=new T.MeshBasicMaterial({color:'#ff422d'});
  const gateGeometry=new T.TorusGeometry(.62,.035,6,24);
  const gateActive=new T.MeshBasicMaterial({color:'#f6dc64'}),gateWaiting=new T.MeshBasicMaterial({color:'#779c92'});
  const gates:T.Mesh[]=[];
- const blastGroup=new T.Group();blastGroup.name='explosion-effects';root.add(blastGroup);
- const blasts=Array.from({length:12},()=>{
-  const mesh=new T.Mesh(blastGeometry,new T.MeshBasicMaterial({
-   color:'#ffd078',transparent:true,depthWrite:false,opacity:.9,blending:T.AdditiveBlending,
-  }));
-  mesh.visible=false;blastGroup.add(mesh);
-  return {mesh,started:0,radius:0};
- });
  const velocity=new T.Vector3(),rocketAxis=new T.Vector3(0,0,1);
  function setCar(group:T.Group,car:{x:number;y:number;z:number;yaw:number}){
   group.position.set(car.x,car.y,car.z);group.rotation.y=car.yaw;
@@ -42,7 +35,7 @@ export function createOperationScene(scene:T.Scene){
  prop(documents,0,.12,0,.65,.22,.45,'#604b32');prop(documents,0,.25,0,.48,.025,.33,'#e9e1bd');prop(documents,-.18,.27,0,.025,.02,.35,'#909872');
  prop(flag,0,1,0,.025,2,.025,'#b8c0b5');prop(flag,.35,1.7,0,.7,.4,.025,'#a4b568');
  return {
-  blastGroup,
+  blastGroup:blasts.group,
   sync(s:Snapshot){snapshot=s;received=performance.now();for(const p of s.pickups){let group=pickups.get(p.id);if(!group){group=p.kind==='gift'?new T.Group():p.kind==='rocket'?gadgets.rocket():medicalCrates.create();if(p.kind==='gift'){group.add(new T.Mesh(box,giftMaterial));group.add(new T.Mesh(ribbonA,ribbonMaterial),new T.Mesh(ribbonB,ribbonMaterial));}root.add(group);pickups.set(p.id,group);}group.position.set(p.x,p.y+(p.kind==='rocket'?.09:.25),p.z);group.visible=!p.taken;}
    for(const [id,group]of pickups)if(!s.pickups.some(p=>p.id===id)){root.remove(group);pickups.delete(id);}
    for(const p of s.projectiles){if(!projectiles.has(p.id)){const mesh=p.kind==='rocket'?gadgets.rocket():new T.Mesh(star,metal);root.add(mesh);projectiles.set(p.id,mesh);}}
@@ -77,12 +70,7 @@ export function createOperationScene(scene:T.Scene){
    const o=snapshot.operation;if(o.config.mode==='mission'&&o.objective.stage==='target'&&o.config.mission!=='hold')candidates.push({...o.objective.point,id:'objective',label:o.config.mission==='documents'?'Dokumente bergen':'Funkstation sabotieren'});
    return candidates.map(q=>({q,distance:Math.hypot(q.x-eye.x,q.y+.5-eye.y,q.z-eye.z),dot:(q.x-eye.x)*-Math.sin(yaw)+(q.z-eye.z)*-Math.cos(yaw)})).filter(q=>q.distance<2.7&&q.dot>-.1).sort((a,b)=>a.distance-b.distance)[0]?.q;
   },
-  explosion(point:[number,number,number],radius:number,time:number){
-   const blast=blasts.find(({mesh})=>!mesh.visible)??blasts.reduce((oldest,current)=>current.started<oldest.started?current:oldest);
-   blast.started=time;blast.radius=radius;
-   const {mesh}=blast;
-   mesh.position.set(...point);mesh.scale.setScalar(.13*radius);mesh.material.opacity=.9;mesh.visible=true;
-  },
+  explosion:blasts.emit,
   update(time:number,frameSeconds:number){
    if(!snapshot)return;
    const dt=Math.max(0,Math.min(.1,(time-received)/1000));
@@ -100,15 +88,10 @@ export function createOperationScene(scene:T.Scene){
     const turn=car.yaw-group.rotation.y;
     group.rotation.y+=Math.atan2(Math.sin(turn),Math.cos(turn))*blend;
    }
-   for(const {mesh,started,radius} of blasts){
-    if(!mesh.visible)continue;
-    const age=Math.max(0,(time-started)/390);
-    if(age>=1){mesh.visible=false;continue;}
-    mesh.scale.setScalar((.13+Math.sqrt(age)*.46)*radius);mesh.material.opacity=.95*(1-age)**2;
-   }
+   blasts.update(time);
    marker.material.opacity=.5+.25*Math.sin(time*.004);
   },
   carPose:(id:string)=>cars.get(id),
-  dispose(){root.removeFromParent();gadgets.dispose();medicalCrates.dispose();box.dispose();ribbonA.dispose();ribbonB.dispose();star.dispose();blastGeometry.dispose();gateGeometry.dispose();warningGeometry.dispose();for(const {mesh} of blasts)mesh.material.dispose();marker.geometry.dispose();marker.material.dispose();for(const g of propGeometries)g.dispose();for(const m of [...propMaterials,giftMaterial,ribbonMaterial,metal,gateActive,gateWaiting,warningMaterial])m.dispose();},
+  dispose(){blasts.dispose();root.removeFromParent();gadgets.dispose();medicalCrates.dispose();box.dispose();ribbonA.dispose();ribbonB.dispose();star.dispose();gateGeometry.dispose();warningGeometry.dispose();marker.geometry.dispose();marker.material.dispose();for(const g of propGeometries)g.dispose();for(const m of [...propMaterials,giftMaterial,ribbonMaterial,metal,gateActive,gateWaiting,warningMaterial])m.dispose();},
  };
 }

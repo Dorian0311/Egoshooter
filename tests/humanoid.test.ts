@@ -78,3 +78,20 @@ test('standard actors reuse immutable body streams while keeping independently d
  assert.ok(b.getAttribute('position').count>10000);
  second.dispose();
 });
+
+test('finger pose follows equipped and empty hands without rewriting a stable grip each frame',()=>{
+ const data=JSON.parse(readFileSync(new URL('../public/shooter/characters/humanoid.json',import.meta.url),'utf8'));
+ const human=createHuman(data,'fr','storm',new T.MeshStandardMaterial(),'task-sand');
+ const finger=human.group.getObjectByName('finger3-2.R')!,p=makePlayer('grip','Grip','fr');
+ p.weapon=0;human.update(p,100,1/60);const grip=finger.quaternion.clone();
+ let changes=0;const set=finger.rotation.set;
+ finger.rotation.set=function(...args){changes++;return set.apply(this,args);};
+ for(let i=0;i<10;i++)human.update(p,120+i*16,1/60);
+ assert.equal(changes,0);
+ p.weapon=4;human.update(p,320,1/60);assert.equal(changes,1);
+ assert.ok(finger.quaternion.angleTo(grip)>.5);
+ human.update(p,340,1/60);assert.equal(changes,1);
+ p.weapon=2;human.update(p,360,1/60);assert.equal(changes,2);
+ assert.ok(finger.quaternion.angleTo(grip)<1e-6);
+ human.dispose();
+});

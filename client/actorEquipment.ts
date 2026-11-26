@@ -47,6 +47,11 @@ export function createActorEquipment(root:T.Group,chains:Partial<Record<'armL'|'
  root.updateWorldMatrix(true,true);
  const arms=Object.fromEntries(Object.entries(chains).filter(([,chain])=>!!chain).map(([key,chain])=>{const upper=root.worldToLocal(chain!.upper.getWorldPosition(new T.Vector3())),lower=root.worldToLocal(chain!.lower.getWorldPosition(new T.Vector3())),hand=root.worldToLocal(chain!.hand.getWorldPosition(new T.Vector3()));return [key,{...chain,rest:[chain!.upper.quaternion.clone(),chain!.lower.quaternion.clone(),chain!.hand.quaternion.clone()],reach:(upper.distanceTo(lower)+lower.distanceTo(hand))*.985,shoulder:upper}];})) as Partial<Record<'armL'|'armR',SavedArm>>;
  const fingers:T.Object3D[]=[],bonusFingers:{bone:T.Object3D;rest:T.Quaternion;angle:number}[]=[];root.traverse(o=>{if(/^finger\d-\d\.[LR]$/.test(o.name))fingers.push(o);const finger=o.name.match(/^UN_([LR])_F_(Index|Mid|Ring|Pinkie|Thumb)_([123])$/);if(finger)bonusFingers.push({bone:o,rest:o.quaternion.clone(),angle:(finger[1]==='L'?-1:1)*(finger[2]==='Thumb'?.4:finger[2]==='Index'&&finger[3]==='1'?.25:finger[3]==='1'?.65:finger[3]==='2'?1.1:.7)});});
+ const gripFingers=fingers.map(bone=>{
+  const digit=Number(bone.name[6]),joint=Number(bone.name[8]);
+  const x=digit===1||digit===2&&joint===1?.15:joint===1?.55:1.15;
+  return {bone,x,z:digit===1?(bone.name.endsWith('.L')?.5:-.5):0};
+ });
  for(const arm of Object.values(arms))if(arm){
   arm.hand.traverse(o=>{if(/Mid_1$|middle|finger3-1|Finger2(?![\w])/i.test(o.name)&&(!arm.finger||o.children.length>arm.finger.children.length))arm.finger=o;});
   arm.gripFinger=arm.hand.children.find(o=>o.name.startsWith('finger3-1'))??arm.finger??arm.hand.children.find(o=>o instanceof T.Bone);
@@ -113,7 +118,10 @@ export function createActorEquipment(root:T.Group,chains:Partial<Record<'armL'|'
   for(let iteration=0;iteration<4;iteration++)for(const side of ['armR','armL'] as const){const arm=arms[side];if(!arm||hasLost(p,side)||p.carriedCorpse&&side==='armL')continue;mount.updateMatrix();localGrip.set(0,side==='armR'||hasLost(p,'armR')?.025:.015,side==='armR'||hasLost(p,'armR')?.035:weapons[p.weapon].kind==='pistol'?-.025:-.22).applyMatrix4(mount.matrix);offset.copy(arm.shoulder).sub(localGrip);const distance=offset.length();if(distance>arm.reach)mount.position.addScaledVector(offset,(distance-arm.reach)/distance);}
   mount.updateMatrix();right.set(0,.025,.035).applyMatrix4(mount.matrix);left.set(0,.015,weapons[p.weapon].kind==='pistol'?-.025:-.22).applyMatrix4(mount.matrix);
   for(const side of ['armR','armL'] as const){if(hasLost(p,side))continue;const arm=arms[side];if(arm){let point=side==='armR'&&!hasLost(p,'armR')?right:hasLost(p,'armR')?right:left;if(p.carriedCorpse&&side==='armL'){const clip=sampleCombatHands('carry',(time/1800)%1);point=clip?.left.clone().lerp(new T.Vector3(-.12,1.28,-.48),.65)??new T.Vector3(-.12,1.28,-.48);}grip(arm,point,side==='armL'?-1:1);}}
-  for(const finger of fingers){const digit=Number(finger.name[6]),joint=Number(finger.name[8]),side=finger.name.endsWith('.L')?1:-1;finger.rotation.set(digit===1?.15:digit===2&&joint===1?.15:joint===1?.55:1.15,0,digit===1?side*.5:0);}
+  for(const {bone,x,z} of gripFingers){
+   const pose=bone.rotation;
+   if(pose.x!==x||pose.y!==0||pose.z!==z)pose.set(x,0,z);
+  }
   for(const finger of bonusFingers)finger.bone.quaternion.copy(finger.rest).multiply(rotation.setFromAxisAngle(axis.set(0,0,1),finger.angle));
  },dispose(){disposed=true;mount.removeFromParent();star.removeFromParent();for(const entry of worldModels.values())entry.release();worldModels.clear();for(const geometry of geometries)geometry.dispose();starGeometry.dispose();for(const material of authoredMaterials)material.dispose();for(const material of [metal,wood,polymer,starMaterial])material.dispose();}};
 }

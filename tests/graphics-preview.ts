@@ -64,6 +64,9 @@ function show() {
   if(view.value==='combat')Object.assign(player,{x:-43,y:0,z:8,yaw:0,pitch:-.02});
   if (view.value === 'river') Object.assign(player, { x: -34, y: 1, z: 24, yaw: -1.1, pitch: -.16 });
   if (view.value === 'alpine') Object.assign(player, { x: -62, y: 0, z: 0, yaw: -1.3, pitch: .06 });
+  if(view.value==='alpine'&&params.get('focus')==='fort'){
+    Object.assign(player,{x:10,y:0,z:-25,yaw:.444,pitch:.18});
+  }
   const weather=params.get('condition');
   const operation=createOperation(weather==='night'||weather==='fog'?{condition:weather}:undefined,getWorld(mapId),Math.random);
   const snapshot: Snapshot = {
