@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { parseGraphicsQuality, renderPixelRatio,ResolutionGovernor } from '../client/graphicsSettings.ts';
+import { parseGraphicsQuality, initialResolutionScale, renderPixelRatio,ResolutionGovernor } from '../client/graphicsSettings.ts';
 import {addMilitaryRoofs} from '../client/militaryRoofs';
 import {createCoastalArchitecture} from '../client/coastalArchitecture';
 import * as T from 'three';
@@ -68,20 +68,26 @@ test('resolution stays within the GPU pixel budget on high-DPI and 4K screens', 
   assert.equal(renderPixelRatio('ultra', 2, 1920, 1080), 2);
   assert.equal(renderPixelRatio('ultra', 2, 3840, 2160), 1);
   assert.equal(renderPixelRatio('performance', 2, 1920, 1080), 1);
-  assert.equal(renderPixelRatio('auto', 2, 1920, 1080), 2/3);
-  for (const quality of ['performance', 'high', 'ultra'] as const) {
+  const autoRatio=renderPixelRatio('auto', 2, 1920, 1080);
+  assert.equal(autoRatio,5/6);
+  assert.equal(autoRatio*initialResolutionScale('auto',autoRatio,1920,1080),2/3);
+  assert.equal(initialResolutionScale('auto',1,1280,720),1);
+  for (const quality of ['auto', 'performance', 'high', 'ultra'] as const) {
     assert.ok(Number.isFinite(renderPixelRatio(quality, 1, 0, 0)));
     const ratio = renderPixelRatio(quality, 3, 7680, 4320);
     assert.ok(7680 * 4320 * ratio * ratio <= 8_294_401);
   }
 });
 
-test('automatic graphics makes room for 60 FPS when sustained performance is just below the target',()=>{
- const busy=new ResolutionGovernor(),stable=new ResolutionGovernor();
+test('automatic graphics makes room for 60 FPS and recovers resolution when there is headroom',()=>{
+ const busy=new ResolutionGovernor(),stable=new ResolutionGovernor(),recovering=new ResolutionGovernor();
  for(let i=0;i<57*6;i++)busy.update(1/57);
  assert.ok(busy.scale<1&&busy.scale>=.8);
  for(let i=0;i<60*8;i++)stable.update(1/60);
  assert.equal(stable.scale,1);
+ recovering.reset(.8);
+ for(let i=0;i<60*24;i++)recovering.update(1/60,true,9,6);
+ assert.ok(recovering.scale>.8&&recovering.scale<=1);
 });
 
 test('facade instancing fits allocated buffers on both maps', () => {

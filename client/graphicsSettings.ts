@@ -53,7 +53,12 @@ export class ResolutionGovernor {
 }
 // Bound total pixels as well as DPR: a 4K monitor must not allocate 8K render targets.
 export function renderPixelRatio(quality: GraphicsQuality, dpr: number, width: number, height: number) {
-  const budget = quality==='auto'?921_600:quality === 'ultra' ? 8_294_400 : quality === 'high' ? 3_686_400 : 2_073_600;
+  const budget = quality==='auto'?1_440_000:quality === 'ultra' ? 8_294_400 : quality === 'high' ? 3_686_400 : 2_073_600;
   return Math.min(Math.max(.5, dpr || 1), graphicsPresets[quality].pixelRatio,
     Math.sqrt(budget / Math.max(1, width * height)));
+}
+
+export function initialResolutionScale(quality: GraphicsQuality, baseRatio: number, width: number, height: number) {
+  const budget = quality==='auto'?921_600:quality==='performance'?1_440_000:undefined;
+  return budget === undefined ? 1 : Math.min(1, Math.sqrt(budget / Math.max(1, width * height)) / baseRatio);
 }

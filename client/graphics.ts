@@ -12,7 +12,7 @@ import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js';
 import {skipRedundantSmaaClears} from './smaaClears';
 import {ShaderPass} from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import {fxaaOutputShader} from './fxaaOutput';
-import { graphicsPresets, renderPixelRatio, ResolutionGovernor, type GraphicsQuality } from './graphicsSettings.ts';
+import { graphicsPresets, initialResolutionScale, renderPixelRatio, ResolutionGovernor, type GraphicsQuality } from './graphicsSettings.ts';
 import {createWeaponScene} from './weaponScene';
 import {createGpuTiming} from './gpuTiming';
 import {withBodyDistanceUpload} from './actorDetails';
@@ -237,9 +237,7 @@ export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
       const adaptiveQuality=quality==='auto'||quality==='performance';
       const baseRatio=renderPixelRatio(quality,window.devicePixelRatio,w,h);
       if(resetScale||w!==width||h!==height){
-        // Start live performance mode at a 900p pixel budget. Headroom measured by the governor restores full detail.
-        const initialScale=quality==='performance'?Math.min(1,Math.sqrt(1_440_000/(w*h))/baseRatio):1;
-        governor.reset(initialScale);resetScale=false;
+        governor.reset(initialResolutionScale(quality,baseRatio,w,h));resetScale=false;
       }
       const scale=adaptiveQuality&&resolutionScaling?governor.update(frameSeconds,!document.hidden&&adaptive,gpuTiming.state.ms,cpuMs):1;
       // Keep the image legible without cancelling adaptive scaling in

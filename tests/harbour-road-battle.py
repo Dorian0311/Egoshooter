@@ -117,7 +117,13 @@ def walk(page, x, z, *, life=None, settle_ms=220):
                 page.keyboard.up('Shift')
             page.keyboard.down('w')
             page.wait_for_timeout(60)
-        raise AssertionError(('Waypoint blocked', x, z, px, pz))
+        controls=page.evaluate("""()=>{const p=harbourQA.player;return {
+            focused:document.hasFocus(),locked:!!document.pointerLockElement,
+            phase:harbourQA.state.phase,paused:harbourQA.state.operation.paused,
+            position:[p.x,p.y,p.z],yaw:p.yaw,hp:p.hp,seq:p.seq,prone:p.prone,
+            downed:!!p.downedUntil,injuries:p.injuries.lost
+        }}""")
+        raise AssertionError(('No progress toward waypoint', [x,z], controls))
     finally:
         page.keyboard.up('Shift')
         page.keyboard.up('w')
@@ -225,6 +231,10 @@ def read_profile(page, name, during_turn=False):
     result = dict(site=name, frames=len(ms), fps=round(1000*len(ms)/sum(ms),1),
                   p95=ms[math.ceil(len(ms)*.95)-1], p99=ms[math.ceil(len(ms)*.99)-1], worst=max(ms),
                   over33=sum(t>33 for t in ms), cpuMs=round(sum(f['cpuMs'] for f in frames)/len(ms),1), calls=round(sum(f['calls'] for f in frames)/len(ms)),scale=frames[-1]['pixelRatio'],gpuMs=frames[-1].get('gpuMs'))
+    resized=[dict(pixelRatio=previous['pixelRatio'],nextFrameMs=round(current['frameMs'],2))
+             for previous,current in zip(frames,frames[1:]) if previous['resized']]
+    if resized:
+        result['resolutionChanges']=resized
     if GPU_PROFILE:
         queries = [current['gpuQueryMs'] for previous, current in zip(frames, frames[1:])
                    if current.get('gpuQueryCount', 0) > previous.get('gpuQueryCount', 0)]
@@ -260,7 +270,8 @@ def read_profile(page, name, during_turn=False):
 
 
 with sync_playwright() as pw:
-    browser = pw.chromium.launch(channel='chrome', headless=os.environ.get('HARBOUR_HEADED')!='1', args=['--enable-webgl','--ignore-gpu-blocklist'])
+    headed=os.environ.get('HARBOUR_HEADED')=='1'
+    browser = pw.chromium.launch(channel='chrome', headless=not headed, args=['--enable-webgl','--ignore-gpu-blocklist'])
     width,height = map(int,os.environ.get('HARBOUR_VIEWPORT','1280x720').split('x'))
     quality=os.environ.get('BATTLE_GRAPHICS','performance')
     assert quality in ('auto','performance','high','ultra'),quality
@@ -275,6 +286,8 @@ with sync_playwright() as pw:
         quality_suffix+='-gpu-profile'
     if FRAME_PHASES:
         quality_suffix+='-cpu-phases'
+    if headed:
+        quality_suffix+='-window'
     page = browser.new_page(viewport=dict(width=width,height=height), device_scale_factor=1)
     page.add_init_script(f"localStorage.setItem('altstadt.graphics.v3',{json.dumps(quality)})")
     page.add_init_script("""if(PerformanceObserver.supportedEntryTypes.includes('long-animation-frame')){
@@ -402,9 +415,11 @@ with sync_playwright() as pw:
         const gl=document.querySelector('.city-canvas').getContext('webgl2');
         const ext=gl.getExtension('WEBGL_debug_renderer_info');
         return {renderer:gl.getParameter(ext?.UNMASKED_RENDERER_WEBGL??gl.RENDERER),
+            drawingBuffer:[gl.drawingBufferWidth,gl.drawingBufferHeight],
             timerQuerySupported:!!gl.getExtension('EXT_disjoint_timer_query_webgl2'),
             quality:harbourQA.scene.getRenderStats().quality};
     }""")
+    renderer_info['presentation']='window' if headed else 'headless'
     renderer_info['lobbyFrameMs']=distribution(baseline_frames) if baseline_frames else None
     assert renderer_info['quality']==quality,(renderer_info,quality)
     print(renderer_info,flush=True)
