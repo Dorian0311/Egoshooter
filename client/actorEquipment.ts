@@ -22,6 +22,11 @@ function aimUpdatedBone(bone:T.Object3D,from:T.Vector3,to:T.Vector3){
  else parentRotation.identity();
  bone.quaternion.copy(parentRotation.invert().multiply(rotation));bone.updateWorldMatrix(false,false);
 }
+function updateBelowAncestor(node:T.Object3D,ancestor:T.Object3D){
+ if(node===ancestor)return;
+ if(node.parent)updateBelowAncestor(node.parent,ancestor);
+ node.updateWorldMatrix(false,false);
+}
 /** Two-bone IK in world space also supports rigs with intermediate twist joints. */
 export function solveArm(chain:ArmChain,target:T.Vector3,pole:T.Vector3){
  // Updating the wrist once includes the elbow, shoulder and any intermediate twist joints.
@@ -33,7 +38,9 @@ export function solveArm(chain:ArmChain,target:T.Vector3,pole:T.Vector3){
  const cosine=T.MathUtils.clamp((upper*upper+distance*distance-lower*lower)/(2*upper*distance),-1,1);
  desired.copy(a).addScaledVector(axis,upper*cosine).addScaledVector(bend,upper*Math.sqrt(1-cosine*cosine));
  aimUpdatedBone(chain.upper,segment.subVectors(b,a),goalDirection.subVectors(desired,a));
- chain.hand.updateWorldMatrix(true,false);b.setFromMatrixPosition(chain.lower.matrixWorld);c.setFromMatrixPosition(chain.hand.matrixWorld);
+ // The shoulder and its parents are current. Recompute only the affected
+ // links down to the wrist, including any intermediate twist joints.
+ updateBelowAncestor(chain.hand,chain.upper);b.setFromMatrixPosition(chain.lower.matrixWorld);c.setFromMatrixPosition(chain.hand.matrixWorld);
  desired.copy(a).addScaledVector(axis,distance);aimUpdatedBone(chain.lower,segment.subVectors(c,b),goalDirection.subVectors(desired,b));
 }
 export function findRigObject(root:T.Group,name:string){let match:T.Object3D|undefined;root.traverse(o=>{if(o.name===name&&(!match||o.children.length>match.children.length))match=o;});return match;}
@@ -80,9 +87,15 @@ export function createActorEquipment(root:T.Group,chains:Partial<Record<'armL'|'
  const reset=(arm:SavedArm)=>{arm.upper.quaternion.copy(arm.rest[0]);arm.lower.quaternion.copy(arm.rest[1]);arm.hand.quaternion.copy(arm.rest[2]);};
  const target=new T.Vector3(),pole=new T.Vector3(),forward=new T.Vector3(),handDirection=new T.Vector3(),right=new T.Vector3(),left=new T.Vector3(),offset=new T.Vector3(),localGrip=new T.Vector3();
  function grip(arm:SavedArm,localTarget:T.Vector3,side:number,up=false){
-  reset(arm);target.copy(localTarget);root.localToWorld(target);pole.set(side*.55,1.01,.12);root.localToWorld(pole);solveArm(arm,target,pole);
+  reset(arm);target.copy(localTarget);root.localToWorld(target);pole.set(side*.55,1.01,.12).applyMatrix4(root.matrixWorld);solveArm(arm,target,pole);
   const finger=arm.gripFinger;
-  if(finger){arm.hand.getWorldPosition(target);finger.getWorldPosition(handDirection).sub(target);forward.set(0,up?1:arm.finger&&side<0?.6:-.6,up?0:-.8).applyQuaternion(root.getWorldQuaternion(rotation));aimUpdatedBone(arm.hand,handDirection,forward);}
+  if(finger){
+   // Refreshing the fingertip includes its hand and the actor root.
+   finger.getWorldPosition(handDirection).sub(target.setFromMatrixPosition(arm.hand.matrixWorld));
+   root.matrixWorld.decompose(bindPosition,rotation,bindScale);
+   forward.set(0,up?1:arm.finger&&side<0?.6:-.6,up?0:-.8).applyQuaternion(rotation);
+   aimUpdatedBone(arm.hand,handDirection,forward);
+  }
  }
  function gestureHand(arm:SavedArm,side:'armL'|'armR'){
   const suffix=side==='armL'?'.L':'.R',middle=findRigObject(root,'finger3-1'+suffix),middleNext=findRigObject(root,'finger3-2'+suffix),index=findRigObject(root,'finger2-1'+suffix),pinky=findRigObject(root,'finger5-1'+suffix);

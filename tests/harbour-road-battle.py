@@ -37,12 +37,14 @@ def write_report(path, report):
 
 
 class TurnLifeInterrupted(AssertionError):
-    pass
+    def __init__(self,detail,position=None):
+        super().__init__(detail)
+        self.position=position
 
 
-def verify_life(hp, life, expected, site):
+def verify_life(hp, life, expected, site, position=None):
     if hp<=0 or life!=expected:
-        raise TurnLifeInterrupted((site,expected,life,hp))
+        raise TurnLifeInterrupted((site,expected,life,hp),position if hp<=0 else None)
 
 
 def recover_life(page):
@@ -60,7 +62,7 @@ def walk(page, x, z, *, life=None):
             px, pz, yaw, hp, current_life = page.evaluate('()=>{const p=harbourQA.player;return [p.x,p.z,p.yaw,p.hp,p.life]}')
             if life is None:
                 life=current_life
-            verify_life(hp,current_life,life,{'waypoint':[x,z],'observedPosition':[px,pz]})
+            verify_life(hp,current_life,life,{'waypoint':[x,z],'observedPosition':[px,pz]},(px,pz))
             distance = math.hypot(px-x, pz-z)
             if distance < .60:
                 return
@@ -340,6 +342,7 @@ with sync_playwright() as pw:
     page.wait_for_timeout(300)
     assert page.evaluate('harbourQA.state.mapId') == map_id
     print(map_id,'battle started with',bots,'bots',flush=True)
+    exposed_cells=set()
     def approach(on_failure=None):
         # Plan around the actual map colliders, including closed doors at this spawn.
         # All movement still goes through the mouse and keyboard.
@@ -376,12 +379,13 @@ with sync_playwright() as pw:
                 px,pz=point
                 for dx,dz in ((1,0),(-1,0),(0,-1),(0,1)):
                     dest=(px+dx,pz+dz)
-                    if dest in occupied or math.hypot(*dest)>119 or cost.get(dest,math.inf)<=steps+1:
+                    next_cost=steps+1+(4 if dest in exposed_cells else 0)
+                    if dest in occupied or math.hypot(*dest)>119 or cost.get(dest,math.inf)<=next_cost:
                         continue
-                    cost[dest]=steps+1
+                    cost[dest]=next_cost
                     parent[dest]=point
-                    priority=steps+1+abs(dest[0]-goal[0])+abs(dest[1]-goal[1])
-                    heapq.heappush(opened,(priority,steps+1,dest))
+                    priority=next_cost+abs(dest[0]-goal[0])+abs(dest[1]-goal[1])
+                    heapq.heappush(opened,(priority,next_cost,dest))
             assert goal in parent, ('No walkable route',start)
             path=[goal]
             while path[-1]!=origin:
@@ -402,6 +406,11 @@ with sync_playwright() as pw:
                     on_failure('street approach',attempt+1,event)
                 if not isinstance(event,TurnLifeInterrupted) or attempt==3:
                     raise
+                if event.position:
+                    # On retry, prefer a detour past the last exposed stretch.
+                    # Keep those cells legal when walls leave no alternative.
+                    x,z=map(round,event.position)
+                    exposed_cells.update((ix,iz) for ix in range(x-10,x+11) for iz in range(z-10,z+11))
                 print('Anmarsch nach Gefechtstod erneut geplant:',event,flush=True)
                 recover_life(page)
     if map_id != 'storm' or os.environ.get('BATTLE_SPAWN_TURNS')=='1' or COMBAT_MOVEMENT:

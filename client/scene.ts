@@ -79,7 +79,8 @@ export function createScene(
   const pressed=(action:Action)=>keys.has(settings.bindings[action]);
   const world=getWorld(mapId),{boxes,buildings}=world;
   let collisionWorld=world;
-  const renderer = new T.WebGLRenderer({ canvas, antialias: false, preserveDrawingBuffer, powerPreference: 'high-performance' });
+  // World and viewmodel depth live in the composer's render targets.
+  const renderer = new T.WebGLRenderer({ canvas, antialias: false, depth: false, preserveDrawingBuffer, powerPreference: 'high-performance' });
   const releaseWorldWeapons=retainWorldWeaponSession();
   renderer.shadowMap.enabled = true;
   renderer.localClippingEnabled = true;

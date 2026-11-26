@@ -17,9 +17,30 @@ export function createInteriors(scene:T.Scene,world:World){
  const wood=material(0x554434),metal=material(0x3d4642),fabric=material(0x77725b),paper=material(0xc9bb92),plaster=material(0x827365),dark=material(0x1d2524);
  const mesh=(b:Box,m:T.Material)=>{const o=new T.Mesh(new T.BoxGeometry(b.w,b.h,b.d),m);o.position.set(b.x,b.y,b.z);o.castShadow=true;o.receiveShadow=true;creationTarget.add(o);return o;};
  const box=(x:number,y:number,z:number,w:number,h:number,d:number,m:T.Material)=>mesh({x,y,z,w,h,d},m);
+ const signMaterial=new T.MeshStandardMaterial({roughness:1});materials.push(signMaterial);
+ const signFaces=new Map<string,T.BufferAttribute[]>();
  function sign(text:string,x:number,y:number,z:number,width:number){
-  const c=document.createElement('canvas');c.width=512;c.height=128;const ctx=c.getContext('2d')!;ctx.fillStyle='#303a33';ctx.fillRect(0,0,512,128);ctx.strokeStyle='#b8b08d';ctx.lineWidth=6;ctx.strokeRect(8,8,496,112);ctx.fillStyle='#dfd5b3';ctx.font='bold 40px serif';ctx.textAlign='center';ctx.fillText(text,256,80,470);
-  const t=new T.CanvasTexture(c);t.colorSpace=T.SRGBColorSpace;textures.push(t);const m=new T.MeshStandardMaterial({map:t,roughness:1});materials.push(m);const plane=new T.Mesh(new T.PlaneGeometry(width,width/4),m);plane.position.set(x,y,z);creationTarget.add(plane);
+  const geometry=new T.PlaneGeometry(width,width/4);
+  const faces=signFaces.get(text)??[];faces.push(geometry.attributes.uv as T.BufferAttribute);signFaces.set(text,faces);
+  const plane=new T.Mesh(geometry,signMaterial);plane.position.set(x,y,z);creationTarget.add(plane);
+ }
+ function paintSigns(){
+  if(!signFaces.size)return;
+  const width=512,height=128,padding=16,stepX=width+2*padding,stepY=height+2*padding;
+  const columns=Math.min(3,signFaces.size),rows=Math.ceil(signFaces.size/columns);
+  const canvas=document.createElement('canvas');canvas.width=columns*stepX;canvas.height=rows*stepY;
+  const ctx=canvas.getContext('2d')!;ctx.fillStyle='#303a33';ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.strokeStyle='#b8b08d';ctx.lineWidth=6;ctx.fillStyle='#dfd5b3';ctx.font='bold 40px serif';ctx.textAlign='center';
+  let index=0;
+  for(const [text,faces]of signFaces){
+   const x=index%columns*stepX+padding,y=Math.floor(index/columns)*stepY+padding;index++;
+   ctx.strokeRect(x+8,y+8,496,112);ctx.fillText(text,x+256,y+80,470);
+   for(const uv of faces)for(let i=0;i<uv.count;i++){
+    uv.setXY(i,(x+uv.getX(i)*width)/canvas.width,1-(y+(1-uv.getY(i))*height)/canvas.height);
+   }
+  }
+  const atlas=new T.CanvasTexture(canvas);atlas.colorSpace=T.SRGBColorSpace;
+  signMaterial.map=atlas;textures.push(atlas);signFaces.clear();
  }
  const doors=new Map<string,T.Mesh>();
  const lampMaterials:T.MeshStandardMaterial[]=[],lamps:InteriorLamp[]=[];
@@ -66,6 +87,7 @@ export function createInteriors(scene:T.Scene,world:World){
   for(const side of [-1,1]){box(b.x+side*(b.w/2-.26),1.1,b.z-1.7,.12,2.2,.15,plaster);box(b.x+side*(b.w/2-.26),1.1,b.z+1.7,.12,2.2,.15,plaster);}
  });
  creationTarget=root;
+ paintSigns();
  // Bound each room independently so a batch behind the camera does not keep
  // furniture from every building in the world/shadow render lists.
  const roomPaint=new Set([wood,metal,fabric,paper,plaster,dark]);

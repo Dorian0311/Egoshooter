@@ -1,6 +1,7 @@
 import * as T from 'three';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import {WorldRenderPass} from './worldRenderPass';
 import { WorldOcclusionPass } from './worldOcclusionPass';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js';
@@ -30,7 +31,7 @@ export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
   renderer.info.autoReset = false;
   // RenderPass updates shadows once; the following SSAO normal pass reuses them.
   renderer.shadowMap.autoUpdate = false;
-  const render = new RenderPass(scene, camera);
+  const render = new WorldRenderPass(scene, camera);
   const weaponCamera=new T.PerspectiveCamera(62,1,.025,8);
   weaponCamera.layers.set(1);
   const viewmodel=createWeaponScene(scene,camera,weaponCamera);

@@ -98,7 +98,7 @@ export function createPeriodArchitecture(world:World){
         const firstPixel=wing<0?4:510,minX=wing<0?-8.98:2.26;
         for(let i=0;i<points.length;i++){
           const u=(pos[i*3]-minX)/6.72,v=(pos[i*3+1]-.04)/2.89;
-          cheekUv.setXY(i,(firstPixel+2+u*497)/1024,(2+v*251)/256);
+          cheekUv.setXY(i,(firstPixel+2+u*497)/1024,1-(254-v*251)/672);
           cheekTint.setXYZ(i,.92,.92,.92);
         }
         for(const y of [.55,1.38,2.17]){
@@ -123,6 +123,27 @@ export function createPeriodArchitecture(world:World){
       box(0,4.02,wallZ+.57,8.13,.17,.75,armour);
       box(0,4.24,wallZ+.49,8.84,.32,1.26,concrete);
       box(0,4.422,wallZ+.56,8.90,.055,1.20,'#e1e7e5');
+      // The front upper storey is solid behind the existing facade modules. Dress
+      // this face only; the open side windows still look out across the pass.
+      const baySkin=new T.PlaneGeometry(17.98,3.99);
+      add(baySkin,0,6.015,wallZ+.424,'#fffdf4');
+      const bayUv=baySkin.getAttribute('uv'),bayPositions=baySkin.getAttribute('position');
+      for(let i=0;i<bayUv.count;i++){
+        const x=(bayPositions.getX(i)+8.99)/17.98,y=(8.01-bayPositions.getY(i))/3.99;
+        bayUv.setXY(i,(4.5+x*1007)/1024,1-(260.5+y*223)/672);
+      }
+      for(const x of [-6.67,-2.80,2.80,6.67]){
+        box(x,7.23,wallZ+.50,1.85,.13,.31,'#8c8978');
+        box(x,7.30,wallZ+.53,1.90,.033,.33,'#c6c9b9');
+        box(x,4.97,wallZ+.49,1.87,.095,.26,'#8d9082');
+      }
+      const pediment=new T.BufferGeometry();
+      pediment.setAttribute('position',new T.Float32BufferAttribute([-9.3,8.32,0,9.3,8.32,0,0,10.64,0],3));
+      pediment.setAttribute('uv',new T.Float32BufferAttribute([0,0,1,0,.5,1],2));
+      pediment.setIndex([0,1,2]);pediment.computeVertexNormals();
+      add(pediment,0,0,wallZ+.55,'#f8f6e9');
+      const gableUv=pediment.getAttribute('uv');
+      gableUv.setXY(0,5/1024,1-660/672);gableUv.setXY(1,1010/1024,1-660/672);gableUv.setXY(2,507/1024,1-493/672);
       // Low armoured observation bell set into a snow-lipped collar on the west roof shoulder.
       const cx=-4.9,cz=-2.6,seat=upper+1.85;
       add(new T.CylinderGeometry(1.72,1.92,.72,24),cx,seat-.24,cz,aggregate);
