@@ -11,6 +11,7 @@ import {createPeriodQuarter} from './periodQuarter';
 import {createPeriodArchitecture,setPeriodNight} from './periodArchitecture';
 import {createCoastalArchitecture} from './coastalArchitecture';
 import {applySurfaceFinish} from './surfaceFinish';
+import {createFacadeBatches} from './facadeBatches';
 
 function disposeSource(root:T.Object3D){
  const geometries=new Set<T.BufferGeometry>(),materials=new Set<T.Material>(),textures=new Set<T.Texture>();
@@ -27,7 +28,8 @@ export function loadEnvironmentUpgrade(scene:T.Scene,world:World,renderer:T.WebG
  const quarter=world.id==='cologne'||world.id==='frontline'?createPeriodQuarter(world.id):undefined;
  if(quarter)architecture.add(quarter);
  root.add(architecture);sources.push(architecture);
- const distantDetails:T.InstancedMesh[]=[];
+ const distantDetails:T.InstancedMesh[]=[],compactFacades=new Set<T.InstancedMesh>(),detailedFacades:T.BatchedMesh[]=[];
+ const multiDraw=world.id==='storm'&&renderer.extensions.has('WEBGL_multi_draw');
  const markDetails=(from:number)=>{
   if(world.id!=='storm')return;
   for(let i=from;i<root.children.length;i++){
@@ -72,8 +74,19 @@ export function loadEnvironmentUpgrade(scene:T.Scene,world:World,renderer:T.WebG
    // The solid building already casts its silhouette. Avoid rendering dense
    // facade dressing a second time into the shadow map; keep received shadows.
    const first=root.children.length;
-   for(const [variant,matrices]of placements){const part=model.getObjectByName(variant);if(part)instanceStaticModel(root,part,matrices,false,48);}
+   const modules=Array.from(placements,([variant,matrices])=>({part:model.getObjectByName(variant),matrices}))
+    .filter((module):module is {part:T.Object3D;matrices:T.Matrix4[]}=>module.part!==undefined);
+   for(const {part,matrices} of modules)instanceStaticModel(root,part,matrices,false,48);
    markDetails(first);
+   if(multiDraw){
+    const last=root.children.length;
+    const {replaced,meshes}=createFacadeBatches(root,modules);
+    detailedFacades.push(...meshes);
+    for(let i=first;i<last;i++){
+     const part=root.children[i];
+     if(part instanceof T.InstancedMesh&&!Array.isArray(part.material)&&replaced.has(part.material))compactFacades.add(part);
+    }
+   }
   }).catch(error=>console.warn('Facade detail unavailable:',pack,error)));
  }
  if(world.id==='storm'||world.id==='frontline')for(const name of ['rock_moss_set_01','grass_medium_01','wild_rooibos_bush']){
@@ -132,11 +145,12 @@ export function loadEnvironmentUpgrade(scene:T.Scene,world:World,renderer:T.WebG
   update(position:T.Vector3,quality:GraphicsQuality){
    quarter?.setQuality(quality);
    const limit=quality==='auto'||quality==='performance'?45:Infinity;
+   for(const facade of detailedFacades)facade.visible=limit===Infinity;
    for(const item of distantDetails){
     const bounds=item.boundingSphere;
-    if(bounds)item.visible=bounds.center.distanceToSquared(position)<(limit+bounds.radius)**2;
+    if(bounds)item.visible=limit===Infinity?!compactFacades.has(item):bounds.center.distanceToSquared(position)<(limit+bounds.radius)**2;
    }
   },
-  dispose(){disposed=true;root.traverse(o=>{if(o instanceof T.InstancedMesh)o.dispose();});sources.forEach(disposeSource);root.removeFromParent();},
+  dispose(){disposed=true;root.traverse(o=>{if(o instanceof T.InstancedMesh||o instanceof T.BatchedMesh)o.dispose();});sources.forEach(disposeSource);root.removeFromParent();},
  };
 }

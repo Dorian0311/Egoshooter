@@ -1,7 +1,30 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { Color, Group, LineSegments, Mesh, PerspectiveCamera, Points, Scene, type WebGLRenderer } from 'three';
+import { Color, Group, LineSegments, Mesh, PerspectiveCamera, Points, RedFormat, RGBAFormat, Scene, WebGLRenderTarget, type WebGLRenderer } from 'three';
 import { WorldOcclusionPass } from '../client/worldOcclusionPass';
+
+test('AO buffers store one channel and the normal diagnostic keeps all color channels', () => {
+  const pass = new WorldOcclusionPass(new Scene(), new PerspectiveCamera(), 4, 4, 4);
+  const buffer = new WebGLRenderTarget(4, 4);
+  pass.renderOverride = () => {};
+  pass.renderPass = () => {};
+  try {
+    assert.equal(pass.normalRenderTarget.texture.format, RGBAFormat);
+    assert.ok(pass.normalRenderTarget.depthTexture);
+    for (const target of [pass.ssaoRenderTarget, pass.blurRenderTarget]) {
+      assert.equal(target.texture.format, RedFormat);
+      assert.equal(target.depthBuffer, false);
+    }
+    for (const output of [WorldOcclusionPass.OUTPUT.Normal, WorldOcclusionPass.OUTPUT.Default]) {
+      pass.output = output;
+      pass.render({} as WebGLRenderer, buffer, buffer, 0, false);
+      assert.equal(pass.copyMaterial.uniforms.scalarInput.value, output !== WorldOcclusionPass.OUTPUT.Normal);
+    }
+  } finally {
+    pass.dispose();
+    buffer.dispose();
+  }
+});
 
 test('normal pass excludes visible point and line subtrees and restores scene visibility', () => {
   const scene = new Scene();

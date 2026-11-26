@@ -1,4 +1,4 @@
-import { LinearFilter, type Object3D } from 'three';
+import { LinearFilter, RedFormat, type Object3D } from 'three';
 import { SSAOPass } from 'three/examples/jsm/postprocessing/SSAOPass.js';
 
 /** Only visible points and lines need a visibility override in the normal/depth pass. */
@@ -13,6 +13,15 @@ export class WorldOcclusionPass extends SSAOPass {
 
   constructor(...args: ConstructorParameters<typeof SSAOPass>) {
     super(...args);
+    // Both fullscreen targets contain a single occlusion factor. Scene depth lives on the normal target.
+    for (const target of [this.ssaoRenderTarget, this.blurRenderTarget]) {
+      target.texture.format = RedFormat;
+      target.depthBuffer = false;
+    }
+    this.copyMaterial.uniforms.scalarInput = { value: true };
+    this.copyMaterial.fragmentShader = 'uniform bool scalarInput;\n' + this.copyMaterial.fragmentShader.replace(
+      'opacity * texel', 'opacity * (scalarInput ? vec4(texel.rrr, 1.0) : texel)',
+    );
     this.ssaoRenderTarget.texture.minFilter = LinearFilter;
     this.ssaoRenderTarget.texture.magFilter = LinearFilter;
     // Linear sampling combines adjacent texels. The paired taps and the center
@@ -34,6 +43,11 @@ export class WorldOcclusionPass extends SSAOPass {
         gl_FragColor = vec4(vec3(sum / 25.0), 1.0);
       }
     `;
+  }
+
+  override render(...args: Parameters<SSAOPass['render']>) {
+    this.copyMaterial.uniforms.scalarInput.value = this.output !== SSAOPass.OUTPUT.Normal;
+    super.render(...args);
   }
 
   overrideVisibility() {

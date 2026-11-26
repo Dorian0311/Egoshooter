@@ -11,6 +11,9 @@ export function applySurfaceFinish(material:MeshStandardMaterial,wall:boolean){
   shader.vertexShader=shader.vertexShader.replace('#include <common>','#include <common>\nvarying vec3 vFinishPosition;')
    .replace('#include <worldpos_vertex>',`#include <worldpos_vertex>
     vec4 finishPosition=vec4(transformed,1.0);
+    #ifdef USE_BATCHING
+     finishPosition=batchingMatrix*finishPosition;
+    #endif
     #ifdef USE_INSTANCING
      finishPosition=instanceMatrix*finishPosition;
     #endif

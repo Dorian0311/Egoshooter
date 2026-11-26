@@ -2,6 +2,7 @@
 // node --import tsx tests/production-battle.mjs [--check]
 // --check verifies the bundle, compressed delivery and account ticket without starting a browser.
 // The Python harness accepts the same BATTLE_* and HARBOUR_* options as in development.
+// Set BATTLE_FIXED_TURNS=1 for repeatable 100 ms sweeps from the same compass heading.
 import assert from 'node:assert/strict';
 import {spawn} from 'node:child_process';
 import {randomBytes} from 'node:crypto';

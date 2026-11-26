@@ -249,16 +249,21 @@ export function addIslandStreet(scene:T.Group){
         detail(0,2.29+side*.888,wall-.009,3.36,.014,.073,accent);
       }
     }else{
-      const poster=document.createElement('canvas');poster.width=640;poster.height=320;
-      const ctx=poster.getContext('2d')!;
-      ctx.fillStyle='#583735';ctx.fillRect(0,0,640,320);
-      ctx.strokeStyle='#cfaf72';ctx.lineWidth=6;ctx.strokeRect(12,12,616,296);
-      ctx.textAlign='center';ctx.fillStyle='#f4e6bc';ctx.font='bold 45px Georgia';
-      ctx.fillText('COAST RECORDS',320,73);
-      ctx.font='30px Georgia';
-      const lines=['NEW ARRIVALS','Jazz   /   Soul   /   Rock','Listening desk open daily'];
-      lines.forEach((line,n)=>ctx.fillText(line,320,140+n*55));
-      texture=new T.CanvasTexture(poster);
+      texture=loader.load(base+'coast-listening.webp');texture.anisotropy=4;
+      const wall=-s.d/2+.28;
+      detail(0,1.44,wall+.012,3.45,.048,.14,wood);
+      for(const side of [-1,1]){
+        // Paired walnut monitor cabinets flank the featured record above the turntable.
+        const x=side*1.45,y=3.56;
+        detail(x,y,wall+.14,.43,.63,.28,wood);
+        detail(x,y,wall+.287,.384,.576,.022,vinyl).castShadow=false;
+        for(const [dy,radius] of [[-.078,.139],[.147,.064]]){
+          const cone=solid(new T.ConeGeometry(radius,.034,18),s.x+x,y+dy,s.z+s.front*(wall+.31),iron);
+          cone.rotation.x=s.front*Math.PI/2;
+          const surround=solid(new T.TorusGeometry(radius,.011,4,18),s.x+x,y+dy,s.z+s.front*(wall+.308),vinyl);
+          surround.rotation.y=Math.PI;
+        }
+      }
     }
     texture.colorSpace=T.SRGBColorSpace;
     const board=new T.Mesh(new T.PlaneGeometry(3.35,1.68),new T.MeshBasicMaterial({map:texture}));

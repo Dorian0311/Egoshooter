@@ -15,6 +15,7 @@ BASE = os.environ.get('BATTLE_BASE_URL', 'http://127.0.0.1:5173')
 OUT = Path('artifacts/harbour-battle') / ('production' if PRODUCTION else '')
 OUT.mkdir(parents=True, exist_ok=True)
 COMBAT_MOVEMENT = os.environ.get('BATTLE_COMBAT_MOVEMENT') == '1'
+FIXED_TURNS = os.environ.get('BATTLE_FIXED_TURNS') == '1'
 
 
 def observe(route):
@@ -94,6 +95,15 @@ def measure(page, name):
 
 
 def measure_turns(page, name):
+    if FIXED_TURNS:
+        life,yaw=page.evaluate('[harbourQA.player.life,harbourQA.player.yaw]')
+        mouse(page,round(math.remainder(yaw,math.tau)/.002))
+        page.wait_for_function("""life=>{const p=harbourQA.player;
+            return p.life!==life || !p.hp || Math.abs(Math.atan2(Math.sin(p.yaw),Math.cos(p.yaw)))<.025;
+        }""",arg=life,timeout=2500)
+        if not page.evaluate("life=>harbourQA.player.life===life && harbourQA.player.hp>0",life):
+            raise TurnLifeInterrupted((name,'align',life))
+    pose=page.evaluate('()=>{const {x,z,yaw}=harbourQA.player;return {x,z,yaw}}')
     page.evaluate('window.turnStarted=performance.now();window.turnRanges=[];harbourQA.scene.profileFrames(3000)')
     life,start = page.evaluate('[harbourQA.player.life,harbourQA.player.yaw]')
     turns=int(os.environ.get('BATTLE_TURNS','12'))
@@ -104,17 +114,38 @@ def measure_turns(page, name):
                 page.keyboard.press('r')
             if n%12<8:
                 page.mouse.down()
-        for step in range(6):
-            page.evaluate("""([dx,step])=>{
+        if FIXED_TURNS:
+            # Same angular trajectory in real time at any refresh rate. The final
+            # packet always reaches 180 degrees, including after a dropped frame.
+            page.evaluate("""sign=>new Promise(resolve=>{
                 const count=()=>harbourQA.scene.frameProfile().length;
-                if(step===0) turnRanges.push([count(),null]);
-                document.dispatchEvent(new MouseEvent('mousemove',{movementX:dx,bubbles:true}));
-                if(step===5) {
-                    const range=turnRanges.at(-1);
-                    requestAnimationFrame(()=>{range[1]=count()});
-                }
-            }""", [(1 if n%2==0 else -1)*262, step])
-            page.wait_for_timeout(15)
+                const range=[null,null]; turnRanges.push(range);
+                const start=performance.now(); let sent=0;
+                const advance=now=>{
+                    const target=Math.round(1571*Math.min(1,Math.max(0,(now-start)/100)));
+                    if(target!==sent) {
+                        if(range[0]===null) range[0]=count();
+                        document.dispatchEvent(new MouseEvent('mousemove',{
+                            movementX:sign*(target-sent),bubbles:true}));
+                    }
+                    sent=target;
+                    if(target<1571) requestAnimationFrame(advance);
+                    else requestAnimationFrame(()=>{range[1]=count();resolve()});
+                };
+                requestAnimationFrame(advance);
+            })""",1 if n%2==0 else -1)
+        else:
+            for step in range(6):
+                page.evaluate("""([dx,step])=>{
+                    const count=()=>harbourQA.scene.frameProfile().length;
+                    if(step===0) turnRanges.push([count(),null]);
+                    document.dispatchEvent(new MouseEvent('mousemove',{movementX:dx,bubbles:true}));
+                    if(step===5) {
+                        const range=turnRanges.at(-1);
+                        requestAnimationFrame(()=>{range[1]=count()});
+                    }
+                }""", [(1 if n%2==0 else -1)*262, step])
+                page.wait_for_timeout(15)
         if COMBAT_MOVEMENT:
             page.mouse.up()
         page.wait_for_timeout(180)
@@ -130,7 +161,8 @@ def measure_turns(page, name):
         hp,current_life=page.evaluate('[harbourQA.player.hp,harbourQA.player.life]')
         if not hp or current_life!=life:
             raise TurnLifeInterrupted((name,n+1,life,current_life,hp))
-    return dict(read_profile(page, name, during_turn=True),turns=turns)
+    return dict(read_profile(page, name, during_turn=True),turns=turns,startPose=pose,
+                inputMode='fixed-100ms' if FIXED_TURNS else 'six-mouse-steps')
 
 
 def read_profile(page, name, during_turn=False):
@@ -161,7 +193,7 @@ with sync_playwright() as pw:
     width,height = map(int,os.environ.get('HARBOUR_VIEWPORT','1280x720').split('x'))
     quality=os.environ.get('BATTLE_GRAPHICS','performance')
     assert quality in ('auto','performance','high','ultra'),quality
-    quality_suffix='' if quality=='performance' else '-'+quality
+    quality_suffix=('' if quality=='performance' else '-'+quality)+('-fixed-turns' if FIXED_TURNS else '')
     page = browser.new_page(viewport=dict(width=width,height=height), device_scale_factor=1)
     page.add_init_script(f"localStorage.setItem('altstadt.graphics.v3',{json.dumps(quality)})")
     page.add_init_script("""if(PerformanceObserver.supportedEntryTypes.includes('long-animation-frame')){
