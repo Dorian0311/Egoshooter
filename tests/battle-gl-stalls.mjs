@@ -3,6 +3,23 @@ export function attachBattleGlStalls(renderer, clock=()=>performance.now()) {
   const gl=renderer.getContext();
   const events=[],frames=[];
   let eventCount=0,frameCount=0,context=null,start=0,composer=0,shadowMs=0,inShadow=false,active=false;
+  const programs=new WeakMap();
+  let nextProgramId=0;
+  const programCalls=new Set(['linkProgram','getProgramParameter','getProgramInfoLog','getUniformLocation','getAttribLocation','useProgram']);
+  function shaderVariant(program){
+    if(!program)return undefined;
+    if(!programs.has(program))programs.set(program,++nextProgramId);
+    const [camera,,geometry,material,object,group]=context??[];
+    const source=Array.isArray(object?.material)?object.material[group?.materialIndex??0]:object?.material;
+    return {
+      programId:programs.get(program),camera:camera?.type,geometry:geometry?.type,materialIndex:group?.materialIndex,
+      attributes:geometry?Object.keys(geometry.attributes).sort():undefined,
+      source:source&&{type:source.type,name:source.name,id:source.id,side:source.side,shadowSide:source.shadowSide,
+        alphaTest:source.alphaTest,map:!!source.map,alphaMap:!!source.alphaMap,vertexColors:source.vertexColors,
+        transparent:source.transparent},
+      materialSide:material?.side,
+    };
+  }
   const methods=[
     'linkProgram','getProgramParameter','getProgramInfoLog','getUniformLocation','getAttribLocation','useProgram',
     'bufferData','bufferSubData','texImage2D','texSubImage2D','texImage3D','texSubImage3D',
@@ -22,7 +39,8 @@ export function attachBattleGlStalls(renderer, clock=()=>performance.now()) {
           for(let node=object;node&&path.length<8;node=node.parent)if(node.name)path.push(node.name);
           events[eventCount++%2048]={method,start:before,end,ms,stage:inShadow?'shadow':composer?'composer':active?'preparation':'outside-frame',
             object:object?.name||object?.type||null,objectId:object?.id??null,path:path.reverse(),
-            material:material?.name||material?.type||null,materialId:material?.id??null};
+            material:material?.name||material?.type||null,materialId:material?.id??null,
+            shader:programCalls.has(method)?shaderVariant(arguments[0]):undefined};
         }
       }
     };

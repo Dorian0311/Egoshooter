@@ -211,6 +211,7 @@ export function createScene(
     cube(b.x + 5, b.upper ? 9 : 5, b.z - 4, 1, 2, 1, "#9d8b75");
     }
     cube(b.x, 0.02, b.z, b.w, 0.04, b.d, "#a99c85");
+    const fortNameplate=mapId==='alpine'&&b.name==='ROCHE-LA-CROIX';
     const label = document.createElement("canvas");
     label.width = 512;
     label.height = 64;
@@ -218,18 +219,25 @@ export function createScene(
     ctx.fillStyle = "#293a33";
     ctx.fillRect(0, 0, 512, 64);
     ctx.fillStyle = "#e5d8ae";
-    ctx.font = "bold 25px Georgia";
+    ctx.font = fortNameplate?"bold 48px Georgia":"bold 25px Georgia";
     ctx.textAlign = "center";
-    ctx.fillText(b.name, 256, 43);
+    if(fortNameplate){
+      ctx.textBaseline="middle";
+      ctx.fillText(b.name,256,32,480);
+    }else ctx.fillText(b.name,256,43);
     const texture = new T.CanvasTexture(label);
     texture.colorSpace=T.SRGBColorSpace;
     const sign = new T.Mesh(
-      new T.PlaneGeometry(7, 0.9),
+      new T.PlaneGeometry(fortNameplate?3.45:7, fortNameplate?.29:.9),
       new T.MeshBasicMaterial({ map: texture }),
     );
     const cinema=mapId==='frontline'&&b.name==='UNION-LICHTSPIELE';
     const front=b.z+b.d/2;
-    sign.position.set(b.x, cinema?4.32:3.4, front+(cinema?1.61:.26));
+    // Mount the fort's plate on the front of the concrete lintel (periodArchitecture.ts).
+    if(fortNameplate){
+      sign.name='alpine-fort-nameplate';
+      sign.position.set(b.x,4.24,front+1.126);
+    }else sign.position.set(b.x, cinema?4.32:3.4, front+(cinema?1.61:.26));
     scene.add(sign);
     if(cinema){
       const brass='#a58753',lacquer='#4a2928';
