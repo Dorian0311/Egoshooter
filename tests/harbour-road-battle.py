@@ -52,6 +52,14 @@ class TurnLifeInterrupted(AssertionError):
         self.position=position
 
 
+class ApproachStalled(AssertionError):
+    def __init__(self,position,goal):
+        super().__init__((position,goal))
+        dx,dz=goal[0]-position[0],goal[1]-position[1]
+        distance=math.hypot(dx,dz)
+        self.blocked={(round(position[0]+dx*offset/distance),round(position[1]+dz*offset/distance)) for offset in (1,2)}
+
+
 def verify_life(hp, life, expected, site, position=None):
     if hp<=0 or life!=expected:
         raise TurnLifeInterrupted((site,expected,life,hp),position if hp<=0 else None)
@@ -98,6 +106,7 @@ def walk(page, x, z, *, life=None, settle_ms=220, route_deadline=math.inf):
     last_turn = 0
     walking = sprinting = False
     control_retries = 0
+    nearest,progress_at=math.inf,time.monotonic()
     try:
         while time.monotonic() < deadline:
             px, pz, yaw, hp, current_life, controls = page.evaluate("""requirePointerLock=>{
@@ -122,7 +131,14 @@ def walk(page, x, z, *, life=None, settle_ms=220, route_deadline=math.inf):
                 walking = sprinting = False
                 previous = None
                 activate_controls(page)
+                progress_at=time.monotonic()
                 continue
+            if route_deadline<math.inf:
+                now=time.monotonic()
+                if nearest-distance>.25:
+                    nearest,progress_at=distance,now
+                elif now-progress_at>2.5:
+                    raise ApproachStalled((px,pz),(x,z))
             target = math.atan2(px-x, pz-z)
             # Reconcile after a server snapshot has caught up with our last mouse turn.
             reference = yaw if previous is None or time.monotonic()-last_turn>.36 else previous
@@ -154,7 +170,8 @@ def walk(page, x, z, *, life=None, settle_ms=220, route_deadline=math.inf):
     finally:
         page.keyboard.up('Shift')
         page.keyboard.up('w')
-        page.wait_for_timeout(settle_ms)
+        if walking and settle_ms:
+            page.wait_for_timeout(settle_ms)
 
 
 def mouse(page, dx):
@@ -524,6 +541,7 @@ with sync_playwright() as pw:
     def approach(on_failure=None, goal=(51,-23)):
         # Plan around the actual map colliders, including closed doors at this spawn.
         # All movement still goes through the mouse and keyboard.
+        blocked=set()
         def find_route():
             start, boxes, opponents, vision = page.evaluate("""async()=>{
               const qa=harbourQA;
@@ -542,7 +560,8 @@ with sync_playwright() as pw:
                 .filter(p=>p.kind==='bot'&&p.team!==qa.player.team&&p.connected&&p.hp>0)
                 .map(p=>[p.x,p.z]),vision];
             }""")
-            occupied=set()
+            origin=tuple(round(v) for v in start)
+            occupied=blocked.difference({origin,goal})
             cover=set()
             for bx,bz,bw,bd,tall in boxes:
                 for ix in range(math.ceil(bx-bw/2-1),math.floor(bx+bw/2+1)+1):
@@ -552,7 +571,6 @@ with sync_playwright() as pw:
                     for ix in range(math.ceil(2*bx-bw),math.floor(2*bx+bw)+1):
                         for iz in range(math.ceil(2*bz-bd),math.floor(2*bz+bd)+1):
                             cover.add((ix,iz))
-            origin=tuple(round(v) for v in start)
             opened=[(0,0,origin)]
             parent={origin:None}
             cost={origin:0}
@@ -626,7 +644,6 @@ with sync_playwright() as pw:
                         raise AssertionError(('Street approach exceeded 180 seconds',goal))
                     route=find_route()
                     if not route:
-                        walk(page,*goal,life=life,route_deadline=route_deadline)
                         return
                     position=tuple(page.evaluate('[harbourQA.player.x,harbourQA.player.z]'))
                     covered=0
@@ -635,7 +652,14 @@ with sync_playwright() as pw:
                         covered+=math.dist(position,(x,z))
                         position=(x,z)
                         arrived=position==goal
-                        walk(page,x,z,life=life,settle_ms=220 if arrived else 70,route_deadline=route_deadline)
+                        try:
+                            walk(page,x,z,life=life,settle_ms=0 if arrived else 70,route_deadline=route_deadline)
+                        except ApproachStalled as event:
+                            blocked.update(event.blocked)
+                            if on_failure:
+                                on_failure('approach replan',attempt+1,event)
+                            print('Rerouting around a stalled waypoint:',event,flush=True)
+                            break
                         if arrived:
                             return
                         # Bot positions have changed by the time we cross this section.
@@ -647,6 +671,7 @@ with sync_playwright() as pw:
                     on_failure('street approach',attempt+1,event)
                 if not isinstance(event,TurnLifeInterrupted) or attempt==attempts-1:
                     raise
+                blocked.clear()
                 if event.position:
                     # On retry, prefer a detour past the last exposed stretch.
                     # Keep those cells legal when walls leave no alternative.
@@ -748,9 +773,9 @@ with sync_playwright() as pw:
         for attempt in range(3):
             try:
                 life=page.evaluate('harbourQA.player.life')
-                walk(page,x,-23,life=life)
+                walk(page,x,-23,life=life,settle_ms=0)
                 page.evaluate('window.turnStarted=performance.now();harbourQA.scene.profileFrames(3000)')
-                walk(page,x,door,life=life)
+                walk(page,x,door,life=life,settle_ms=0)
                 walk(page,x,inside,life=life)
                 entry=read_profile(page,name+' entrance')
                 print('Entered',name,flush=True)
@@ -760,8 +785,8 @@ with sync_playwright() as pw:
                     page.evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))')
                 result=measure(page,name)
                 page.evaluate('window.turnStarted=performance.now();harbourQA.scene.profileFrames(3000)')
-                walk(page,x,door,life=life)
-                walk(page,x,-23,life=life)
+                walk(page,x,door,life=life,settle_ms=0)
+                walk(page,x,-23,life=life,settle_ms=0)
                 hp,current_life=page.evaluate('[harbourQA.player.hp,harbourQA.player.life]')
                 verify_life(hp,current_life,life,name)
                 results.append(dict(entry=entry,turn=result,exit=read_profile(page,name+' exit'),attempt=attempt+1))
