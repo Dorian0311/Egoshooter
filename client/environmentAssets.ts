@@ -32,6 +32,7 @@ export function loadEnvironmentUpgrade(scene:T.Scene,world:World,renderer:T.WebG
  if(quarter)architecture.add(quarter);
  root.add(architecture);sources.push(architecture);
  const distantDetails:T.InstancedMesh[]=[],compactFacades=new Set<T.InstancedMesh>(),detailedFacades:T.BatchedMesh[]=[];
+ let visibilityDirty=true,appliedQuality:GraphicsQuality|undefined;
  const multiDraw=world.id==='storm'&&renderer.extensions.has('WEBGL_multi_draw');
  const markDetails=(from:number)=>{
   if(world.id!=='storm')return;
@@ -39,6 +40,7 @@ export function loadEnvironmentUpgrade(scene:T.Scene,world:World,renderer:T.WebG
    const object=root.children[i];
    if(object instanceof T.InstancedMesh)distantDetails.push(object);
   }
+  visibilityDirty=true;
  };
  const anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());
  const configure=(model:T.Group,foliage=false)=>model.traverse(o=>{if(o instanceof T.Mesh)for(const material of Array.isArray(o.material)?o.material:[o.material]){
@@ -159,13 +161,19 @@ export function loadEnvironmentUpgrade(scene:T.Scene,world:World,renderer:T.WebG
   ready:Promise.all(loading).then(()=>{if(!disposed)freezeStaticTransforms(root);}),
   setNight(enabled:boolean){setPeriodNight(architecture,enabled);quarter?.setNight(enabled);},
   update(position:T.Vector3,quality:GraphicsQuality){
-   quarter?.setQuality(quality);
-   const limit=quality==='auto'||quality==='performance'?45:Infinity;
-   for(const facade of detailedFacades)facade.visible=limit===Infinity;
+   const qualityChanged=quality!==appliedQuality;
+   if(qualityChanged){quarter?.setQuality(quality);appliedQuality=quality;}
+   const distanceLimited=quality==='auto'||quality==='performance';
+   if(visibilityDirty||qualityChanged){
+    for(const facade of detailedFacades)facade.visible=!distanceLimited;
+   }else if(!distanceLimited){
+    return;
+   }
    for(const item of distantDetails){
     const bounds=item.boundingSphere;
-    if(bounds)item.visible=limit===Infinity?!compactFacades.has(item):bounds.center.distanceToSquared(position)<(limit+bounds.radius)**2;
+    if(bounds)item.visible=distanceLimited?bounds.center.distanceToSquared(position)<(45+bounds.radius)**2:!compactFacades.has(item);
    }
+   visibilityDirty=false;
   },
   dispose(){disposed=true;root.traverse(o=>{if(o instanceof T.InstancedMesh||o instanceof T.BatchedMesh)o.dispose();});sources.forEach(disposeSource);root.removeFromParent();},
  };
