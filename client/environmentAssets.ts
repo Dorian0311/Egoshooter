@@ -13,6 +13,7 @@ import {createCoastalArchitecture} from './coastalArchitecture';
 import {applySurfaceFinish} from './surfaceFinish';
 import {createFacadeBatches} from './facadeBatches';
 import {freezeStaticTransforms} from './staticTransforms';
+import {facadePartIsBuried,opaqueWallCores} from './facadeOcclusion';
 
 function disposeSource(root:T.Object3D){
  const geometries=new Set<T.BufferGeometry>(),materials=new Set<T.Material>(),textures=new Set<T.Texture>();
@@ -62,6 +63,7 @@ export function loadEnvironmentUpgrade(scene:T.Scene,world:World,renderer:T.WebG
   }).catch(error=>console.warn('Coastal cliff scan unavailable:',error)));
  }
  const packs=world.id==='storm'?['modular_factory_facade']:world.id==='frontline'?['modular_factory_facade','modular_urban_apartments_facade']:['modular_urban_apartments_facade'];
+ const wallCores=packs.includes('modular_factory_facade')?opaqueWallCores(world.boxes):[];
  for(const pack of packs){
   loading.push(loader.loadAsync('/shooter/models/'+pack+'/runtime.gltf').then(({scene:model})=>{
    if(disposed){disposeSource(model);return;}sources.push(model);configure(model);
@@ -80,7 +82,12 @@ export function loadEnvironmentUpgrade(scene:T.Scene,world:World,renderer:T.WebG
    const first=root.children.length;
    const modules=Array.from(placements,([variant,matrices])=>({part:model.getObjectByName(variant),matrices}))
     .filter((module):module is {part:T.Object3D;matrices:T.Matrix4[]}=>module.part!==undefined);
-   for(const {part,matrices} of modules)instanceStaticModel(root,part,matrices,false,48);
+   for(const {part,matrices} of modules)instanceStaticModel(root,part,matrices,false,48,mesh=>{
+    if(Array.isArray(mesh.material)||mesh.material.name!=='modular_factory_facade_windows_glass')return true;
+    mesh.geometry.computeBoundingBox();
+    const bounds=mesh.geometry.boundingBox;
+    return !bounds||!facadePartIsBuried(bounds,mesh.matrixWorld,matrices,wallCores);
+   });
    markDetails(first);
    if(multiDraw){
     const last=root.children.length;

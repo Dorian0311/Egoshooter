@@ -3,7 +3,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import type { Building } from '../shared/world.ts';
 import {freezeStaticTransforms} from './staticTransforms';
 
-export function instanceStaticModel(scene: T.Scene|T.Group, source: T.Object3D, placements: T.Matrix4[],castShadow=true,cellSize=Infinity) {
+export function instanceStaticModel(scene: T.Scene|T.Group, source: T.Object3D, placements: T.Matrix4[],castShadow=true,cellSize=Infinity,includePart?:(part:T.Mesh)=>boolean) {
   const cells=new Map<string,T.Matrix4[]>();
   for(const placement of placements){
     const key=Number.isFinite(cellSize)&&cellSize>0?`${Math.floor(placement.elements[12]/cellSize)},${Math.floor(placement.elements[14]/cellSize)}`:'all';
@@ -11,7 +11,7 @@ export function instanceStaticModel(scene: T.Scene|T.Group, source: T.Object3D, 
   }
   source.updateMatrixWorld(true);
   source.traverse(part => {
-    if (!(part instanceof T.Mesh)) return;
+    if (!(part instanceof T.Mesh)||includePart&&!includePart(part)) return;
     for(const cell of cells.values()){
       const instances = new T.InstancedMesh(part.geometry, part.material, cell.length);
       const matrix = new T.Matrix4();

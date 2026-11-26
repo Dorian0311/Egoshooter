@@ -46,16 +46,27 @@ export function addIslandStreet(scene:T.Group){
   const concrete=paint('#b6ac99'),trim=paint('#e6cf98'),iron=paint('#555c58');
   const paving=loader.load(base+'concrete.webp');
   paving.colorSpace=T.SRGBColorSpace;paving.wrapS=paving.wrapT=T.RepeatWrapping;
-  paving.repeat.set(20,1);paving.anisotropy=4;
+  paving.repeat.set(8,1);paving.anisotropy=4;
   const pavingMaterial=new T.MeshStandardMaterial({map:paving,roughness:.98});
   for(const side of [-1,1]){
     const kerb=-23+side*4.62;
-    cuboid(63,.071,kerb,64,.142,.24,concrete);
     cuboid(63,.068,kerb+side*1.75,64,.135,3.4,concrete);
-    const slabs=new T.Mesh(new T.PlaneGeometry(64,3.4),pavingMaterial);
-    slabs.rotation.x=-Math.PI/2;slabs.position.set(63,.139,kerb+side*1.75);
+    // Fold the curb, its bevel and the apron into the same strip. Kerb joints
+    // continue up the riser and the drainage course always faces the carriageway.
+    const profile=[[-.12,.053,0],[-.12,.115,20],[-.09,.144,26],[.12,.144,66],[3.45,.139,688]];
+    const points:number[]=[],texcoords:number[]=[],indices:number[]=[];
+    for(let i=0;i<profile.length-1;i++){
+      const [start,low,v0]=profile[i],[end,high,v1]=profile[i+1],n=points.length/3;
+      points.push(-32,low,side*start,-32,high,side*end,32,high,side*end,32,low,side*start);
+      texcoords.push(0,1-v0/688,0,1-v1/688,1,1-v1/688,1,1-v0/688);
+      if(side===1)indices.push(n,n+1,n+2,n,n+2,n+3);
+      else indices.push(n,n+2,n+1,n,n+3,n+2);
+    }
+    const strip=new T.BufferGeometry();strip.setIndex(indices);
+    strip.setAttribute('position',new T.Float32BufferAttribute(points,3));
+    strip.setAttribute('uv',new T.Float32BufferAttribute(texcoords,2));strip.computeVertexNormals();
+    const slabs=new T.Mesh(strip,pavingMaterial);slabs.position.set(63,0,kerb);
     slabs.receiveShadow=true;street.add(slabs);
-    for(let x=32;x<=94;x+=3.5)cuboid(x,.14,kerb+side*1.74,.022,.006,3.6,iron);
   }
   // Recesses and uneven paint make the carriageway read as a working street.
   // All road details sit below step height and share the existing street batches.

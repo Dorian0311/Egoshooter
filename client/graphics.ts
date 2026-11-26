@@ -209,7 +209,7 @@ export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
     warmup,warmupWorldDraw,
     weaponFov:()=>weaponCamera.fov,
     stats:()=>({quality,antialias:fxaa.enabled?'fxaa':'smaa',aaPasses:Number(fxaa.enabled)+Number(smaa.enabled),scale:ratio/Math.max(.01,renderPixelRatio(quality,window.devicePixelRatio,width,height)),pixelRatio:ratio,gpuMs:gpuTiming.state.ms}),
-    render(dt: number,aimBlend=0,adaptive=true,cpuMs?:number,frameSeconds=dt,viewport?:{width:number;height:number},weaponVisible=true,occlusionFar=camera.far) {
+    render(dt: number,aimBlend=0,adaptive=true,cpuMs?:number,frameSeconds=dt,viewport?:{width:number;height:number},weaponVisible=true,occlusionFar=camera.far,skyOccluded=false) {
       const w = Math.max(1, viewport?.width??renderer.domElement.clientWidth);
       const h = Math.max(1, viewport?.height??renderer.domElement.clientHeight);
       // A few asynchronous samples/second are enough for the quality governor;
@@ -282,7 +282,12 @@ export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
       // These presets refresh the map on every frame, including the first view back outside.
       clipReceivers=(quality==='high'||quality==='ultra')&&camera.far<shadowExtent;
       includeWeapon=weaponVisible;
-      try{composer.render(dt);}finally{clipReceivers=false;gpuTiming.end();}
+      const sky=scene.background;
+      if(skyOccluded)scene.background=null;
+      try{composer.render(dt);}finally{
+        if(skyOccluded)scene.background=sky;
+        clipReceivers=false;gpuTiming.end();
+      }
     },
     dispose() {
       sun.shadow.getFrustum=lightFrustum;
