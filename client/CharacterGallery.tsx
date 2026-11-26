@@ -1,8 +1,14 @@
-import React,{useEffect,useRef,useState} from 'react';
+import React,{lazy,Suspense,useEffect,useRef,useState} from 'react';
 import {uniforms,uniformOptions,type UniformId} from '../shared/uniforms';
-import {ModelPreview} from './ModelPreview';
 import type {MapId} from '../shared/world';
 import './characterGallery.css';
+const ModelPreview=lazy(async()=>{
+ try{return {default:(await import('./ModelPreview')).ModelPreview};}
+ catch(error){
+  console.warn('Character preview could not load',error);
+  return {default:()=> <div className="model-stage"><span className="model-status" role="status">3D-Vorschau nicht verfügbar. Du kannst die Figur trotzdem auswählen.</span></div>};
+ }
+});
 type Props={team:'de'|'fr';map:MapId;value:UniformId|'';onChange:(id:UniformId)=>void;compact?:boolean;actionLabel?:string};
 export function CharacterGallery({team,map,value,onChange,compact=false,actionLabel}:Props){
  const ids=uniformOptions(team,map),[browsed,setBrowsed]=useState<UniformId>(value||ids[0]);
@@ -14,7 +20,9 @@ export function CharacterGallery({team,map,value,onChange,compact=false,actionLa
  return <section className={`character-gallery${compact?' character-gallery-compact':''}`} aria-label="Charakter-Slider" aria-roledescription="Karussell" onKeyDown={e=>{if(e.key==='ArrowLeft'||e.key==='ArrowRight'){e.preventDefault();step(e.key==='ArrowLeft'?-1:1);}}}>
   <div className="character-gallery-heading"><div><span>WÄHLE DEINEN SPIELSTIL</span><h2>Dein nächster Einsatz.</h2></div><span className="character-counter">{String(index+1).padStart(2,'0')} <small>/ {String(ids.length).padStart(2,'0')}</small></span></div>
   <div className="model-slider">
-   <ModelPreview key={current} id={current} team={team} map={map}/>
+   <Suspense fallback={<div className="model-stage"><span className="model-status" role="status">Modell wird geladen …</span></div>}>
+    <ModelPreview key={current} id={current} team={team} map={map}/>
+   </Suspense>
    <button className="model-prev" aria-label="Vorheriger Charakter" onClick={()=>step(-1)}>‹</button><button className="model-next" aria-label="Nächster Charakter" onClick={()=>step(1)}>›</button>
    <div className="model-caption" aria-live="polite"><span>{current==='leatherface'?'NAHKAMPF · POWERMODUS':current.startsWith('task-')?'TAKTISCHE EINHEIT':current.includes('-')?'HISTORISCHE UNIFORM':'BONUS-CHARAKTER'}</span><h3>{uniforms[current].name.replace(/^(Bonus|Heer|France|US Army) · /,'')}</h3><p>{uniforms[current].detail}</p><button className={selected?'model-selected':'model-select'} aria-pressed={selected} onClick={()=>onChange(current)}>{actionLabel??(selected?'✓ Für den Einsatz ausgewählt':'Diesen Charakter auswählen ↗')}</button></div>
   </div>

@@ -6,8 +6,6 @@ import {uniforms,type UniformId} from '../shared/uniforms';
 // Cache lightweight still images; never keep a gallery full of live WebGL scenes.
 const cache=new Map<UniformId,Promise<string>>();
 let queue:Promise<unknown>=Promise.resolve();
-// These original-model head renders are generated at development time, never on a kill.
-export function characterFaceUrl(id:UniformId){return `/shooter/characters/portraits/${id}-face.webp?v=20261116-remains`;}
 export function characterPortrait(id:UniformId):Promise<string>{
  const existing=cache.get(id);if(existing)return existing;
  const result=queue.then(()=>renderPortrait(id)).catch(error=>{cache.delete(id);throw error;});
