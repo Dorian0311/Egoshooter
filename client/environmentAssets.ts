@@ -67,11 +67,11 @@ export function loadEnvironmentUpgrade(scene:T.Scene,world:World,renderer:T.WebG
   }).catch(error=>console.warn('Coastal cliff scan unavailable:',error)));
  }
  const packs=world.id==='storm'?['modular_factory_facade']:world.id==='frontline'?['modular_factory_facade','modular_urban_apartments_facade']:['modular_urban_apartments_facade'];
- const checkApartmentGlass=world.id==='alpine'||world.id==='cologne';
- // A .45 m front wall has at most .054 m of bevel (scene.ts uses depth * .12).
- const wallCores=checkApartmentGlass?opaqueWallCores(world.boxes.filter(b=>b.d<=.45),.060):
-  packs.includes('modular_factory_facade')?opaqueWallCores(world.boxes):[];
  for(const pack of packs){
+  const apartment=pack==='modular_urban_apartments_facade';
+  const glassName=apartment?'modular_urban_apartments_facade_glass':'modular_factory_facade_windows_glass';
+  // A .45 m front wall has at most .054 m of bevel (scene.ts uses depth * .12).
+  const wallCores=apartment?opaqueWallCores(world.boxes.filter(b=>b.d<=.45),.060):opaqueWallCores(world.boxes);
   loading.push(loader.loadAsync('/shooter/models/'+pack+'/runtime.gltf').then(({scene:model})=>{
    if(disposed){disposeSource(model);return;}sources.push(model);configure(model);
    const placements=new Map<string,T.Matrix4[]>();
@@ -98,8 +98,7 @@ export function loadEnvironmentUpgrade(scene:T.Scene,world:World,renderer:T.WebG
    for(const {part,matrices} of modules)instanceStaticModel(root,part,matrices,false,cellSize,mesh=>{
     if(plaster?.parts.has(mesh))return false;
     if(Array.isArray(mesh.material))return true;
-    const name=mesh.material.name;
-    if(name!=='modular_factory_facade_windows_glass'&&!(checkApartmentGlass&&name==='modular_urban_apartments_facade_glass'))return true;
+    if(mesh.material.name!==glassName)return true;
     if(!mesh.visible)return false;
     mesh.geometry.computeBoundingBox();
     const bounds=mesh.geometry.boundingBox;

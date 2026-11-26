@@ -124,7 +124,17 @@ export function createMapDetails(scene:T.Scene,world:World,get:(color:string)=>T
       const frame=material('#343d3b',.52,.62),boards=get('#67513d');
       const bodyBottom=.62,bodyTop=b.y+b.h/2-.12,bodyHeight=bodyTop-bodyBottom;
       const gauge=world.id==='frontline'&&b.z===-22?.72:.8;
-      box(b.x,bodyBottom+bodyHeight/2,b.z,b.w,bodyHeight,b.d,boards);
+      const body=box(b.x,bodyBottom+bodyHeight/2,b.z,b.w,bodyHeight,b.d,boards);
+      const bodyUv=body.geometry.getAttribute('uv'),bodyNormal=body.geometry.getAttribute('normal');
+      const bodyPosition=body.geometry.getAttribute('position');
+      // The atlas grain runs along V. Its joints at columns 562, 751, 940 and
+      // 105 (after wrapping) meet the wagon's four horizontal board joints.
+      for(let i=0;i<bodyUv.count;i++){
+        if(Math.abs(bodyNormal.getY(i))>.8)continue;
+        const height=bodyPosition.getY(i)+body.position.y;
+        const across=(562+(height-1.04)*189/.43)/1024;
+        bodyUv.setXY(i,across,-bodyUv.getX(i));
+      }
       for(const x of [-b.w*.37,b.w*.37]){
         const axle=cylinder(b.x+x,.46,b.z,.10,2*gauge+.16,frame,12);axle.rotation.x=Math.PI/2;
         for(const side of [-1,1]){
