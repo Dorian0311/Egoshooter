@@ -21,6 +21,7 @@ DRAW_PROFILE = os.environ.get('BATTLE_DRAW_PROFILE') == '1'
 GPU_PROFILE = os.environ.get('BATTLE_GPU_PROFILE') == '1'
 FRAME_PHASES = os.environ.get('BATTLE_FRAME_PHASES') == '1'
 SNAPSHOT_PROFILE = os.environ.get('BATTLE_SNAPSHOT_PROFILE') == '1'
+GL_STALLS = os.environ.get('BATTLE_GL_STALLS') == '1'
 NEAR_SPAWN = os.environ.get('HARBOUR_NEAR_SPAWN') == '1'
 SEED = os.environ.get('BATTLE_SEED')
 ENEMIES = int(os.environ.get('HARBOUR_ENEMIES','0'))
@@ -30,6 +31,7 @@ assert not DRAW_PROFILE or PRODUCTION, 'BATTLE_DRAW_PROFILE requires the separat
 assert not GPU_PROFILE or PRODUCTION, 'BATTLE_GPU_PROFILE requires the separate production harness'
 assert not FRAME_PHASES or PRODUCTION, 'BATTLE_FRAME_PHASES requires the separate production harness'
 assert not SNAPSHOT_PROFILE or PRODUCTION, 'BATTLE_SNAPSHOT_PROFILE requires the separate production harness'
+assert not GL_STALLS or PRODUCTION, 'BATTLE_GL_STALLS requires the separate production harness'
 assert not NEAR_SPAWN or PRODUCTION and os.environ.get('BATTLE_MAP','storm')=='storm', 'HARBOUR_NEAR_SPAWN requires the isolated Island production harness'
 
 
@@ -314,6 +316,7 @@ def measure_turns(page, name):
 
 def read_profile(page, name, during_turn=False):
     frames = page.evaluate('harbourQA.scene.frameProfile()')
+    window_end = page.evaluate('performance.now()') if GL_STALLS else None
     ms = sorted(f['frameMs'] for f in frames)
     result = dict(site=name, frames=len(ms), fps=round(1000*len(ms)/sum(ms),1),
                   p95=ms[math.ceil(len(ms)*.95)-1], p99=ms[math.ceil(len(ms)*.99)-1], worst=max(ms),
@@ -362,6 +365,8 @@ def read_profile(page, name, during_turn=False):
                     snapshots:samples.filter(s=>s.start<f.startTime+f.duration&&s.end>f.startTime).sort((a,b)=>a.start-b.start)
                 }))};
         }""",result['longTasks'])
+    if GL_STALLS:
+        result['glStalls']=page.evaluate("end=>window.battleGlStalls.report(window.turnStarted,end)",window_end)
     if os.environ.get('BATTLE_TIMER_PROFILE')=='1':
         result['timers']=page.evaluate(r"""()=> (window.roadTimers??[]).filter(t=>
           (window.harbourLongFrames??[]).some(f=>f.startTime>=window.turnStarted&&t.start>=f.startTime-1&&t.start<f.startTime+f.duration)
@@ -390,6 +395,8 @@ with sync_playwright() as pw:
         quality_suffix+='-cpu-phases'
     if SNAPSHOT_PROFILE:
         quality_suffix+='-snapshot-phases'
+    if GL_STALLS:
+        quality_suffix+='-gl-stalls'
     if headed:
         quality_suffix+='-window'
     if channel!='chrome':

@@ -745,8 +745,15 @@ export function createScene(
       const roots=[...preparedActors].filter(actor=>actor.parent?.parent===scene);preparedActors.clear();
       scene.add(equipment);
       environmentUpgrade.update(camera.position,'high');
+      // Submit the idle effect batches during the offscreen warmup. Their zero
+      // instance counts keep the draw empty while Three prepares program state.
+      const idleEffects=muzzleEffects.group.children.filter(effect=>!effect.visible);
+      for(const effect of idleEffects)effect.visible=true;
       try{graphics.warmupWorldDraw(roots);}
-      finally{environmentUpgrade.update(camera.position,quality);}
+      finally{
+        for(const effect of idleEffects)effect.visible=false;
+        environmentUpgrade.update(camera.position,quality);
+      }
     }finally{
       equipment.removeFromParent();
       for(const asset of assets)asset?.release();

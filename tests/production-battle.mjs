@@ -7,6 +7,7 @@
 // Set BATTLE_GPU_PROFILE=1 to sample raw GPU frame times, including on High and Ultra.
 // Set BATTLE_FRAME_PHASES=1 to attribute long CPU frames to work inside the game callback.
 // BATTLE_SNAPSHOT_PROFILE=1 times client snapshot merge, HUD/event dispatch, scene sync and the test observer.
+// BATTLE_GL_STALLS=1 records existing WebGL calls taking over 2 ms and shadow/composer CPU time.
 // HARBOUR_NEAR_SPAWN=1 starts the tester behind the Diner on the isolated server.
 // BATTLE_SEED sets the isolated server's starting random sequence for comparable runs.
 // Bots, difficulty, damage and movement retain their normal game rules.
@@ -58,11 +59,26 @@ try {
   let patched = false, drawPatched=false, phasePatched=false, gpuHooks=0;
   const traceDraws=process.env.BATTLE_DRAW_PROFILE==='1';
   const traceGpu=process.env.BATTLE_GPU_PROFILE==='1';
+  const traceGl=process.env.BATTLE_GL_STALLS==='1';
+  let glPatched=false;
   const tracePhases=process.env.BATTLE_FRAME_PHASES==='1';
   await build({root, mode:'production', logLevel:'warn', build:{outDir:dist}, plugins:[{
     name:'local-battle-observation', enforce:'pre',
     transform(source, id) {
       const path=id.replaceAll('\\','/');
+      if(traceGl&&path.endsWith('/client/graphics.ts')){
+        const instrument=(anchor,replacement)=>{
+          assert.equal(source.split(anchor).length,2,'GL stall hook changed: '+anchor);
+          source=source.replace(anchor,replacement);
+        };
+        source="import {attachBattleGlStalls} from '../tests/battle-gl-stalls.mjs';\n"+source;
+        instrument('const composer = new EffectComposer(renderer);',
+          'const stallProbe=window.battleGlStalls=attachBattleGlStalls(renderer);\nconst composer = new EffectComposer(renderer);');
+        instrument('const currentTimingFrame=timingFrame++;','stallProbe.frame();\nconst currentTimingFrame=timingFrame++;');
+        instrument('composer.render(dt);','stallProbe.composer();try{composer.render(dt);}finally{stallProbe.end();}');
+        glPatched=true;
+        if(!traceGpu)return source;
+      }
       if(traceGpu&&path.endsWith('/client/gpuTiming.ts')){
         const anchor='state.samples++;';
         assert.equal(source.split(anchor).length,2,'GPU sample hook changed');
@@ -131,6 +147,7 @@ try {
   assert.equal(drawPatched,traceDraws,'Missing scene renderer hook');
   assert.equal(phasePatched,tracePhases,'Missing CPU phase hooks');
   assert.equal(gpuHooks,traceGpu?2:0,'Missing GPU profile hook');
+  assert.equal(glPatched,traceGl,'Missing GL stall hooks');
   await child(process.execPath, [join(root,'scripts/compress-client.mjs')], {cwd:scratch}).done;
 
   const reservation = createServer();

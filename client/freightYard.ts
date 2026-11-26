@@ -113,6 +113,52 @@ export function freightYard(world:World){
     box(hx,3.13,hz,.16,.35,.16,metal);cylinder(hx,2.93,hz,.21,.21,.14,rim,Math.PI/2);
     for(let i=0;i<8;i++)add(new T.TorusGeometry(.035,.012,4,8),hx-.08,2.74-i*.049,hz,metal,0,0,i%2*.98);
     add(new T.TorusGeometry(.067,.020,5,10,Math.PI*1.55),hx-.065,2.30,hz,rim);
+    // A wall-mounted goods crane at the east corner serves the siding. Two
+    // spaced bearings take the cantilever moment back into the masonry.
+    const pivotX=station.x+station.w/2+.37,pivotZ=oz-.95;
+    for(const level of [1.90,3.73]){
+      box(station.w/2+.24,level,-.95,.52,.28,.56,'#647068',ironPlate);
+      box(station.w/2+.028,level,-.95,.09,.53,.72,'#605e53',ironPlate);
+    }
+    const craneStart=pieces.length;
+    ox=0;oz=0;
+    const steel='#4f605b',flange='#7b8270';
+    function boomBar(x:number,z0:number,y0:number,z1:number,y1:number,width:number,height:number){
+      add(new T.BoxGeometry(width,height,Math.hypot(z1-z0,y1-y0)),x,(y0+y1)/2,(z0+z1)/2,
+        steel,0,-Math.atan2(y1-y0,z1-z0));
+    }
+    cylinder(0,3.49,0,.16,.18,3.48,steel);
+    for(const y of [1.90,3.73,5.13])cylinder(0,y,0,.225,.225,.19,flange);
+    const bottom=(z:number)=>3.87+.155*z,top=(z:number)=>5.16+.024*z;
+    const reach=6,panels=4;
+    for(const x of [-.20,.20]){
+      boomBar(x,0,bottom(0),reach,bottom(reach),.12,.15);
+      boomBar(x,0,top(0),reach,top(reach),.105,.125);
+      for(let i=0;i<panels;i++){
+        const a=i*reach/panels,b=(i+1)*reach/panels;
+        boomBar(x,a,i%2?top(a):bottom(a),b,i%2?bottom(b):top(b),.060,.072);
+      }
+    }
+    for(let n=0;n<=panels;n++){
+      const z=n*reach/panels;
+      box(0,top(z),z,.51,.10,.085,flange);
+      box(0,bottom(z),z,.51,.10,.085,steel);
+    }
+    // The hoist line leaves the drum tangentially, runs over the tip sheave
+    // and ends in a raised hook above the boxcar roof.
+    const drumZ=.82,drumY=4.63,wheelY=5.05;
+    for(const x of [-.16,.16]){
+      box(x,4.43,drumZ,.075,.51,.35,steel,ironPlate);
+      add(new T.CylinderGeometry(.26,.26,.047,12),x,drumY,drumZ,flange,0,0,0,Math.PI/2);
+    }
+    add(new T.CylinderGeometry(.19,.19,.30,12),0,drumY,drumZ,'#594e40',0,0,0,Math.PI/2);
+    for(const x of [-.20,.20])box(x,wheelY,reach,.078,.55,.32,steel,ironPlate);
+    add(new T.CylinderGeometry(.205,.205,.19,12),0,wheelY,reach,flange,0,0,0,Math.PI/2);
+    boomBar(0,drumZ,drumY+.19,reach,wheelY+.205,.032,.032);
+    box(0,4.45,reach+.205,.034,1.20,.034,'#514b40');
+    const hook=new T.TorusGeometry(.13,.031,5,13,Math.PI*1.60).rotateZ(Math.PI/2);
+    add(hook,0,3.72,reach+.205,'#605447',0,0,Math.PI/2);
+    for(const piece of pieces.slice(craneStart))piece.rotateY(.30).translate(pivotX,0,pivotZ);
   }
   const cinema=world.buildings.find(b=>b.name==='UNION-LICHTSPIELE');
   if(cinema){
