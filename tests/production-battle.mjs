@@ -6,6 +6,8 @@
 // Set BATTLE_DRAW_PROFILE=1 to trace CPU draw submission and actual WebGL program binds.
 // Set BATTLE_GPU_PROFILE=1 to sample raw GPU frame times, including on High and Ultra.
 // Set BATTLE_FRAME_PHASES=1 to attribute long CPU frames to work inside the game callback.
+// HARBOUR_NEAR_SPAWN=1 starts the tester behind the Diner on the isolated server.
+// Bots, difficulty, damage and movement retain their normal game rules.
 import assert from 'node:assert/strict';
 import {spawn} from 'node:child_process';
 import {randomBytes} from 'node:crypto';
@@ -121,7 +123,22 @@ try {
   await new Promise(done=>publicPortReservation.close(done));
   await new Promise((done,fail)=>gateway.server.once('error',fail).listen(publicPort,'127.0.0.1',done));
   await new Promise(done=>reservation.close(done));
-  const server = child(process.execPath,['--import','tsx','server/index.ts'],{env:{...process.env,
+  const serverEntry = process.env.HARBOUR_NEAR_SPAWN === '1' ? ['--input-type=module','--eval',`
+    import {Game} from './shared/game.ts';
+    import {getWorld,ground} from './shared/world.ts';
+    const tick=Game.prototype.tick;
+    Game.prototype.tick=function(now){
+      const player=this.state.players.find(p=>p.kind==='human');
+      const previousLife=player?.life;
+      tick.call(this,now);
+      if(this.state.phase==='playing' && this.state.mapId==='storm' && player?.hp>0 && player.life!==previousLife){
+        const x=60,z=-41;
+        Object.assign(player,{x,y:ground(x,z,getWorld('storm')),z});
+      }
+    };
+    await import('./server/index.ts');
+  `] : ['server/index.ts'];
+  const server = child(process.execPath,['--import','tsx',...serverEntry],{env:{...process.env,
     NODE_ENV:'production', BIND_HOST:'127.0.0.1', PORT:String(backendPort), DATABASE_URL:'',
     SHOOTER_ACCOUNTS_DB:join(scratch,'accounts.sqlite'), SHOOTER_ORIGINS:origin,
     SHOOTER_PUBLIC_URL:origin+'/game', SHOOTER_TICKET_SECRET:randomBytes(32).toString('hex')}});

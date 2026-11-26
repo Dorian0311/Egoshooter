@@ -98,7 +98,7 @@ export function createInteriors(scene:T.Scene,world:World){
    if(child instanceof T.Mesh&&child.material instanceof T.MeshStandardMaterial&&child.material.vertexColors)materials.push(child.material);
   }
   freezeStaticTransforms(room);
-  registerFixedRoom(scene,room);
+  registerFixedRoom(scene,room,world);
  }
  batchStaticMeshes(root,new Set<T.Object3D>(doors.values()));
  const lighting=createInteriorLighting(root,lamps),origin={x:0,y:0,z:0};

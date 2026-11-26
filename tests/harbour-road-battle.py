@@ -19,9 +19,11 @@ FIXED_TURNS = os.environ.get('BATTLE_FIXED_TURNS') == '1'
 DRAW_PROFILE = os.environ.get('BATTLE_DRAW_PROFILE') == '1'
 GPU_PROFILE = os.environ.get('BATTLE_GPU_PROFILE') == '1'
 FRAME_PHASES = os.environ.get('BATTLE_FRAME_PHASES') == '1'
+NEAR_SPAWN = os.environ.get('HARBOUR_NEAR_SPAWN') == '1'
 assert not DRAW_PROFILE or PRODUCTION, 'BATTLE_DRAW_PROFILE requires the separate production harness'
 assert not GPU_PROFILE or PRODUCTION, 'BATTLE_GPU_PROFILE requires the separate production harness'
 assert not FRAME_PHASES or PRODUCTION, 'BATTLE_FRAME_PHASES requires the separate production harness'
+assert not NEAR_SPAWN or PRODUCTION and os.environ.get('BATTLE_MAP','storm')=='storm', 'HARBOUR_NEAR_SPAWN requires the isolated Island production harness'
 
 
 def observe(route):
@@ -408,6 +410,9 @@ with sync_playwright() as pw:
     print(renderer_info,flush=True)
     bots = page.evaluate("harbourQA.state.players.filter(p=>p.kind==='bot').length")
     assert bots == (enemies or 7), bots
+    if NEAR_SPAWN:
+        position=page.evaluate('[harbourQA.player.x,harbourQA.player.z]')
+        assert math.dist(position,(60,-41))<1, ('Expected the dedicated Harbour Road start',position)
     activate_controls(page)
     assert page.evaluate('harbourQA.state.mapId') == map_id
     assert page.evaluate('harbourQA.state.operation.config.difficulty') == difficulty
@@ -596,13 +601,14 @@ with sync_playwright() as pw:
     if only_shop:
         shops=[shop for shop in shops if shop[0]==only_shop]
         assert shops, ('Unknown HARBOUR_SHOP',only_shop)
-    suffix=(f'-{condition}' if condition else '')+(f'-{only_shop}' if only_shop else '')
+    suffix=(f'-{condition}' if condition else '')+(f'-{only_shop}' if only_shop else '')+('-near-spawn' if NEAR_SPAWN else '')
     report_path=OUT/f'report-{bots}-bots-{width}x{height}{suffix}{quality_suffix}.json'
     run_id=time.time_ns()
     checkpoint=report_path.with_name(f'{report_path.stem}-{run_id}.partial.json')
     results = []
     report=dict(bots=bots,width=width,height=height,quality=quality,difficulty=difficulty,renderer=renderer_info,
-                condition=condition or 'standard',runId=str(run_id),complete=False,results=results,routeFailures=[])
+                condition=condition or 'standard',startArea='behind Diner' if NEAR_SPAWN else 'regular',
+                runId=str(run_id),complete=False,results=results,routeFailures=[])
     def record_failure(stage,attempt,event):
         # Persist before any recovery, including the final exhausted attempt.
         report['routeFailures'].append(dict(stage=stage,attempt=attempt,error=type(event).__name__,

@@ -320,7 +320,7 @@ export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
       const sky=scene.background;
       if(skyOccluded)scene.background=null;
       try{
-        if(ao.enabled&&!renderer.xr.isPresenting)rooms.begin(camera,updateShadow?clippedShadow:undefined);
+        if(ao.enabled&&!renderer.xr.isPresenting)rooms.begin(camera,updateShadow?clippedShadow:undefined,quality==='high');
         composer.render(dt);
       }finally{
         rooms.restore();

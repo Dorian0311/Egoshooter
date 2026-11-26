@@ -439,6 +439,27 @@ export function addIslandStreet(scene:T.Group){
         const print=new T.Mesh(geometry,board.material);
         print.position.set(x,y,z);print.rotation.order='YXZ';print.rotation.y=yaw;street.add(print);return print;
       }
+      // A dimensional record and a striped tail form a single wall sign on the
+      // approach from the diner. The roundel sits proud of the lettering panel.
+      const alleyX=s.x-s.w/2,roundelZ=s.z-1.88,signY=2.64;
+      cuboid(alleyX-.056,signY,s.z+.53,.10,1.23,4.52,iron);
+      for(const h of [-.67,.67])cuboid(alleyX-.11,signY+h,s.z+.36,.12,.052,5.16,accent);
+      const lettering=new T.PlaneGeometry(3.76,.96),letters=lettering.getAttribute('uv');
+      for(let i=0;i<letters.count;i++)letters.setXY(i,.003+.994*letters.getX(i),facadeV((3-index+.70+.298*letters.getY(i))/4));
+      const enamel=solid(lettering,alleyX-.112,signY,s.z+.81,facade);
+      enamel.rotation.y=-Math.PI/2;enamel.castShadow=true;
+      const recordFace=(radius:number,depth:number,material:T.Material)=>{
+        const disc=solid(new T.CircleGeometry(radius,48),alleyX-depth,signY,roundelZ,material);
+        disc.rotation.y=-Math.PI/2;
+      };
+      const rim=solid(new T.CylinderGeometry(1.06,1.06,.16,48,1,true),alleyX-.10,signY,roundelZ,accent);
+      rim.rotation.z=Math.PI/2;
+      recordFace(1.06,.181,accent);recordFace(1.006,.185,vinyl);
+      for(const radius of [.59,.76,.91]){
+        const groove=solid(new T.RingGeometry(radius,radius+.012,48),alleyX-.190,signY,roundelZ,iron);
+        groove.rotation.y=-Math.PI/2;
+      }
+      recordFace(.37,.194,accent);recordFace(.27,.198,cream);recordFace(.075,.202,vinyl);
       for(const [wallIndex,bin] of parts.filter(p=>p.role==='bin').entries()){
         const side=bin.x<s.x?-1:1,wallX=s.x+side*(s.w/2-.29);
         // Enlarged sleeve prints and their actual records are paired on walnut rails above the bins.
