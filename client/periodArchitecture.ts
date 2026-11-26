@@ -27,12 +27,13 @@ export function createPeriodArchitecture(world:World){
     const upper=b.upper?8:4,wallX=b.w/2,wallZ=b.d/2,gableZ=wallZ+.52;
     const alpine=world.id==='alpine',cinema=b.name==='UNION-LICHTSPIELE';
     const fortress=alpine&&b.name==='ROCHE-LA-CROIX';
+    const domhof=world.id==='cologne'&&b.name==='AM DOMHOF';
     const station=/BAHNHOF|KÖLN-DEUTZ/.test(b.name);
     const deutz=world.id==='cologne'&&b.name==='DEUTZER BAHNHOF';
     const illuminated=deutz||cinema;
-    const trim=illuminated||fortress?material.clone():material;
-    if(fortress){
-      trim.map=new T.TextureLoader().load('/shooter/environment/alpine-fort-casement.webp');
+    const trim=illuminated||fortress||domhof?material.clone():material;
+    if(fortress||domhof){
+      trim.map=new T.TextureLoader().load('/shooter/environment/'+(fortress?'alpine-fort-casement':'domhof-bookshop')+'.webp');
       trim.map.colorSpace=T.SRGBColorSpace;trim.map.anisotropy=4;
     }
     if(illuminated)trim.onBeforeCompile=shader=>{
@@ -50,7 +51,7 @@ export function createPeriodArchitecture(world:World){
       quaternion.setFromEuler(angles.set(rx,0,rz));
       g.applyMatrix4(matrix.compose(translation.set(x,y,z),quaternion,scale));
       const p=g.getAttribute('position'),n=g.getAttribute('normal'),rgb=new Float32Array(p.count*3);
-      if(fortress){
+      if(fortress||domhof){
         // All unprinted trim shares the atlas's white margin and retains its vertex paint.
         const uv=g.getAttribute('uv');
         for(let i=0;i<uv.count;i++)uv.setXY(i,1020/1024,.5);
@@ -65,6 +66,36 @@ export function createPeriodArchitecture(world:World){
     }
     function box(x:number,y:number,z:number,w:number,h:number,d:number,c:string,rx=0,rz=0,near=false){
       add(new T.BoxGeometry(w,h,d),x,y,z,c,rx,rz,near);
+    }
+    if(domhof){
+      // The street elevation stands against the solid upper wall. On the river
+      // elevation every skin panel follows the masonry around the playable windows.
+      function elevation(river:boolean,left:number,right:number,bottom:number,top:number){
+        const skin=new T.PlaneGeometry(right-left,top-bottom);
+        if(river)skin.rotateY(Math.PI/2);
+        const mid=(left+right)/2,half=river?wallZ:wallX;
+        add(skin,river?wallX+.239:mid,(bottom+top)/2,river?-mid:wallZ+.424,'#fffdf4');
+        const uv=skin.getAttribute('uv'),pos=skin.getAttribute('position');
+        for(let i=0;i<uv.count;i++){
+          const along=river?-pos.getZ(i):pos.getX(i),u=(along+half)/(2*half);
+          const v=(8-pos.getY(i))/4;
+          uv.setXY(i,(3.5+u*1007)/1024,1-((river?258.5:3.5)+v*247)/512);
+        }
+      }
+      elevation(false,-wallX,wallX,4.01,8);
+      for(const [bottom,top] of [[4.01,5.2],[6.5,8]])elevation(true,-wallZ,wallZ,bottom,top);
+      for(const [left,right] of [[-wallZ,-5],[-1.5,1.5],[5,wallZ]])elevation(true,left,right,5.2,6.5);
+      for(const x of [-6.43,-2.70,2.70,6.43]){
+        box(x,4.88,wallZ+.51,2.34,.12,.32,'#a5967d');
+        if(Math.abs(x)>3)continue;
+        // The flower balconies project over the central windows facing the street.
+        box(x,4.94,wallZ+.74,2.23,.11,.69,'#928972');
+        for(const y of [5.07,5.49])box(x,y,wallZ+1.04,2.20,.055,.06,iron);
+        for(const side of [-1,1])box(x+side*1.07,5.49,wallZ+.76,.054,.06,.54,iron);
+        for(let i=-4;i<=4;i++)box(x+i*.248,5.27,wallZ+1.04,.030,.45,.035,iron,0,0,true);
+        for(const offset of [-.66,0,.66])
+          add(new T.TorusGeometry(.16,.017,4,12),x+offset,5.28,wallZ+1.06,'#536255',0,0,true);
+      }
     }
     if(fortress){
       const concrete='#a4a497',aggregate='#797d72',armour='#535e55';

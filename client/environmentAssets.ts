@@ -14,6 +14,7 @@ import {applySurfaceFinish} from './surfaceFinish';
 import {createFacadeBatches} from './facadeBatches';
 import {freezeStaticTransforms} from './staticTransforms';
 import {facadePartIsBuried,opaqueWallCores} from './facadeOcclusion';
+import {addFactoryGlazing} from './factoryGlazing';
 
 function disposeSource(root:T.Object3D){
  const geometries=new Set<T.BufferGeometry>(),materials=new Set<T.Material>(),textures=new Set<T.Texture>();
@@ -82,8 +83,12 @@ export function loadEnvironmentUpgrade(scene:T.Scene,world:World,renderer:T.WebG
    const first=root.children.length;
    const modules=Array.from(placements,([variant,matrices])=>({part:model.getObjectByName(variant),matrices}))
     .filter((module):module is {part:T.Object3D;matrices:T.Matrix4[]}=>module.part!==undefined);
+   if(world.id==='storm'&&pack==='modular_factory_facade'){
+    for(const {part} of modules)addFactoryGlazing(part);
+   }
    for(const {part,matrices} of modules)instanceStaticModel(root,part,matrices,false,48,mesh=>{
     if(Array.isArray(mesh.material)||mesh.material.name!=='modular_factory_facade_windows_glass')return true;
+    if(!mesh.visible)return false;
     mesh.geometry.computeBoundingBox();
     const bounds=mesh.geometry.boundingBox;
     return !bounds||!facadePartIsBuried(bounds,mesh.matrixWorld,matrices,wallCores);

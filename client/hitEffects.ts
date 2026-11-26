@@ -38,8 +38,20 @@ export function createHitEffects(scene:T.Scene){
  const mistMaterial=new T.ShaderMaterial({transparent:true,depthWrite:false,vertexShader:'attribute float particleSize;attribute float opacity;varying float alpha;void main(){vec4 p=modelViewMatrix*vec4(position,1.0);gl_Position=projectionMatrix*p;gl_PointSize=clamp(particleSize*300.0/max(.1,-p.z),1.0,96.0);alpha=opacity;}',fragmentShader:'varying float alpha;void main(){float r=length(gl_PointCoord*2.0-1.0);gl_FragColor=vec4(.55,.025,.08,alpha*pow(max(0.0,1.0-r),2.0));}'});
  const mist=new T.Points(mistGeometry,mistMaterial);mist.name='headshot-mist';mist.frustumCulled=false;mist.visible=false;scene.add(mist);
  const matrix=new T.Object3D();
- function sync(){let drops=0,chunks=0,clouds=0;for(const p of particles){if(p.mist){mistPositions.setXYZ(clouds,p.position.x,p.position.y,p.position.z);mistSizes.setX(clouds,p.scale.x);mistOpacity.setX(clouds,.28*Math.pow(p.life/p.total,1.5));clouds++;}else{matrix.position.copy(p.position);matrix.rotation.copy(p.rotation);matrix.scale.copy(p.scale);matrix.updateMatrix();(p.fragment?skulls:droplets).setMatrixAt(p.fragment?chunks++:drops++,matrix.matrix);}}
-  droplets.count=drops;skulls.count=chunks;droplets.visible=!!drops;skulls.visible=!!chunks;mist.visible=!!clouds;mistGeometry.setDrawRange(0,clouds);droplets.instanceMatrix.needsUpdate=skulls.instanceMatrix.needsUpdate=true;mistPositions.needsUpdate=mistSizes.needsUpdate=mistOpacity.needsUpdate=true;
+ function uploadVisible(attribute:T.BufferAttribute,count:number){
+  if(!count)return;
+  attribute.clearUpdateRanges();attribute.addUpdateRange(0,count*attribute.itemSize);attribute.needsUpdate=true;
+ }
+ function sync(first=0){
+  let drops=first?droplets.count:0,chunks=first?skulls.count:0,clouds=first?mistGeometry.drawRange.count:0;
+  for(let i=first;i<particles.length;i++){
+   const p=particles[i];
+   if(p.mist){mistPositions.setXYZ(clouds,p.position.x,p.position.y,p.position.z);mistSizes.setX(clouds,p.scale.x);mistOpacity.setX(clouds,.28*Math.pow(p.life/p.total,1.5));clouds++;}
+   else{matrix.position.copy(p.position);matrix.rotation.copy(p.rotation);matrix.scale.copy(p.scale);matrix.updateMatrix();(p.fragment?skulls:droplets).setMatrixAt(p.fragment?chunks++:drops++,matrix.matrix);}
+  }
+  droplets.count=drops;skulls.count=chunks;droplets.visible=!!drops;skulls.visible=!!chunks;mist.visible=!!clouds;mistGeometry.setDrawRange(0,clouds);
+  uploadVisible(droplets.instanceMatrix,drops);uploadVisible(skulls.instanceMatrix,chunks);
+  uploadVisible(mistPositions,clouds);uploadVisible(mistSizes,clouds);uploadVisible(mistOpacity,clouds);
  }
  function remove(index:number){particles.splice(index,1);}
  function emit(event:GameEvent,slowMotion=false,direction=new T.Vector3(0,0,-1),floorY?:number){
@@ -49,7 +61,9 @@ export function createHitEffects(scene:T.Scene){
   const forward=direction.clone();if(forward.lengthSq()<.0001)forward.set(0,0,-1);forward.normalize();
   const count=burst?72:16;
   // Reserve space for the newest confirmed impact during sustained multiplayer fire.
-  while(particles.length+count>256)remove(0);
+  const overflow=particles.length+count-256;
+  const first=overflow>0?0:particles.length;
+  if(overflow>0)particles.splice(0,overflow);
   for(let i=0;i<count;i++){
    const mist=burst&&i>=64,skull=burst&&!mist&&i%4===0;
    const position=new T.Vector3(...event.point).add(new T.Vector3((Math.random()-.5)*.09,(Math.random()-.5)*.09,(Math.random()-.5)*.09)),rotation=new T.Euler(Math.random()*6,Math.random()*6,Math.random()*6);
@@ -60,10 +74,10 @@ export function createHitEffects(scene:T.Scene){
    const total=mist?.75:burst?1.6:.65;
 
    particles.push({position,rotation,scale:new T.Vector3(scale,scale,scale),velocity,spin:new T.Vector3((Math.random()-.5)*14,(Math.random()-.5)*12,(Math.random()-.5)*14),life:total,total,slowRemaining:burst&&slowMotion?.85:0,floor:(floorY??event.point[1]-1.65)+.018,size:scale,mist,fragment:skull,landed:false});
-  }sync();
+  }sync(first);
  }
  function update(dt:number){
-  if(!Number.isFinite(dt)||dt<=0)return;
+  if(!particles.length||!Number.isFinite(dt)||dt<=0)return;
   for(let i=particles.length-1;i>=0;i--){
    const p=particles[i],step=headshotStep(dt,p.slowRemaining);
    p.slowRemaining=Math.max(0,p.slowRemaining-dt);p.life-=step;
