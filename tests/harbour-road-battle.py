@@ -21,6 +21,8 @@ DRAW_PROFILE = os.environ.get('BATTLE_DRAW_PROFILE') == '1'
 GPU_PROFILE = os.environ.get('BATTLE_GPU_PROFILE') == '1'
 FRAME_PHASES = os.environ.get('BATTLE_FRAME_PHASES') == '1'
 NEAR_SPAWN = os.environ.get('HARBOUR_NEAR_SPAWN') == '1'
+SEED = os.environ.get('BATTLE_SEED')
+assert SEED is None or PRODUCTION and re.fullmatch(r'[0-9]{1,10}',SEED) and int(SEED)<=0xffffffff, 'BATTLE_SEED requires an unsigned 32-bit integer in the production harness'
 assert not DRAW_PROFILE or PRODUCTION, 'BATTLE_DRAW_PROFILE requires the separate production harness'
 assert not GPU_PROFILE or PRODUCTION, 'BATTLE_GPU_PROFILE requires the separate production harness'
 assert not FRAME_PHASES or PRODUCTION, 'BATTLE_FRAME_PHASES requires the separate production harness'
@@ -358,6 +360,8 @@ with sync_playwright() as pw:
         quality_suffix+='-'+channel
     if NATIVE_TURNS:
         quality_suffix+='-browser-pointer'
+    if SEED is not None:
+        quality_suffix+=f'-seed{int(SEED)}'
     page = browser.new_page(viewport=dict(width=width,height=height), device_scale_factor=1)
     if NATIVE_TURNS:
         pointer=page.context.new_cdp_session(page)
@@ -677,6 +681,8 @@ with sync_playwright() as pw:
             (OUT/f'{map_id}-profile-timing.json').write_text(json.dumps(dict(start=profile_start,tasks=turn['longTasks'])))
             profiler.detach()
         result=dict(bots=bots,width=width,height=height,quality=quality,difficulty=difficulty,renderer=renderer_info,entry=entry,turn=turn)
+        if SEED is not None:
+            result['seed']=int(SEED)
         suffix='-combat' if COMBAT_MOVEMENT else ''
         report=OUT/f'{map_id}-{bots}-bots-{width}x{height}{suffix}{quality_suffix}.json'
         report.write_text(json.dumps(result,indent=2))
@@ -713,6 +719,8 @@ with sync_playwright() as pw:
     report=dict(bots=bots,width=width,height=height,quality=quality,difficulty=difficulty,renderer=renderer_info,
                 condition=condition or 'standard',startArea='behind Diner' if NEAR_SPAWN else 'regular',
                 runId=str(run_id),complete=False,results=results,routeFailures=[])
+    if SEED is not None:
+        report['seed']=int(SEED)
     def record_failure(stage,attempt,event):
         # Persist before any recovery, including the final exhausted attempt.
         report['routeFailures'].append(dict(stage=stage,attempt=attempt,error=type(event).__name__,
@@ -721,12 +729,13 @@ with sync_playwright() as pw:
     write_report(checkpoint,report)
     print('Harbour Road checkpoint:',checkpoint,flush=True)
     if not NEAR_SPAWN:
-        page.evaluate('window.turnStarted=performance.now();harbourQA.scene.profileFrames(12000)')
+        page.evaluate('window.turnStarted=performance.now();harbourQA.scene.profileFrames(3600)')
     try:
         approach(record_failure,(shops[0][2],-23))
     finally:
         if not NEAR_SPAWN and not page.is_closed() and page.evaluate('window.harbourQA?.scene?.frameProfile().length>0'):
-            report['approach']=read_profile(page,'Regular spawn approach including route changes and respawn waits')
+            sample=read_profile(page,'Regular spawn approach including route changes and respawn waits')
+            report['approach']={**sample,'reachedFrameLimit':sample['frames']==3600}
             write_report(checkpoint,report)
     road_profiler=None
     if os.environ.get('BATTLE_CPU_PROFILE')=='1':

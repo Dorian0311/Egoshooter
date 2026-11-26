@@ -7,6 +7,7 @@
 // Set BATTLE_GPU_PROFILE=1 to sample raw GPU frame times, including on High and Ultra.
 // Set BATTLE_FRAME_PHASES=1 to attribute long CPU frames to work inside the game callback.
 // HARBOUR_NEAR_SPAWN=1 starts the tester behind the Diner on the isolated server.
+// BATTLE_SEED sets the isolated server's starting random sequence for comparable runs.
 // Bots, difficulty, damage and movement retain their normal game rules.
 import assert from 'node:assert/strict';
 import {spawn} from 'node:child_process';
@@ -20,6 +21,8 @@ import {setTimeout as delay} from 'node:timers/promises';
 import {build} from 'vite';
 import {createTunnelGateway} from '../server/tunnelGateway.ts';
 
+const seed=process.env.BATTLE_SEED;
+assert(seed===undefined||/^\d{1,10}$/.test(seed)&&Number(seed)<=0xffffffff,'BATTLE_SEED must be an unsigned 32-bit integer');
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const tempRoot = resolve(tmpdir());
 const scratch = await mkdtemp(join(tempRoot, 'harbour-release-'));
@@ -124,19 +127,28 @@ try {
   await new Promise(done=>publicPortReservation.close(done));
   await new Promise((done,fail)=>gateway.server.once('error',fail).listen(publicPort,'127.0.0.1',done));
   await new Promise(done=>reservation.close(done));
-  const serverEntry = process.env.HARBOUR_NEAR_SPAWN === '1' ? ['--input-type=module','--eval',`
+  const serverEntry = process.env.HARBOUR_NEAR_SPAWN === '1'||seed!==undefined ? ['--input-type=module','--eval',`
     import {Game} from './shared/game.ts';
     import {getWorld,ground} from './shared/world.ts';
-    const tick=Game.prototype.tick;
-    Game.prototype.tick=function(now){
-      const player=this.state.players.find(p=>p.kind==='human');
-      const previousLife=player?.life;
-      tick.call(this,now);
-      if(this.state.phase==='playing' && this.state.mapId==='storm' && player?.hp>0 && player.life!==previousLife){
-        const x=60,z=-41;
-        Object.assign(player,{x,y:ground(x,z,getWorld('storm')),z});
-      }
-    };
+    if(process.env.BATTLE_SEED!==undefined){
+      let state=Number(process.env.BATTLE_SEED);
+      Math.random=()=>{
+        state=(Math.imul(1664525,state)+1013904223)>>>0;
+        return state/4294967296;
+      };
+    }
+    if(process.env.HARBOUR_NEAR_SPAWN==='1'){
+      const tick=Game.prototype.tick;
+      Game.prototype.tick=function(now){
+        const player=this.state.players.find(p=>p.kind==='human');
+        const previousLife=player?.life;
+        tick.call(this,now);
+        if(this.state.phase==='playing' && this.state.mapId==='storm' && player?.hp>0 && player.life!==previousLife){
+          const x=60,z=-41;
+          Object.assign(player,{x,y:ground(x,z,getWorld('storm')),z});
+        }
+      };
+    }
     await import('./server/index.ts');
   `] : ['server/index.ts'];
   const server = child(process.execPath,['--import','tsx',...serverEntry],{env:{...process.env,
