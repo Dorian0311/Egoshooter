@@ -3,6 +3,7 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import {WorldRenderPass} from './worldRenderPass';
 import {installPointLightCutoff} from './pointLightCutoff';
+import {installDirectionalShadowCutoff} from './directionalShadowCutoff';
 import { WorldOcclusionPass } from './worldOcclusionPass';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js';
@@ -29,6 +30,7 @@ class WeaponPass extends RenderPass {
 export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
   camera: T.PerspectiveCamera, sun: T.DirectionalLight, initialQuality: GraphicsQuality) {
   installPointLightCutoff();
+  installDirectionalShadowCutoff();
   const composer = new EffectComposer(renderer);
   renderer.info.autoReset = false;
   // RenderPass updates shadows once; the following SSAO normal pass reuses them.

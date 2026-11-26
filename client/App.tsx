@@ -211,7 +211,10 @@ export default function App({
         const s = mergeSnapshot(last.current, packet);
         if (!s) return;
         if(s.version!==VERSION){setError('Spielversion geändert. Bitte die Seite neu laden.');void r.leave();return;}
-        recorder.current.push(s,access.playerId);setClips([...recorder.current.clips]);
+        const previousClips=recorder.current.clips;
+        // Network snapshots are replaced on merge. Prediction writes to a separate local player.
+        recorder.current.push(s,access.playerId,'immutable');
+        if(recorder.current.clips!==previousClips)setClips(recorder.current.clips);
         if(s.phase==='finished'&&savedMatch.current!==s.matchId){saveBest(s,access.playerId);savedMatch.current=s.matchId;}
         const freshEvents=s.events.filter(e=>!e.eventId||!uiEvents.current.has(e.eventId));for(const e of freshEvents)if(e.eventId)uiEvents.current.add(e.eventId);if(uiEvents.current.size>2048)uiEvents.current=new Set([...uiEvents.current].slice(-1024));
 

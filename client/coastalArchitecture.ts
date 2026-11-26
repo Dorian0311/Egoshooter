@@ -6,12 +6,19 @@ import type {Building} from '../shared/world';
 export function createCoastalArchitecture(buildings:readonly Building[]){
   const group=new T.Group();group.name='Coastal depot architecture';
   const material=new T.MeshStandardMaterial({vertexColors:true,roughness:.77,metalness:.17});
+  const shutterMaterial=material.clone();
+  if(typeof document!=='undefined'){
+    shutterMaterial.map=new T.TextureLoader().load('/shooter/environment/island-loading-shutters.webp');
+    shutterMaterial.map.colorSpace=T.SRGBColorSpace;
+    shutterMaterial.map.anisotropy=4;
+  }
   const matrix=new T.Matrix4(),rotation=new T.Quaternion(),angles=new T.Euler();
   const position=new T.Vector3(),unit=new T.Vector3(1,1,1),color=new T.Color();
   const sheet='#667878',edge='#b0b5a5',soot='#485657',glass='#789a9a',rust='#886b50';
   for(const [index,b] of buildings.entries()){
     const pieces:T.BufferGeometry[]=[];
     const cap=b.upper?8.3:4.3,halfW=b.w/2,halfD=b.d/2;
+    const loadingBay=b.upper&&b.name.startsWith('KÜSTENWACHE');
     const enamel=['#4e6f65','#597279','#7e7861','#676e64'][index%4];
     function piece(g:T.BufferGeometry,x:number,y:number,z:number,tint:string,rotX=0,rotZ=0){
       rotation.setFromEuler(angles.set(rotX,0,rotZ));
@@ -24,6 +31,10 @@ export function createCoastalArchitecture(buildings:readonly Building[]){
         rgb[i*3]=color.r*patina;rgb[i*3+1]=color.g*patina;rgb[i*3+2]=color.b*patina;
       }
       g.setAttribute('color',new T.BufferAttribute(rgb,3));pieces.push(g);
+      if(loadingBay){
+        const uv=g.getAttribute('uv');
+        for(let i=0;i<uv.count;i++)uv.setXY(i,.978,.5);
+      }
     }
     function box(x:number,y:number,z:number,w:number,h:number,d:number,tint:string,rotX=0,rotZ=0){
       piece(new T.BoxGeometry(w,h,d),x,y,z,tint,rotX,rotZ);
@@ -54,6 +65,23 @@ export function createCoastalArchitecture(buildings:readonly Building[]){
       box(0,3.99,frontZ,4.85,.105,1.18,enamel,side*.055);
       box(0,3.92,frontZ+side*.59,4.88,.16,.065,edge);
       for(const dx of [-2.03,2.03])box(dx,3.72,frontZ,.065,.068,1.13,soot,-side*.35);
+      if(loadingBay){
+        // The upper central bay is masonry; the playable openings below and on
+        // the side elevations stay clear of the shutter and runner assembly.
+        const shutter=new T.PlaneGeometry(3.56,3.19);
+        if(side<0)shutter.rotateY(Math.PI);
+        piece(shutter,0,6.10,side*(halfD+.265),'#faf9f1');
+        const uv=shutter.getAttribute('uv'),x=(side>0?8:496);
+        uv.setXY(0,(x+1)/1024,491/512);uv.setXY(1,(x+471)/1024,491/512);
+        uv.setXY(2,(x+1)/1024,21/512);uv.setXY(3,(x+471)/1024,21/512);
+        for(const xx of [-1.81,1.81]){
+          box(xx,6.10,side*(halfD+.30),.16,3.32,.17,soot);
+          box(xx+Math.sign(xx)*.045,6.10,side*(halfD+.397),.045,3.32,.025,edge);
+        }
+        box(0,7.72,side*(halfD+.40),3.84,.26,.36,enamel);
+        box(0,7.82,side*(halfD+.49),3.91,.06,.23,edge);
+        box(0,4.49,side*(halfD+.31),3.84,.12,.22,soot);
+      }
     }
     // Raised north-light monitor: opaque glass and metal panels keep the pass count fixed.
     const roofSpan=b.w*(index%3===0?.57:.44),z0=index%2?1.35:-1.35;
@@ -94,7 +122,7 @@ export function createCoastalArchitecture(buildings:readonly Building[]){
     pieces.forEach(g=>g.dispose());
     if(!geometry)continue;
     geometry.computeBoundingSphere();
-    const detail=new T.Mesh(geometry,material);detail.receiveShadow=true;detail.matrixAutoUpdate=false;
+    const detail=new T.Mesh(geometry,loadingBay?shutterMaterial:material);detail.receiveShadow=true;detail.matrixAutoUpdate=false;
     detail.position.set(b.x,0,b.z);detail.updateMatrix();group.add(detail);
   }
   return group;

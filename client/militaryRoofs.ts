@@ -13,8 +13,6 @@ export function addMilitaryRoofs(scene:T.Scene,buildings:Building[],get:(color:s
   for(const side of [-1,1]){
    box(b.x,top+.24,b.z+side*b.d/2,b.w+.45,.48,.26,concrete);
    box(b.x+side*b.w/2,top+.24,b.z,.26,.48,b.d,concrete);
-   box(b.x,3.12,b.z+side*(b.d/2+.95),4.8,.16,1.85,paint);
-   for(const x of [-2.25,2.25])box(b.x+x,2.75,b.z+side*(b.d/2+.65),.08,.8,.08,steel);
    // Narrow band under the roof and exposed downpipes reinforce the modern silhouette.
    box(b.x,top-.25,b.z+side*(b.d/2+.27),b.w,.16,.08,paint);
   }

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { parseGraphicsQuality, renderPixelRatio,ResolutionGovernor } from '../client/graphicsSettings.ts';
 import {addMilitaryRoofs} from '../client/militaryRoofs';
+import {createCoastalArchitecture} from '../client/coastalArchitecture';
 import * as T from 'three';
 import {createMuzzleEffects} from '../client/muzzleEffects';
 import {createBlastEffects} from '../client/blastEffects';
@@ -90,6 +91,27 @@ test('alpine ridges face upward and meet the pass without sky gaps', () => {
     probe.ray.origin.set(facing.x, 120, facing.y);
     assert.ok(probe.intersectObject(mountain).length > 0, `Gap at ${i} of 64 rim angles`);
   }
+});
+
+test('coastal depot shutters occupy only the solid upper centre bay', () => {
+  const world = getWorld('storm');
+  const depot = world.buildings.find(b => b.name.startsWith('KÜSTENWACHE'))!;
+  const architecture = createCoastalArchitecture([depot]);
+  assert.equal(architecture.children.length, 1);
+  const mesh = architecture.children[0] as T.Mesh<T.BufferGeometry, T.Material>;
+  const uv = mesh.geometry.getAttribute('uv');
+  const position = mesh.geometry.getAttribute('position');
+  const shutterFaces = [];
+  for (let i = 0; i < uv.count; i++) {
+    if (uv.getX(i) > .96) continue;
+    shutterFaces.push(i);
+    assert.ok(Math.abs(position.getX(i)) < 2);
+    assert.ok(position.getY(i) > 4.4 && position.getY(i) < 7.8);
+    assert.ok(Math.abs(position.getZ(i)) > depot.d / 2 + .225);
+  }
+  assert.equal(shutterFaces.length, 8);
+  mesh.geometry.dispose();
+  mesh.material.dispose();
 });
 
 test('river stays below the playable bridge and advances its animation uniform', () => {

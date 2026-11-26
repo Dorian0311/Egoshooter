@@ -12,9 +12,9 @@ export function freightYard(world:World){
   // Original cargo tiles occupy the lower left quarter; the tower panels wrap once around each drum.
   const cargoTiles=[[.765,.025,.20,.10],[.006,.515,.238,.472],[.256,.515,.238,.472],
     [.506,.515,.488,.472],[.006,.135,.238,.347],[.256,.135,.238,.347],[.506,.135,.238,.347]];
-  const surfaceTiles=[[3,3,1530,506],[1027,515,1018,238],[1539,3,506,250],[1539,259,506,250],[1027,759,250,260],[1281,757,766,266]];
+  const surfaceTiles=[[3,3,1530,506],[1027,515,1018,238],[1539,3,506,250],[1539,259,506,250],[1027,759,250,260],[1281,757,766,266],[769,769,250,170]];
   const uvRect=[...cargoTiles.map(tile=>tile.map(n=>n*.5)),...surfaceTiles.map(([x,y,w,h])=>[x/2048,1-(y+h)/1024,w/2048,h/1024])];
-  const masonry=7,ironPlate=8,stonework=9,slate=10,boardDoor=11,postalBrick=12;
+  const masonry=7,ironPlate=8,stonework=9,slate=10,boardDoor=11,postalBrick=12,cinemaMosaic=13;
   let ox=0,oz=0;
   function add(g:T.BufferGeometry,x:number,y:number,z:number,c:string,tile=0,rx=0,ry=0,rz=0){
     g.rotateX(rx);g.rotateY(ry);g.rotateZ(rz);g.translate(ox+x,y,oz+z);
@@ -113,6 +113,26 @@ export function freightYard(world:World){
     box(hx,3.13,hz,.16,.35,.16,metal);cylinder(hx,2.93,hz,.21,.21,.14,rim,Math.PI/2);
     for(let i=0;i<8;i++)add(new T.TorusGeometry(.035,.012,4,8),hx-.08,2.74-i*.049,hz,metal,0,0,i%2*.98);
     add(new T.TorusGeometry(.067,.020,5,10,Math.PI*1.55),hx-.065,2.30,hz,rim);
+  }
+  const cinema=world.buildings.find(b=>b.name==='UNION-LICHTSPIELE');
+  if(cinema){
+    ox=cinema.x;oz=cinema.z+cinema.d/2+2.57;
+    // Terrazzo marquee set flush in the flagstone runner. Its sunburst and clipped
+    // corners echo the fanlight above the door; the stone joints continue around it.
+    add(new T.PlaneGeometry(2.62,1.78),0,.058,0,'#fff8e8',cinemaMosaic,-Math.PI/2);
+    for(const side of [-1,1]){
+      for(let ray=0;ray<5;ray++){
+        const x0=side*1.34,z0=(ray-2)*.132,x1=side*(2.78-Math.abs(ray-2)*.11),z1=(ray-2)*.46;
+        const dx=x1-x0,dz=z1-z0;
+        add(new T.PlaneGeometry(Math.hypot(dx,dz),ray===2?.083:.052),(x0+x1)/2,.057,(z0+z1)/2,
+          ray%2?'#ba9868':'#526e62',0,-Math.PI/2,-Math.atan2(dz,dx));
+      }
+      for(const line of [-1,1]){
+        const z=line*1.08;
+        add(new T.PlaneGeometry(1.14,.045),side*1.93,.057,z,'#b2976c',0,-Math.PI/2);
+        add(new T.PlaneGeometry(.91,.054),side*1.76,.057,z+line*.14,'#5b7467',0,-Math.PI/2);
+      }
+    }
   }
   const postOffice=world.buildings.find(b=>b.name==='FELDPOST');
   if(postOffice){

@@ -50,7 +50,36 @@ def verify_life(hp, life, expected, site, position=None):
 def recover_life(page):
     page.wait_for_function('harbourQA.player.hp>0',timeout=20000)
     if not page.evaluate('!!document.pointerLockElement'):
+        activate_controls(page)
+
+
+def activate_controls(page):
+    page.bring_to_front()
+    for attempt in range(2):
         page.locator('.city-canvas').click(force=True)
+        page.wait_for_timeout(300)
+        yaw=page.evaluate('harbourQA.player.yaw')
+        mouse(page,28)
+        try:
+            page.wait_for_function("""before=>{
+                const delta=harbourQA.player.yaw-before;
+                return Math.abs(Math.atan2(Math.sin(delta),Math.cos(delta)))>.025;
+            }""",arg=yaw,timeout=3500)
+        except PlaywrightTimeout:
+            if attempt==0:
+                continue
+            focus=page.evaluate("""()=>({
+                focused:document.hasFocus(),locked:!!document.pointerLockElement,
+                canvasFocused:document.activeElement?.matches('.city-canvas'),
+                phase:harbourQA.state.phase,alive:harbourQA.player.hp>0
+            })""")
+            raise AssertionError(('Game controls did not activate',focus)) from None
+        mouse(page,-28)
+        page.wait_for_function("""before=>{
+            const delta=harbourQA.player.yaw-before;
+            return Math.abs(Math.atan2(Math.sin(delta),Math.cos(delta)))<.02;
+        }""",arg=yaw,timeout=3500)
+        return
 
 
 def walk(page, x, z, *, life=None):
@@ -338,8 +367,7 @@ with sync_playwright() as pw:
     print(renderer_info,flush=True)
     bots = page.evaluate("harbourQA.state.players.filter(p=>p.kind==='bot').length")
     assert bots == (enemies or 7), bots
-    page.locator('canvas').last.click(force=True)
-    page.wait_for_timeout(300)
+    activate_controls(page)
     assert page.evaluate('harbourQA.state.mapId') == map_id
     print(map_id,'battle started with',bots,'bots',flush=True)
     exposed_cells=set()
@@ -449,7 +477,7 @@ with sync_playwright() as pw:
             print('Drehserie durch Gefechtstod unterbrochen:',event,flush=True)
             page.wait_for_function('harbourQA.player.hp>0',timeout=20000)
             if not page.evaluate('!!document.pointerLockElement'):
-                page.locator('.city-canvas').click(force=True)
+                activate_controls(page)
             if map_id=='storm' and COMBAT_MOVEMENT:
                 approach()
             walk(page,sx+4,sz)
