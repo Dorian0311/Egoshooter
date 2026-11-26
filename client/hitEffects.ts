@@ -32,9 +32,9 @@ export function createHitEffects(scene:T.Scene){
  // Three bounded GPU batches replace up to 256 individual render objects.
  const droplets=new T.InstancedMesh(geometry,blood,256),skulls=new T.InstancedMesh(skullGeometry,fragment,256);
  droplets.name='hit-droplet';skulls.name='headshot-fragment';
- for(const mesh of [droplets,skulls]){mesh.instanceMatrix.setUsage(T.DynamicDrawUsage);mesh.frustumCulled=false;mesh.visible=false;scene.add(mesh);}
+ for(const mesh of [droplets,skulls]){mesh.count=0;mesh.instanceMatrix.setUsage(T.DynamicDrawUsage);mesh.frustumCulled=false;mesh.visible=false;scene.add(mesh);}
  const mistGeometry=new T.BufferGeometry(),mistPositions=new T.Float32BufferAttribute(new Float32Array(256*3),3),mistSizes=new T.Float32BufferAttribute(new Float32Array(256),1),mistOpacity=new T.Float32BufferAttribute(new Float32Array(256),1);
- mistGeometry.setAttribute('position',mistPositions);mistGeometry.setAttribute('particleSize',mistSizes);mistGeometry.setAttribute('opacity',mistOpacity);
+ mistGeometry.setAttribute('position',mistPositions);mistGeometry.setAttribute('particleSize',mistSizes);mistGeometry.setAttribute('opacity',mistOpacity);mistGeometry.setDrawRange(0,0);
  const mistMaterial=new T.ShaderMaterial({transparent:true,depthWrite:false,vertexShader:'attribute float particleSize;attribute float opacity;varying float alpha;void main(){vec4 p=modelViewMatrix*vec4(position,1.0);gl_Position=projectionMatrix*p;gl_PointSize=clamp(particleSize*300.0/max(.1,-p.z),1.0,96.0);alpha=opacity;}',fragmentShader:'varying float alpha;void main(){float r=length(gl_PointCoord*2.0-1.0);gl_FragColor=vec4(.55,.025,.08,alpha*pow(max(0.0,1.0-r),2.0));}'});
  const mist=new T.Points(mistGeometry,mistMaterial);mist.name='headshot-mist';mist.frustumCulled=false;mist.visible=false;scene.add(mist);
  const matrix=new T.Object3D();
@@ -101,5 +101,5 @@ export function createHitEffects(scene:T.Scene){
   }sync();
  }
  function dispose(){while(particles.length)remove(0);for(const mesh of [droplets,skulls]){mesh.removeFromParent();mesh.dispose();}mist.removeFromParent();mistGeometry.dispose();mistMaterial.dispose();geometry.dispose();skullGeometry.dispose();blood.dispose();fragment.dispose();}
- return {emit,update,dispose,stats:()=>({particles:particles.length,drawCalls:Number(droplets.visible)+Number(skulls.visible)+Number(mist.visible)}),clear(){particles.length=0;sync();}};
+ return {batches:[droplets,skulls,mist] as const,emit,update,dispose,stats:()=>({particles:particles.length,drawCalls:Number(droplets.visible)+Number(skulls.visible)+Number(mist.visible)}),clear(){particles.length=0;sync();}};
 }

@@ -123,6 +123,15 @@ test('alpine ridges face upward and meet the pass without sky gaps', () => {
     probe.ray.origin.set(facing.x, 120, facing.y);
     assert.ok(probe.intersectObject(mountain).length > 0, `Gap at ${i} of 64 rim angles`);
   }
+  const trees=scene.getObjectByName('Subalpine fir stands') as T.InstancedMesh;
+  const matrix=new T.Matrix4(),trunk=new T.Vector3();
+  for(let i=0;i<trees.count;i++){
+    trees.getMatrixAt(i,matrix);trunk.setFromMatrixPosition(matrix);
+    probe.ray.origin.set(trunk.x,120,trunk.z);
+    const ridge=probe.intersectObject(mountain,false)[0]?.point.y??0;
+    const expected=Math.max(ridge,Math.max(Math.abs(trunk.x),Math.abs(trunk.z))<=88.5?.02:-Infinity)-.06;
+    assert.ok(Math.abs(trunk.y-expected)<.00002,`Fir ${i} must meet the full mountain mesh`);
+  }
 });
 
 test('coastal depot shutters occupy only the solid upper centre bay', () => {

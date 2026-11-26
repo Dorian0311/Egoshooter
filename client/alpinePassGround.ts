@@ -69,6 +69,23 @@ function snowControl(world:World){
       dab(px+(i%2?.18:-.18),pz,.11,.22,i%2?-.14:.14,'#003c49');
     }
   }
+  const fort=world.buildings.find(b=>b.name==='ROCHE-LA-CROIX');
+  if(fort){
+    // Two broken tongues of wind-scoured grit below the crests. The existing
+    // green mask reveals the same local stone as the roadside verges.
+    for(const side of [-1,1]){
+      const front=fort.z+fort.d/2;
+      for(let i=0;i<38;i++){
+        const t=i/37,x=3.7+t*5.8;
+        const z=front+1.47+.26*Math.sin(x*1.8+side)+.16*(rnd()-.5);
+        if(Math.sin(t*16+side)>-.26)dab(fort.x+side*x,z,.12+rnd()*.23,.06+rnd()*.10,side*.28,'#004526');
+      }
+      for(let i=0;i<26;i++){
+        const z=front-.20-i*.18,x=fort.w/2+.75+.19*Math.sin(i*.47+side);
+        dab(fort.x+side*x,z,.08+rnd()*.13,.10+rnd()*.18,-side*.20,'#003425');
+      }
+    }
+  }
   const map=new T.CanvasTexture(canvas);map.anisotropy=4;return map;
 }
 
@@ -76,6 +93,7 @@ export function alpinePassGround(world:World,snow:T.MeshStandardMaterial,road:T.
   const mask=snowControl(world),positions:number[]=[],uv:number[]=[],indices:number[]=[];
   const rows=[-88.5,-74,-60,-45,-30,-20,-14,-10.3,-8.9,-8.1,-7.45,-6.8,-6.1,-4.8,-2.4,0,2.4,4.8,6.1,6.8,7.45,8.1,8.9,10.3,14,20,30,45,60,74,88.5];
   const cols=72;
+  const fort=world.buildings.find(b=>b.name==='ROCHE-LA-CROIX');
   for(const [j,z] of rows.entries())for(let i=0;i<=cols;i++){
     const x=(i/cols-.5)*extent,side=Math.sign(z);
     const edge=7.66+.59*Math.sin(x*.18+side)+.37*Math.sin(x*.49-side);
@@ -83,10 +101,45 @@ export function alpinePassGround(world:World,snow:T.MeshStandardMaterial,road:T.
     const turnoff=Math.min(1,Math.abs(Math.abs(x)-48)/3.4,Math.abs(x-10.6)/3.4);
     const h=.019+bank*bank*(.105+.044*Math.sin(x*.37))*turnoff;
     positions.push(x,h,z);uv.push(x/4.2,z/4.2);
-    if(j&&i){const a=j*(cols+1)+i;indices.push(a-cols-2,a-1,a,a-cols-2,a,a-cols-1);}
+    const fortCell=fort&&z===-30&&Math.abs(x-extent/(2*cols))<12&&Math.abs(x-extent/(2*cols))>2.5;
+    if(j&&i&&!fortCell){const a=j*(cols+1)+i;indices.push(a-cols-2,a-1,a,a-cols-2,a,a-cols-1);}
+  }
+  if(fort){
+    // Replace the four flat ground cells on each flank. Their boundary vertices
+    // remain at the original grade; the centre aisle keeps its original triangles.
+    const front=fort.z+fort.d/2,wall=fort.w/2;
+    const fade=(d:number)=>Math.max(0,1-d*d)**2;
+    for(const side of [-1,1]){
+      const xs=[extent/cols,3.5,4.7,6.0,7.3,8.5,9.02,9.28,10.32,extent*5/cols];
+      const zs=[-45,-43.6,-41.7,-39.8,-38.35,-37.70,-37.22,-36.92,-36.42,-35.58,-30];
+      const base=positions.length/3;
+      for(const [j,z] of zs.entries())for(const [i,localX] of xs.entries()){
+        const x=fort.x+side*localX;
+        const frontCrest=front+.69+.11*Math.sin(localX*1.19+side);
+        const face=fade((localX-(side>0?6.60:6.12))/3.42)*fade((z-frontCrest)/(z>frontCrest?1.16:.87));
+        const edgeCrest=wall+.035+.10*Math.sin(z*1.23+side);
+        const flank=fade((z-front+1.74)/5.06)*fade(Math.max(0,z-front-.30)/1.44)*
+          fade((localX-edgeCrest)/(localX>edgeCrest?1.23:.85));
+        // Keep the tall crest against the battered cheek and the side masonry.
+        // The next transverse sample lies inside one player radius; beyond it
+        // only shallow windblown snow remains over the unchanged walking plane.
+        const taper=(gap:number)=>.16+.84*fade(Math.max(0,gap)/.26);
+        const cheekGap=Math.max(z-front-.79,localX-8.92);
+        const sideGap=Math.max(localX-wall,z-front);
+        const height=Math.max(face*(side>0?.74:.56)*taper(cheekGap),flank*(side>0?.53:.64)*taper(sideGap))*
+          (.86+.14*Math.cos(localX*.77+z*.83));
+        const rim=i===0||j===0||i===xs.length-1||j===zs.length-1;
+        positions.push(x,.019+(rim?0:height),z);uv.push(x/4.2,z/4.2);
+        if(i&&j){
+          const a=base+j*xs.length+i,b=a-xs.length-1;
+          if(side>0)indices.push(b,a-1,a,b,a,a-xs.length);
+          else indices.push(b,a,a-1,b,a-xs.length,a);
+        }
+      }
+    }
   }
   const geometry=new T.BufferGeometry();geometry.setAttribute('position',new T.Float32BufferAttribute(positions,3));geometry.setAttribute('uv',new T.Float32BufferAttribute(uv,2));geometry.setIndex(indices);geometry.computeVertexNormals();
-  const material=new T.MeshStandardMaterial({map:snow.map,normalMap:snow.normalMap,roughness:.93});
+  const material=new T.MeshStandardMaterial({map:snow.map,normalMap:snow.normalMap,roughness:.93,depthFunc:T.LessDepth});
   material.normalScale.setScalar(.58);
   material.onBeforeCompile=shader=>{
     Object.assign(shader.uniforms,{passControl:{value:mask},passSetts:{value:road.map},passStone:{value:rock.map},passSettsNormal:{value:road.normalMap}});
@@ -108,5 +161,9 @@ export function alpinePassGround(world:World,snow:T.MeshStandardMaterial,road:T.
     shader.fragmentShader=shader.fragmentShader.replace('#include <roughnessmap_fragment>','float roughnessFactor=roughness-packed*.23+gravel*.035;');
   };
   material.addEventListener('dispose',()=>mask.dispose());
-  const mesh=new T.Mesh(geometry,material);mesh.receiveShadow=true;mesh.name='Alpine pass – ploughed road and barracks approaches';return mesh;
+  const mesh=new T.Mesh(geometry,material);mesh.receiveShadow=true;mesh.name='Alpine pass – ploughed road and barracks approaches';
+  // Let opaque buildings populate the depth buffer first. Equal-depth edging
+  // and pavement retain priority over the ground drawn underneath them.
+  mesh.renderOrder=1;
+  return mesh;
 }

@@ -747,7 +747,7 @@ export function createScene(
       environmentUpgrade.update(camera.position,'high');
       // Submit the idle effect batches during the offscreen warmup. Their zero
       // instance counts keep the draw empty while Three prepares program state.
-      const idleEffects=muzzleEffects.group.children.filter(effect=>!effect.visible);
+      const idleEffects=[...muzzleEffects.group.children,...hitEffects.batches].filter(effect=>!effect.visible);
       for(const effect of idleEffects)effect.visible=true;
       try{graphics.warmupWorldDraw(roots);}
       finally{

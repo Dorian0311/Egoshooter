@@ -181,17 +181,36 @@ export function addAlpineBackdrop(scene:T.Scene,rock?:T.Texture,snow?:T.Texture)
   const trees=new T.InstancedMesh(firGeometry(),new T.MeshStandardMaterial({
     map:canopy,color:canopy?'#ffffff':'#415b4b',alphaTest:.27,roughness:1,
   }),120);
-  const object=new T.Object3D(),groundProbe=new T.Raycaster(new T.Vector3(),new T.Vector3(0,-1,0));
-  const groundHits:T.Intersection[]=[];
+  const object=new T.Object3D(),groundRay=new T.Ray(new T.Vector3(),new T.Vector3(0,-1,0));
+  const vertices=geo.getAttribute('position'),triangles=geo.getIndex()!;
+  const v0=new T.Vector3(),v1=new T.Vector3(),v2=new T.Vector3(),hit=new T.Vector3();
+  function ridgeAt(x:number,z:number){
+    const sector=Math.floor(T.MathUtils.euclideanModulo(Math.atan2(z,x),tau)*segments/tau);
+    groundRay.origin.set(x,120,z);
+    let highest=-Infinity;
+    // Each indexed quad stays inside its angular sector. Include both neighbours
+    // for Float32 rounding on shared edges and wrap across the duplicated seam.
+    for(let offset=-1;offset<=1;offset++){
+      const column=(sector+offset+segments)%segments;
+      for(let row=0;row<=rings;row++){
+        const first=(row*segments+column)*6;
+        for(let i=first;i<first+6;i+=3){
+          v0.fromBufferAttribute(vertices,triangles.getX(i));
+          v1.fromBufferAttribute(vertices,triangles.getX(i+1));
+          v2.fromBufferAttribute(vertices,triangles.getX(i+2));
+          if(groundRay.intersectTriangle(v0,v1,v2,true,hit))highest=Math.max(highest,hit.y);
+        }
+      }
+    }
+    return highest===-Infinity?0:highest;
+  }
   for(let i=0;i<trees.count;i++){
     const cluster=Math.floor(i/5),a=cluster*2.39996+Math.sin(i*3.5)*.080;
     const border=75/Math.max(Math.abs(Math.cos(a)),Math.abs(Math.sin(a)));
     const r=border+11+(Math.sin(i*1.77)+1)*6;
     const h=4+1.9*(1+Math.sin(i*11.2));
     const x=r*Math.cos(a),z=r*Math.sin(a);
-    groundProbe.ray.origin.set(x,120,z);
-    groundHits.length=0;groundProbe.intersectObject(mountain,false,groundHits);
-    const ridge=groundHits[0]?.point.y??0;
+    const ridge=ridgeAt(x,z);
     const y=Math.max(ridge,Math.max(Math.abs(x),Math.abs(z))<=88.5?.02:-Infinity);
     object.position.set(x,y-.06,z);
     object.rotation.y=i*.83;object.scale.set(h*.90,h,h*.90);object.updateMatrix();trees.setMatrixAt(i,object.matrix);

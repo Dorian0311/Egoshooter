@@ -29,6 +29,7 @@ test('lethal headshot sprays away from the shooter and debris stays above an ele
 
 test('ordinary hits stay small and fresh headshots survive the multiplayer particle cap',()=>{
  const scene=new T.Scene(),effects=createHitEffects(scene);
+ assert.deepEqual(effects.batches.map(batch=>batch instanceof T.InstancedMesh?batch.count:batch.geometry.drawRange.count),[0,0,0]);
  effects.emit({type:'kill',id:'a',hitZone:'body',point:[0,1,0]});assert.equal(effects.stats().particles,0);
  effects.emit({type:'hit',id:'a',hitZone:'body',point:[0,1,0]});assert.equal(effects.stats().particles,16);
  for(let i=0;i<20;i++)effects.emit({type:'kill',id:'a',hitZone:'head',point:[i,1.7,0]});
