@@ -41,6 +41,8 @@ export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
   ao.maxDistance = .025;
   const bloom = new UnrealBloomPass(new T.Vector2(1, 1), .075, .3, 1.65);
   const smaa = new SMAAPass(1, 1);
+  // SMAA reads only red and green edge flags. RG16F preserves their filtered values.
+  smaa.edgesRT.texture.format = T.RGFormat;
   const fxaa=new ShaderPass(fxaaOutputShader);fxaa.material.toneMapped=true;
   fxaa.setSize=(w:number,h:number)=>{fxaa.uniforms.resolution.value.set(1/Math.max(1,w),1/Math.max(1,h));};
   const output = new OutputPass();

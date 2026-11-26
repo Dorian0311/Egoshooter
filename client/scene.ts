@@ -326,6 +326,7 @@ export function createScene(
     }
   });
   hudResize.observe(canvas);hudResize.observe(ammoReadout,{box:'border-box'});
+  let projectedScopeWeapon:Player['weapon']|undefined;
   const scope=document.createElement('div');scope.className='sniper-scope';scope.hidden=true;
   scope.setAttribute('aria-hidden','true');canvas.parentElement?.append(scope);
   const ammoAnchor=new T.Vector3(),avatarPosition=new T.Vector3();
@@ -841,6 +842,9 @@ export function createScene(
       }
     }
     contactShadows.begin();
+    // Scope and FOV describe the same camera projection. A weapon replacement
+    // snapshot invalidates the previous optical scope before the new pose is sampled.
+    const opticalScope=projectedScopeWeapon!==undefined&&projectedScopeWeapon===local?.weapon;
     const detailHeight=actorLodHeight(quality,viewport.height,graphics.frameState.pixelRatio?renderer.domElement.height:0);
     let detailDrawsSkipped=0;
     for (const g of avatars.values()) {
@@ -857,7 +861,7 @@ export function createScene(
       const compact=quality==='auto'||quality==='performance';
       const drawActor=inView&&(!compact||!p.hp||!actorBehindWall(camera.position,g.position,opaqueWalls));
       if(g.userData.human)g.userData.human.group.visible=drawActor;
-      if(drawActor)detailDrawsSkipped+=g.userData.details?.update(actorDistance,detailHeight,camera.fov)??0;
+      if(drawActor)detailDrawsSkipped+=g.userData.details?.update(actorDistance,detailHeight,camera.fov,opticalScope)??0;
       if(drawActor&&p.hp>0&&p.grounded)contactShadows.actor(remote.x,remote.y,remote.z,p.crouching||isCrawling(p),remote.yaw);
       if(!p.hp&&!p.downedUntil&&p.diedAt){
         const pose=headshotPose(Math.max(0,((snapshot?.now??0)+t-receivedAt-p.diedAt)/1000),!!g.userData.deathSlowMotion);
@@ -940,6 +944,7 @@ export function createScene(
     const sniperAiming=weapon.visible&&zoom>1&&!special;
     const aimBlend=pose?.aimBlend??0;
     const scopeOpacity=sniperAiming?T.MathUtils.smoothstep(aimBlend,.66,.95):0;
+    projectedScopeWeapon=scopeOpacity>0?local?.weapon:undefined;
     const scopeHidden=scopeOpacity===0;
     if(scope.hidden!==scopeHidden)scope.hidden=scopeHidden;
     if(!scopeHidden&&scope.style.opacity!==String(scopeOpacity))scope.style.opacity=String(scopeOpacity);

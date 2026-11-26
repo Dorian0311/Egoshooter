@@ -48,9 +48,9 @@ export function createActorDetails(root:T.Group){
  });
  if(bodies.length)distanceBodies.set(root,bodies);
  return {
-  update(distance:number,height:number,fov:number){
+  update(distance:number,height:number,fov:number,opticalScope=false){
    const pixelsPerMetre=height/(2*Math.tan(T.MathUtils.degToRad(fov/2))*Math.max(.1,distance));
-   for(const body of bodies)body.update(pixelsPerMetre,fov<45);
+   for(const body of bodies)body.update(pixelsPerMetre,opticalScope);
    let hidden=0;
    for(const detail of details){
     const pixels=detail.radius*2*pixelsPerMetre;

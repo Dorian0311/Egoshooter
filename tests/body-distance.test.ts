@@ -36,8 +36,8 @@ test('standard distance body uses original skinned vertices and retreats on inju
   const vert=far.geometry.index!.getX(j);
   assert.ok(far.getVertexPosition(vert,p).distanceTo(full.getVertexPosition(vert,q))<1e-6);
  }
- const check=(distance:number,fov:number,expected:boolean)=>{
-  details.update(distance,720,fov);assert.equal(far.visible,expected);assert.equal(full.visible,!expected);
+ const check=(distance:number,fov:number,expected:boolean,scope=false)=>{
+  details.update(distance,720,fov,scope);assert.equal(far.visible,expected);assert.equal(full.visible,!expected);
  };
  function checkUploadRestores(expectedFar:boolean){
   assert.throws(()=>withBodyDistanceUpload([human.group],()=>{
@@ -55,7 +55,16 @@ test('standard distance body uses original skinned vertices and retreats on inju
  }
  check(8,80,false);checkUploadRestores(false);
  check(60,80,true);checkUploadRestores(true);
- check(60,20,false);check(60,80,true);
+ check(60,20,false,true);check(60,80,true);
+ // A low user FOV + iron sights must not keep subpixel detail on a faraway body.
+ // Change weapons at the same FOV to isolate the optical state from projection size.
+ for(const height of [1440,2160]){
+  for(const optical of [false,true,false]){
+   details.update(130,height,36,optical);
+   const active=[full,far].filter(body=>body.visible&&body.castShadow);
+   assert.deepEqual(active.map(body=>body===full?'full':'far'),[optical?'full':'far']);
+  }
+ }
  anatomy.setLost(2);check(60,80,false);checkUploadRestores(false);assert.ok(full.geometry.drawRange.count<full.geometry.index!.count);
  assert.ok(anatomy.detach('armL'));anatomy.setLost(0);check(60,80,true);check(8,80,false);
  let released=false;
