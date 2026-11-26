@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import * as T from 'three';
 import {Game,makePlayer} from '../shared/game';
 import {getWorld} from '../shared/world';
+import {terrainHeight} from '../shared/terrain';
 import {createOperationScene} from '../client/operationScene';
 import {createContactShadows} from '../client/contactShadows';
 import {createCharacterMotion,type MotionLibrary} from '../client/characterMotion';
@@ -35,6 +36,19 @@ test('grounding shadows have bounded instance storage and release their scene ob
  shadows.begin();shadows.actor(1,4,2);shadows.end();const matrix=new T.Matrix4();actors.getMatrixAt(0,matrix);
  assert.equal(actors.count,1);assert.ok(Math.abs(new T.Vector3().setFromMatrixPosition(matrix).y-4.018)<1e-6);
  shadows.dispose();assert.equal(scene.children.length,0);
+});
+
+test('foot contact shadows follow terrain but stay level on raised floors',()=>{
+ const scene=new T.Scene(),world=getWorld('storm'),shadow=createContactShadows(scene,world.buildings,world);
+ const x=-71,z=62,floor=terrainHeight(x,z,world);
+ shadow.begin();shadow.actor(x,floor,z,false,.8);shadow.actor(x,floor+3,z,false,.8);shadow.end();
+ const actor=scene.getObjectByName('actor-contact-shadows') as T.InstancedMesh;
+ const matrix=new T.Matrix4(),normal=new T.Vector3();
+ actor.getMatrixAt(0,matrix);normal.setFromMatrixColumn(matrix,1);
+ assert.ok(Math.hypot(normal.x,normal.z)>.004&&normal.y>.9);
+ actor.getMatrixAt(1,matrix);normal.setFromMatrixColumn(matrix,1);
+ assert.deepEqual(normal.toArray(),[0,1,0]);
+ shadow.dispose();
 });
 
 test('decorative facade instances can receive shadows without duplicating building shadow geometry',()=>{

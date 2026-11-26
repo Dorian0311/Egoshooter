@@ -1,23 +1,47 @@
 import * as T from 'three';
 import {mergeGeometries} from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
+const panels={
+  hull:[0,0,2048,256],boot:[0,256,2048,128],concrete:[0,384,1024,256],
+  container:[1024,384,512,256],cabin:[1536,384,512,256],hatch:[0,640,512,256],
+  deck:[512,640,512,256],metal:[1024,640,512,256],glass:[1536,640,256,256],
+  timber:[1792,640,256,256],coping:[0,896,1024,128],paint:[1024,896,1024,128],
+} as const;
+type Panel=keyof typeof panels;
+
 /** The working quay sits across the channel, beyond the Island movement boundary. */
 export function createIslandQuay(){
   const pieces:T.BufferGeometry[]=[];
   const paint=new T.Color(),matrix=new T.Matrix4(),rotation=new T.Quaternion(),up=new T.Vector3(0,1,0);
-  function finish(g:T.BufferGeometry,color:string){
+  function finish(g:T.BufferGeometry,color:string,panel:Panel='paint'){
     const pos=g.getAttribute('position'),norm=g.getAttribute('normal'),rgb=new Float32Array(pos.count*3);
+    const uv=new Float32Array(pos.count*2);
+    g.computeBoundingBox();
+    const bounds=g.boundingBox!,size=bounds.getSize(new T.Vector3());
     paint.set(color);
     for(let i=0;i<pos.count;i++){
       const wear=.94+.045*norm.getY(i)+.025*Math.sin(pos.getX(i)*.7+pos.getZ(i)*.9);
       rgb[i*3]=paint.r*wear;rgb[i*3+1]=paint.g*wear;rgb[i*3+2]=paint.b*wear;
+      // Bow-to-stern panel layout on the hull; cargo markings read correctly from either quay.
+      const x=(pos.getX(i)-bounds.min.x)/(size.x||1),y=(pos.getY(i)-bounds.min.y)/(size.y||1),z=(pos.getZ(i)-bounds.min.z)/(size.z||1);
+      const nx=norm.getX(i),ny=norm.getY(i),nz=norm.getZ(i);
+      let u=Math.abs(nx)>Math.abs(nz)?nx<0?z:1-z:nz>0?x:1-x,v=y,finish=panel;
+      if(panel==='hull'||panel==='boot')u=nx<0?z:1-z;
+      if(Math.abs(ny)>.72){
+        u=size.z>size.x?z:x;v=size.z>size.x?x:z;
+        if(panel==='hull')finish='deck';
+        else if(panel==='concrete')finish='coping';
+        else if(panel==='container')finish='metal';
+      }
+      const [left,top,width,height]=panels[finish];
+      uv[i*2]=(left+2+u*(width-4))/2048;uv[i*2+1]=1-(top+2+(1-v)*(height-4))/1024;
     }
-    g.setAttribute('color',new T.BufferAttribute(rgb,3));g.deleteAttribute('uv');
+    g.setAttribute('color',new T.BufferAttribute(rgb,3));g.setAttribute('uv',new T.BufferAttribute(uv,2));
     if(g.index){const flat=g.toNonIndexed();g.dispose();g=flat;}
     pieces.push(g);
   }
-  function box(x:number,y:number,z:number,w:number,h:number,d:number,color:string){
-    finish(new T.BoxGeometry(w,h,d).translate(x,y,z),color);
+  function box(x:number,y:number,z:number,w:number,h:number,d:number,color:string,panel:Panel='paint'){
+    finish(new T.BoxGeometry(w,h,d).translate(x,y,z),color,panel);
   }
   type Point=[number,number,number];
   function bar(from:Point,to:Point,width:number,color:string){
@@ -26,8 +50,8 @@ export function createIslandQuay(){
     matrix.compose(pose,rotation,new T.Vector3(width,axis.length(),width));
     finish(new T.BoxGeometry().applyMatrix4(matrix),color);
   }
-  box(144,-1.8,-30,12,3.6,68,'#777365');
-  for(let z=-60;z<5;z+=4.2)box(137.9,-1.8,z,.42,3.1,.42,'#463f37');
+  box(144,-1.8,-30,12,3.6,68,'#f2ece0','concrete');
+  for(let z=-60;z<5;z+=4.2)box(137.9,-1.8,z,.42,3.1,.42,'#615b50','timber');
   // Two rail-mounted portal cranes with open gantries and hanging hook blocks.
   for(const [z,height] of [[-39,19],[-8,15]]){
     const red='#965e46',dark='#454c49',x=144;
@@ -55,8 +79,8 @@ export function createIslandQuay(){
   for(let i=0;i<8;i++){
     const z=-55+i*6,x=147.5,y=i%3===1?2.7:0;
     const color=['#725950','#64766b','#8d7957','#657479'][i%4];
-    box(x,y+1.3,z,2.7,2.6,5.7,color);
-    if(y)box(x,1.3,z,2.7,2.6,5.7,'#646762');
+    box(x,y+1.3,z,2.7,2.6,5.7,color,'container');
+    if(y)box(x,1.3,z,2.7,2.6,5.7,'#81877e','container');
     for(let rib=0;rib<12;rib++)box(x-1.36,y+1.3,z-2.52+rib*.455,.08,2.35,.07,color);
   }
   // A coastal cargo vessel, broadside to the quay. Ring widths form the bow and stern.
@@ -75,13 +99,13 @@ export function createIslandQuay(){
     const midA:Point=[131,-.63,za-23],midB:Point=[131,-.63,zb-23];
     for(const v of (side===1?[a,midA,midB,a,midB,b]:[midB,midA,a,b,midB,a]))vertices.push(...v);
   }
-  hull.setAttribute('position',new T.Float32BufferAttribute(vertices,3));hull.computeVertexNormals();finish(hull,'#454f50');
+  hull.setAttribute('position',new T.Float32BufferAttribute(vertices,3));hull.computeVertexNormals();finish(hull,'#f1f4ed','hull');
   const waterline=new T.BufferGeometry();waterline.setAttribute('position',new T.Float32BufferAttribute(bootTop,3));
-  waterline.computeVertexNormals();finish(waterline,'#925e4c');
-  box(131,.64,-9,5.5,2.55,5.3,'#d1c7ad');box(131,2.54,-9,5.9,1.35,4.5,'#e0d5b8');
-  for(let i=0;i<5;i++)box(128.02,2.66,-10.62+i*.80,.10,.57,.64,'#354c51');
+  waterline.computeVertexNormals();finish(waterline,'#f5f0e9','boot');
+  box(131,.64,-9,5.5,2.55,5.3,'#e3d7b7','cabin');box(131,2.54,-9,5.9,1.35,4.5,'#ece2c9','cabin');
+  for(let i=0;i<5;i++)box(128.02,2.66,-10.62+i*.80,.10,.57,.64,'#4a686c','glass');
   box(132,4.55,-7.8,1.17,2.75,1.4,'#a76748');box(132,5.9,-7.8,1.22,.46,1.47,'#3f4947');
-  for(let i=0;i<3;i++)box(131,-.19,-35+i*6,5.1,.88,5.2,'#775f51');
+  for(let i=0;i<3;i++)box(131,-.19,-35+i*6,5.1,.88,5.2,'#a38b71','hatch');
   // The coastal freighter carries a short cargo derrick forward of its wheelhouse.
   // The mast, boom and topping lift remain legible against the sky from Harbour Road.
   const ochre='#ac9467',wire='#4e5653',enamel='#d7cfb4';
@@ -121,7 +145,8 @@ export function createIslandQuay(){
     bar([shipX,.035,shipZ],middle,.13,'#948871');bar(middle,[pierX,.56,pierZ],.13,'#948871');
   }
   const merged=mergeGeometries(pieces)!;pieces.forEach(g=>g.dispose());merged.computeBoundingSphere();
-  const mesh=new T.Mesh(merged,new T.MeshStandardMaterial({vertexColors:true,roughness:.84,metalness:.15}));
+  const atlas=new T.TextureLoader().load('/shooter/environment/island-quay-surfaces.webp');atlas.colorSpace=T.SRGBColorSpace;atlas.anisotropy=4;
+  const mesh=new T.Mesh(merged,new T.MeshStandardMaterial({map:atlas,vertexColors:true,roughness:.84,metalness:.15}));
   mesh.name='Island harbour · quay and freighter';mesh.matrixAutoUpdate=false;
   return mesh;
 }

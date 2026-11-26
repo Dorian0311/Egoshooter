@@ -64,7 +64,9 @@ def mouse(page, dx):
 def measure(page, name):
     page.evaluate('window.turnStarted=performance.now();harbourQA.scene.profileFrames(3000)')
     start = page.evaluate('harbourQA.player.yaw')
-    for n in range(12):
+    turns=int(os.environ.get('BATTLE_TURNS','12'))
+    assert 1<=turns<=80
+    for n in range(turns):
         for _ in range(6):
             mouse(page, (1 if n%2==0 else -1)*262)
             page.wait_for_timeout(15)
@@ -72,7 +74,7 @@ def measure(page, name):
         actual = page.evaluate('harbourQA.player.yaw')
         expected = start if n%2 else start+math.pi
         assert abs(math.remainder(actual-expected, math.tau)) < .25, (actual, expected)
-    return read_profile(page, name)
+    return dict(read_profile(page, name),turns=turns)
 
 
 def read_profile(page, name):
@@ -255,7 +257,7 @@ with sync_playwright() as pw:
                     raise
                 page.wait_for_function('harbourQA.player.hp>0',timeout=20000)
                 page.locator('.city-canvas').click(force=True)
-    if map_id != 'storm':
+    if map_id != 'storm' or os.environ.get('BATTLE_SPAWN_TURNS')=='1':
         # Short walk from the regular western team spawn, then look both ways in the street.
         sx,sz = page.evaluate('[harbourQA.player.x,harbourQA.player.z]')
         page.evaluate('window.turnStarted=performance.now();harbourQA.scene.profileFrames(3000)')
@@ -264,6 +266,7 @@ with sync_playwright() as pw:
         profiler=None
         if os.environ.get('BATTLE_CPU_PROFILE')=='1':
             profiler=page.context.new_cdp_session(page)
+            profiler.send('Performance.enable')
             profiler.send('Profiler.enable')
             profiler.send('Profiler.setSamplingInterval',{'interval':2000})
             profiler.send('Profiler.start')
@@ -272,6 +275,10 @@ with sync_playwright() as pw:
         if profiler:
             profile=profiler.send('Profiler.stop')['profile']
             (OUT/f'{map_id}-first-turn.cpuprofile').write_text(json.dumps(profile))
+            metrics={m['name']:m['value'] for m in profiler.send('Performance.getMetrics')['metrics']}
+            navigation=metrics.get('NavigationStart')
+            if navigation is not None:
+                profile_start=profile['startTime']/1000-navigation*1000
             (OUT/f'{map_id}-profile-timing.json').write_text(json.dumps(dict(start=profile_start,tasks=turn['longTasks'])))
             profiler.detach()
         warm=measure(page,map_id+' repeat')

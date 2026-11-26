@@ -391,7 +391,7 @@ export function createScene(
   const chainsaw=createChainsaw();weapon.add(chainsaw.group);
   const muzzleEffects=createMuzzleEffects(scene);
   const avatars = new Map<string, T.Group>();
-  const contactShadows=createContactShadows(scene,buildings);
+  const contactShadows=createContactShadows(scene,buildings,world);
   const opaqueWalls=world.boxes.filter(box=>box.kind==='wall');
   const actorFrustum=new T.Frustum(),actorProjection=new T.Matrix4(),actorBounds=new T.Sphere(new T.Vector3(),3.5);
   const residentVoice=createResidentVoice();
@@ -854,7 +854,7 @@ export function createScene(
       const drawActor=inView&&(!compact||!p.hp||!actorBehindWall(camera.position,g.position,opaqueWalls));
       if(g.userData.human)g.userData.human.group.visible=drawActor;
       if(drawActor)detailDrawsSkipped+=g.userData.details?.update(actorDistance,viewport.height,camera.fov)??0;
-      if(drawActor&&p.hp>0&&p.grounded)contactShadows.actor(remote.x,remote.y,remote.z,p.crouching||isCrawling(p));
+      if(drawActor&&p.hp>0&&p.grounded)contactShadows.actor(remote.x,remote.y,remote.z,p.crouching||isCrawling(p),remote.yaw);
       if(!p.hp&&!p.downedUntil&&p.diedAt){
         const pose=headshotPose(Math.max(0,((snapshot?.now??0)+t-receivedAt-p.diedAt)/1000),!!g.userData.deathSlowMotion);
         g.rotateOnAxis(g.userData.deathAxis??new T.Vector3(1,0,0),pose.fall*Math.PI/2+pose.recoil);g.position.y=p.y+pose.height;

@@ -1,3 +1,4 @@
+import {RemoteMotion} from '../client/remoteMotion';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -25,10 +26,57 @@ test('imported motion clips are normalized and produce finite walk/crouch poses 
  const data=JSON.parse(readFileSync('public/shooter/characters/humanoid.json','utf8'));
  const human=createHuman({...data,motion},'fr','storm',new T.MeshStandardMaterial(),'task-sand'),p=makePlayer('motion','M','fr',0,getWorld('storm'));
  const foot=human.group.getObjectByName('foot.L')!,before=foot.quaternion.clone();
- for(let n=0;n<90;n++){human.group.position.x=n/60*3.6;p.x=human.group.position.x;human.update(p,n*1000/60,1/60);}
- assert.ok(foot.quaternion.angleTo(before)>.05);
+ let maxFootRotation=0;
+ for(let n=0;n<90;n++){human.group.position.x=n/60*3.6;p.x=human.group.position.x;human.update(p,n*1000/60,1/60);maxFootRotation=Math.max(maxFootRotation,foot.quaternion.angleTo(before));}
+ assert.ok(maxFootRotation>.25,'the foot articulates through an actual stride');
  p.crouching=true;for(let n=0;n<60;n++)human.update(p,n*1000/60,1/60);
  human.group.updateMatrixWorld(true);const head=human.group.getObjectByName('head')!.getWorldPosition(new T.Vector3());
  assert.ok(head.y> .8&&head.y<1.6,`crouch head ${head.y}`);assert.ok(human.group.userData.hasCrouchAnimation);
  human.dispose();
+});
+
+
+test('20 Hz remote movement keeps actual support soles at ground level across animation update rates',()=>{
+ const data=JSON.parse(readFileSync('public/shooter/characters/humanoid.json','utf8'));
+ data.motion=JSON.parse(readFileSync('public/shooter/animations/locomotion.json','utf8'));
+ for(const speed of [1.6,3.6])for(const hz of [30,60]){
+  const human=createHuman(data,'fr','storm',new T.MeshStandardMaterial(),'task-sand');
+  const actor=new T.Group();actor.add(human.group);
+  const p=makePlayer('feet','Feet','fr',0,getWorld('storm'));
+  Object.assign(p,{x:0,y:0,z:0,yaw:0,grounded:true});
+  const soles=['L','R'].map(side=>{
+   const foot=human.group.getObjectByName('foot.'+side)!;
+   const boot=foot.children.find(c=>c instanceof T.Group)!;
+   const shoe=boot.children[0] as T.Mesh,vertices=shoe.geometry.getAttribute('position');
+   const unique=new Map<string,T.Vector3>();
+   for(let i=0;i<vertices.count;i++)if(vertices.getY(i)<.02){
+    const v=new T.Vector3().fromBufferAttribute(vertices,i);
+    unique.set(v.toArray().map(n=>n.toFixed(4)).join(','),v);
+   }
+   return {shoe,vertices:[...unique.values()],last:new T.Matrix4()};
+  });
+  const motion=new RemoteMotion(),v=new T.Vector3(),before=new T.Vector3();
+  let lowest=Infinity,slide=0,contacts=0;
+  for(let i=0;i<240;i++){
+   const t=i*1000/60;
+   if(i%3===0)motion.push({...p,z:-speed*t/1000},t,t);
+   if(i%(60/hz))continue;
+   const pose=motion.sample(t);actor.position.set(pose.x,pose.y,pose.z);
+   human.update({...p,...pose},t,1/hz);actor.updateMatrixWorld(true);
+   for(const {shoe,vertices,last} of soles){
+    if(i>110){
+     let support=vertices[0],min=Infinity;
+     for(const point of vertices){
+      const y=v.copy(point).applyMatrix4(last).y;if(y<min){min=y;support=point;}
+     }
+     lowest=Math.min(lowest,min);before.copy(support).applyMatrix4(last);v.copy(support).applyMatrix4(shoe.matrixWorld);
+     if(Math.max(before.y,v.y)<.015){slide+=Math.hypot(v.x-before.x,v.z-before.z);contacts++;}
+    }
+    last.copy(shoe.matrixWorld);
+   }
+  }
+  assert.ok(contacts>40&&lowest>-.012&&lowest<.015,`${speed} m/s @ ${hz} Hz: minimum sole height ${lowest}, ${contacts} contacts`);
+  assert.ok(slide*hz/contacts<(speed<2?.59:2.2),`support sole drift ${slide*hz/contacts} m/s`);
+  human.dispose();
+ }
 });

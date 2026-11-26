@@ -10,13 +10,15 @@ export function harbourEntrance(world:World,aggregate:T.Texture|null){
   const group=new T.Group(),parts:T.BufferGeometry[]=[];
   const iron='#4b5b59',cream='#e1d6af',teal='#4a6867',rust='#93745a',ochre='#bf994e';
   const tint=new T.Color(),up=new T.Vector3(0,1,0);
-  function piece(g:T.BufferGeometry,tone:string,area=[.70,.09,.28,.26]){
+  const enamelArea=[.68,.022,.22,.042],pierArea=[.648,.078,.331,.325];
+  function piece(g:T.BufferGeometry,tone:string,area=enamelArea){
     const uv=g.getAttribute('uv'),n=g.getAttribute('normal'),p=g.getAttribute('position'),rgb=new Float32Array(p.count*3);
     tint.set(tone);
     for(let i=0;i<p.count;i++){
       const grain=.95+.036*n.getY(i)+.019*Math.sin(1.7*p.getX(i)+.9*p.getZ(i));
       rgb[3*i]=tint.r*grain;rgb[3*i+1]=tint.g*grain;rgb[3*i+2]=tint.b*grain;
-      uv.setXY(i,area[0]+uv.getX(i)*area[2],area[1]+uv.getY(i)*area[3]);
+      const panel=area===pierArea&&Math.abs(n.getY(i))>.7?enamelArea:area;
+      uv.setXY(i,panel[0]+uv.getX(i)*panel[2],panel[1]+uv.getY(i)*panel[3]);
     }
     g.setAttribute('color',new T.BufferAttribute(rgb,3));
     const flat=g.index?g.toNonIndexed():g;if(flat!==g)g.dispose();parts.push(flat);
@@ -57,7 +59,7 @@ export function harbourEntrance(world:World,aggregate:T.Texture|null){
   }
   // Tidal harbour office over the abutment, facing the approach.
   const cx=122.9,cz=-32.65;
-  box(cx,-1.22,cz,6.25,1.65,7.70,'#929387');
+  piece(new T.BoxGeometry(6.25,1.65,7.70).translate(cx,-1.22,cz),'#eee9d8',pierArea);
   for(const z of [cz-2.95,cz+2.98])for(const x of [cx-2.77,cx+2.77]){
     cylinder(x,-2.74,z,.20,.24,2.4,iron);
   }

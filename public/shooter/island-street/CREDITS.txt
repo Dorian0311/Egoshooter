@@ -16,3 +16,7 @@ diner-linoleum.webp (speckled tile), interior-prints.webp (wall prints).
 
 Outer Island headlands: Coastal Cliff 01 by Rob Tuytel and Rico Cilliers, Poly Haven (CC0).
 A simplified scan retains the source colour and normal maps. https://polyhaven.com/a/coastal_cliff_01
+
+Original East Harbour artwork: island-quay-surfaces.webp and the pier finish in
+port-authority.webp. Steel platework, vessel paint and markings, cargo panels,
+concrete formwork, timber and weathering were drawn specifically for this game.

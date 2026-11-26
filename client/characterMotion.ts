@@ -52,7 +52,8 @@ export function createCharacterMotion(root:T.Group,bones:Map<string,T.Bone>,data
   braking+=(brakeTarget-braking)*(1-Math.exp(-step*14));
   const next:MotionName=!player.grounded?'air':landing>0&&!moving?'land':player.crouching?(moving?'crouchWalk':'crouchIdle'):moving?(player.sprinting||speed>5.2?'sprint':speed>2.4?'jog':'walk'):'idle';
   if(next!==current){actions.get(current)?.fadeOut(.16);actions.get(next)!.reset().setEffectiveWeight(1).fadeIn(.16).play();current=next;}
-  const action=actions.get(current)!,nominal=current==='walk'?1.65:current==='jog'?3.6:current==='sprint'?6.2:current==='crouchWalk'?1.6:0;
+  // Calibrated on the retargeted boot's ground-contact phase in metres per clip second.
+  const action=actions.get(current)!,nominal=current==='walk'?.95:current==='jog'?4.8:current==='sprint'?6.2:current==='crouchWalk'?1.6:0;
   const forwardSpeed=(dx*-Math.sin(player.yaw)+dz*-Math.cos(player.yaw))/step;
   // Hysteresis avoids alternating forward/reverse clips while strafing. Use
   // velocity rather than a per-frame displacement threshold on fast displays.
@@ -66,7 +67,7 @@ export function createCharacterMotion(root:T.Group,bones:Map<string,T.Bone>,data
   heading+=turn*(1-Math.exp(-step*12));
   const leanTarget=groundFactor*T.MathUtils.clamp(turn*speed*.06,-.17,.17);
   lean+=(leanTarget-lean)*(1-Math.exp(-step*13));
-  action.setEffectiveTimeScale(nominal?T.MathUtils.clamp(speed/nominal,.65,1.6)*(reverse?-1:1):1);
+  action.setEffectiveTimeScale(nominal?T.MathUtils.clamp(speed/nominal,.65,current==='walk'?1.85:1.6)*(reverse?-1:1):1);
   // Mixer bindings can skip unchanged keys: remove our previous additive turn
   // before sampling, otherwise an idle root rotation accumulates every frame.
   if(hips&&authoredHips)hips.quaternion.copy(authoredHips);
@@ -97,5 +98,5 @@ export function createCharacterMotion(root:T.Group,bones:Map<string,T.Bone>,data
    contact=Math.max(0,contact-step);
    if(contact===0)planted=undefined;
   }
- },dispose(){mixer.stopAllAction();mixer.uncacheRoot(root);},state:()=>current};
+ },dispose(){mixer.stopAllAction();mixer.uncacheRoot(root);},state:()=>current,groundYaw:()=>heading};
 }

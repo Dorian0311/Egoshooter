@@ -1,5 +1,6 @@
 import {GLTFLoader} from 'three/examples/jsm/loaders/GLTFLoader.js';
 import {batchWeaponMeshes} from './batchWeaponMeshes';
+import {bootGroundContact} from './bootGroundContact';
 import {createCharacterMotion,loadMotionLibrary,type MotionLibrary} from './characterMotion';
 import {isBonusId,loadBonusCharacter,createBonusCharacter,type BonusCharacterData} from './bonusCharacters';
 import {defaultUniform,uniforms,type UniformId} from '../shared/uniforms.ts';
@@ -360,6 +361,7 @@ export function createHuman(data:HumanData|BonusCharacterData|CivilianCharacterD
   }
  }
  batchDetails(eyes);
+ const bootContact=bootGroundContact();
  for(const side of ['L','R']){
   if(data.coat||civilian)continue;
   const foot=named.get(`foot.${side}`),joint=data.bones.find(j=>j.name===`foot.${side}`);if(!foot||!joint)continue;
@@ -370,7 +372,7 @@ export function createHuman(data:HumanData|BonusCharacterData|CivilianCharacterD
   const shoeGeometry=new T.ExtrudeGeometry(shape,{depth:.022,bevelEnabled:true,bevelThickness:.005,bevelSize:.005,bevelSegments:islandKit?1:3,curveSegments:islandKit?5:12});shoeGeometry.rotateX(-Math.PI/2);shoeGeometry.translate(0,.006,0);const shoe=new T.Mesh(shoeGeometry,leather);shoe.castShadow=true;boot.add(shoe);const upper=new T.Mesh(new T.SphereGeometry(1,islandKit?12:16,islandKit?7:12),leather);upper.castShadow=islandKit;upper.scale.set(.068,.052,.15);upper.position.set(0,.062,-.105);boot.add(upper);
   const shaft=new T.Mesh(new T.CylinderGeometry(.06,.063,.16,islandKit?12:16),leather);shaft.position.set(0,.14,-.025);shaft.castShadow=true;boot.add(shaft);
   for(let i=0;i<4;i++){const lace=part(0,.095+i*.012,-.08-i*.018,.08,.006,.007,'#41413b',boot);if(islandKit)lace.material=detailMaterial('#41413b',.75);lace.rotation.z=i%2?.12:-.12;}
-  batchDetails(boot);
+  batchDetails(boot);bootContact.add(boot,foot);
  }
  if(civilianLook)civilianLook.addDetails(group,named,data.bones,mesh);
  // Held weapons have their own hand targets instead of being baked into the torso.
@@ -405,6 +407,7 @@ export function createHuman(data:HumanData|BonusCharacterData|CivilianCharacterD
   if(!motion||civilian)headBone.rotation.x=-player.pitch*.35;
   for(const [name,bone]of named)if(name.startsWith('finger'))bone.rotation.set(0,0,name.startsWith('finger1-1')?0:(name.endsWith('.L')?1:-1)*.38);
   applyActionPose(group,player,time,now);held.update(player,time,now);
+  if(motion)bootContact.update(player.y,player.grounded&&player.hp>0&&!player.crouching&&(motion.state()==='walk'||motion.state()==='jog'),player.yaw+motion.groundYaw());
  }
  function dispose(){if(isDisposed)return;isDisposed=true;held.dispose();motion?.dispose();for(const garment of coatMeshes)(garment.material as T.Material).dispose();for(const texture of coatTextures)releaseCoatTexture(texture);releaseSurface(skinImage);if(cloth)releaseSurface(garmentImage);skeleton.dispose();ownMaterials.forEach(m=>m.dispose());group.traverse(o=>{if(o instanceof T.Mesh){o.geometry.dispose();o.userData.ownedTexture?.dispose();}});group.clear();}
  return {group,update,dispose,setHeadVisible:(visible:boolean)=>{headBone.scale.setScalar(visible?1:.001);}};
