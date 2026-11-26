@@ -145,6 +145,28 @@ function trackwork(name:string,lines:{z:number;first:number;last:number;gauge:nu
       for(let i=0;i<4;i++)colors.push(tint.r,tint.g,tint.b);
       indices.push(start,start+1,start+2,start,start+2,start+3);
     }
+    if(eastBank&&sectionEnd>117){
+      // The old yard surface drops one metre outside the playable map. Carry
+      // a cinder service lane down this lip and around the water tower.
+      const lanes=[-17,-15,-13,-11,-9,-7,-5,-3,-1.05,-.67,.65,1.03,3,5,7,9,11,13,15,17];
+      function grade(x:number,offset:number):Vertex{
+        const bend=1.4*Math.sin((x-119)*.16)-.8;
+        const rim=Math.abs(offset)===17||x>=149;
+        const apron=-.035-.92*Math.min(1,(x-119)/3.4);
+        const worn=Math.abs(offset)<1.06?.012:0;
+        const ragged=Math.abs(offset)>15?.49*Math.sin(.91*x+offset):0;
+        return [x,rim?-1.014:apron-worn,bend+offset+ragged];
+      }
+      for(let x=119;x<149;x+=2)for(let band=0;band<lanes.length-1;band++){
+        const low=lanes[band],high=lanes[band+1];
+        // Use the existing ballast grain at a finer scale for compacted cinders.
+        const v=.004+Math.min(1,(high-low)/2)*.992;
+        const reverse=(band+Math.floor((x-119)/2))%2!==0;
+        const u0=reverse?1.498:1.002,u1=reverse?1.002:1.498;
+        const tone=low===-1.05||low===.65?'#bcb1a0':Math.abs(low)>15?'#b8aa93':'#e5dbc9';
+        quad(grade(x,low),grade(x,high),grade(x+2,high),grade(x+2,low),tone,[u0,.004,u0,v,u1,v,u1,.004]);
+      }
+    }
     for(const {z,first,last,gauge} of lines){
       const left=Math.max(first,sectionStart),right=Math.min(last,sectionEnd);
       if(left>=right)continue;
