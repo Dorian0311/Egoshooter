@@ -729,7 +729,7 @@ export function createScene(
   }
   const graphics=createGraphics(renderer,scene,camera,sun,graphicsQuality);
   renderer.initTexture(muzzleEffects.texture);
-  const worldPrepared=Promise.all([environmentUpgrade.ready,sceneAssets.ready]).then(async()=>{
+  const worldPrepared=Promise.all([environmentUpgrade.ready,sceneAssets.ready,mapDetails.ready]).then(async()=>{
     if(stopped)return;
     // Bot equipment can resolve after actor preparation. Use the actual shared materials and buffers
     // before a turn first exposes a distant bot and forces the driver to link its weapon program.

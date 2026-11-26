@@ -17,7 +17,10 @@ export function addIslandStreet(scene:T.Group){
     const mesh=new T.Mesh(new T.BoxGeometry(w,h,d),material);
     mesh.position.set(x,y,z);mesh.castShadow=h>.3;mesh.receiveShadow=true;street.add(mesh);return mesh;
   }
-  const loader=new T.TextureLoader(),base='/shooter/island-street/';
+  const manager=new T.LoadingManager();
+  const ready=new Promise<void>(resolve=>{manager.onLoad=resolve;});
+  manager.itemStart('Harbour Road');
+  const loader=new T.TextureLoader(manager),base='/shooter/island-street/';
   function solid(geometry:T.BufferGeometry,x:number,y:number,z:number,material:T.Material){
     const mesh=new T.Mesh(geometry,material);
     mesh.position.set(x,y,z);mesh.receiveShadow=true;street.add(mesh);return mesh;
@@ -38,10 +41,13 @@ export function addIslandStreet(scene:T.Group){
   const asphalt=loader.load(base+'asphalt-color.webp'),normal=loader.load(base+'asphalt-normalgl.webp');
   asphalt.colorSpace=T.SRGBColorSpace;
   for(const map of [asphalt,normal]){
-    map.wrapS=map.wrapT=T.RepeatWrapping;map.repeat.set(14,2);map.anisotropy=4;
+    map.wrapS=map.wrapT=T.RepeatWrapping;map.anisotropy=4;
   }
   const pavement=new T.MeshStandardMaterial({map:asphalt,normalMap:normal,roughness:.96,normalScale:new T.Vector2(.5,.5)});
   const road=new T.Mesh(new T.PlaneGeometry(64,9),pavement);
+  // The adjoining route shares these textures at unit repeat.
+  const roadUv=road.geometry.getAttribute('uv');
+  for(let i=0;i<roadUv.count;i++)roadUv.setXY(i,14*roadUv.getX(i),2*roadUv.getY(i));
   road.rotation.x=-Math.PI/2;road.position.set(63,.056,-23);road.receiveShadow=true;street.add(road);
   const concrete=paint('#b6ac99'),trim=paint('#e6cf98'),iron=paint('#555c58');
   const paving=loader.load(base+'concrete.webp');
@@ -680,8 +686,13 @@ export function addIslandStreet(scene:T.Group){
   const cableMaterial=new T.LineBasicMaterial({color:'#393d3b'});street.add(new T.LineSegments(cables,cableMaterial));
   batchStaticMeshes(street,new Set(),32,new Set(palette.values()));
   const dampRoad=dampSurface(pavement),dampSlabs=dampSurface(pavingMaterial,.68);
+  manager.itemEnd('Harbour Road');
   return {
+    ready,asphaltMaps:{map:asphalt,normalMap:normal},
     setDampness(damp:boolean){dampRoad(damp);dampSlabs(damp);},
-    dispose(){cables.dispose();cableMaterial.dispose();normal.dispose();palette.forEach(m=>m.dispose());},
+    dispose(){
+      pavement.map=pavement.normalMap=null;asphalt.dispose();normal.dispose();
+      cables.dispose();cableMaterial.dispose();palette.forEach(m=>m.dispose());
+    },
   };
 }

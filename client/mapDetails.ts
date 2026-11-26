@@ -167,22 +167,14 @@ export function createMapDetails(scene:T.Scene,world:World,get:(color:string)=>T
   let ocean:ReturnType<typeof createCoastalWater>|undefined;
   const terrain=island||war?createBattleTerrain(world,get(island?'#718a48':'#77766b'),get('#d0b37c')):undefined;
   if(terrain)root.add(terrain.mesh);
-  const roadTextures:T.Texture[]=[];
   let roadSurface:T.MeshStandardMaterial|undefined;
   const street=island?addIslandStreet(root):undefined;
-  if(island){
+  if(street){
     root.add(createIslandQuay());
     root.add(harbourEntrance(world,get('#818783').map));
     ocean=createCoastalWater(scene,world);
     const route=new T.CatmullRomCurve3(islandRoute.map(([x,z])=>new T.Vector3(x,0,z)));
-    const loader=new T.TextureLoader();
-    const roadMap=loader.load('/shooter/island-street/asphalt-color.webp');
-    const roadNormal=loader.load('/shooter/island-street/asphalt-normalgl.webp');
-    roadMap.colorSpace=T.SRGBColorSpace;
-    for(const tex of [roadMap,roadNormal]){
-      tex.wrapS=tex.wrapT=T.RepeatWrapping;tex.anisotropy=4;roadTextures.push(tex);
-    }
-    const road=new T.MeshStandardMaterial({map:roadMap,normalMap:roadNormal,vertexColors:true,roughness:.95});
+    const road=new T.MeshStandardMaterial({...street.asphaltMaps,vertexColors:true,roughness:.95});
     roadSurface=road;road.normalScale.set(.48,.48);
     const asphalt=new T.Color('#f1eee5'),verge=new T.Color('#ccae83'),marking=material('#edd8a3');
     const center=new T.Vector3(),tangent=new T.Vector3(),roadColor=new T.Color(),routeLength=route.getLength();
@@ -403,10 +395,14 @@ export function createMapDetails(scene:T.Scene,world:World,get:(color:string)=>T
     world.id==='cologne'?dampSurface(get('#77766b'),.78):undefined;
   let waterDetail=false,waterSunlight=true;
   return {
+    ready:street?.ready??Promise.resolve(),
     update(seconds:number){ocean?.update(seconds);if(radarRotor)radarRotor.rotation.y=seconds*.25;},
     setDampness(damp:boolean){wetGround?.(damp);street?.setDampness(damp);},
     setWaterDetail(enabled:boolean){waterDetail=enabled;ocean?.setDetail(waterDetail&&waterSunlight);},
     setWaterSunlight(enabled:boolean){waterSunlight=enabled;ocean?.setDetail(waterDetail&&waterSunlight);},
-    dispose(){ocean?.dispose();street?.dispose();roadSurface?.dispose();roadTextures.forEach(texture=>texture.dispose());terrain?.dispose();colors.forEach(m=>m.dispose());},
+    dispose(){
+      if(roadSurface){roadSurface.map=roadSurface.normalMap=null;roadSurface.dispose();}
+      ocean?.dispose();street?.dispose();terrain?.dispose();colors.forEach(m=>m.dispose());
+    },
   };
 }

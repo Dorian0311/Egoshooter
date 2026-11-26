@@ -233,7 +233,24 @@ export function freightYard(world:World){
   drum(14.48,.74,4.59,2.06,neutral,32,slate);
   drum(15.74,.63,.63,.48,'#474f49',12);drum(16.22,.035,.85,.52,'#64675c',12);
   // Door, high ventilators and the exterior level gauge are on the town-facing side.
-  box(-3.06,1.54,0,.11,2.48,1.44,neutral,boardDoor);box(-3.14,2.84,0,.22,.19,1.77,stone);
+  const sill=.625,landingX=-3.62,landingEdge=.83,run=.34,rise=.16,treads=8;
+  box(-3.06,(sill+2.78)/2,0,.11,2.78-sill,1.44,neutral,boardDoor);box(-3.14,2.84,0,.22,.19,1.77,stone);
+  // The stair reaches the lower cinder yard at the north end, away from the crane.
+  const footing=-1.02;
+  function landingStone(z:number,length:number,top:number){
+    box(landingX,(top+footing)/2,z,1.25,top-footing,length,neutral,stonework);
+  }
+  landingStone(0,2*landingEdge,sill);
+  for(let i=1;i<=treads;i++)landingStone(landingEdge+(i-.5)*run,run,sill-i*rise);
+  const railX=landingX-.55,railY=sill+.90;
+  for(const i of [0,3,treads]){
+    const z=landingEdge+(i-.5)*run,top=railY-i*rise;
+    box(railX,top-.45,z,.044,.90,.044,metal,ironPlate);
+  }
+  box(railX,railY,-.055,.055,.055,2*(landingEdge-run/2+.055),metal,ironPlate);
+  box(railX,railY-.45,-.735,.044,.90,.044,metal,ironPlate);
+  add(new T.BoxGeometry(.055,.055,treads*Math.hypot(run,rise)),railX,railY-treads*rise/2,
+    landingEdge+(treads-1)*run/2,metal,ironPlate,Math.atan2(rise,run));
   for(const y of [4.60,7.43]){
     box(-2.97,y,0,.15,1.17,.72,stone);box(-3.06,y,0,.07,.98,.55,'#4a504a');
     for(const dy of [-.29,0,.29])box(-3.11,y+dy,0,.05,.045,.56,metal);

@@ -6,6 +6,7 @@
 // Set BATTLE_DRAW_PROFILE=1 to trace CPU draw submission and actual WebGL program binds.
 // Set BATTLE_GPU_PROFILE=1 to sample raw GPU frame times, including on High and Ultra.
 // Set BATTLE_FRAME_PHASES=1 to attribute long CPU frames to work inside the game callback.
+// BATTLE_SNAPSHOT_PROFILE=1 times client snapshot merge, HUD/event dispatch, scene sync and the test observer.
 // HARBOUR_NEAR_SPAWN=1 starts the tester behind the Diner on the isolated server.
 // BATTLE_SEED sets the isolated server's starting random sequence for comparable runs.
 // Bots, difficulty, damage and movement retain their normal game rules.
@@ -107,9 +108,23 @@ try {
       const anchor = "scene.current?.update(s, access.playerId, 'network');";
       assert.equal(source.split(anchor).length, 2, 'App snapshot hook changed');
       patched = true;
+      let observe="window.observeHarbourBattle?.(own,s,scene.current,()=>battleInteriorWorld(getWorld(s.mapId),s.interiors).boxes,harbourBotRules[s.operation.config.difficulty].vision);";
+      if(process.env.BATTLE_SNAPSHOT_PROFILE==='1'){
+        const merge='const s = mergeSnapshot(last.current, packet);';
+        assert.equal(source.split(merge).length,2,'Snapshot merge timing hook changed');
+        source=source.replace(merge,'const snapshotStart=performance.now();\n'+merge+'\nconst mergedAt=performance.now();');
+        observe=`const sceneDone=performance.now();\n${observe}
+          const done=performance.now();
+          const probe=window.harbourSnapshotProbe??={samples:[],count:0};
+          probe.samples[probe.count++%2048]={start:snapshotStart,end:done,mergeMs:mergedAt-snapshotStart,
+            hudEventsMs:sceneStarted-mergedAt,sceneMs:sceneDone-sceneStarted,observerMs:done-sceneDone,
+            full:!!packet.full,players:(packet.full?.players??packet.players??[]).length,
+            freshEvents:freshEvents.map(e=>e.type)};`;
+        source=source.replace(anchor,'const sceneStarted=performance.now();\n'+anchor);
+      }
       return "import {interiorWorld as battleInteriorWorld} from '../shared/interiors';\n"+
         "import {difficultyRules as harbourBotRules} from '../shared/operationConfig';\n"+
-        source.replace(anchor, anchor+"\nwindow.observeHarbourBattle?.(own,s,scene.current,()=>battleInteriorWorld(getWorld(s.mapId),s.interiors).boxes,harbourBotRules[s.operation.config.difficulty].vision);");
+        source.replace(anchor,anchor+"\n"+observe);
     }
   }]});
   assert(patched, 'Missing App observation hook');

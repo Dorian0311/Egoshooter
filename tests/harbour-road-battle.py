@@ -20,6 +20,7 @@ NATIVE_TURNS = os.environ.get('BATTLE_NATIVE_TURNS') == '1'
 DRAW_PROFILE = os.environ.get('BATTLE_DRAW_PROFILE') == '1'
 GPU_PROFILE = os.environ.get('BATTLE_GPU_PROFILE') == '1'
 FRAME_PHASES = os.environ.get('BATTLE_FRAME_PHASES') == '1'
+SNAPSHOT_PROFILE = os.environ.get('BATTLE_SNAPSHOT_PROFILE') == '1'
 NEAR_SPAWN = os.environ.get('HARBOUR_NEAR_SPAWN') == '1'
 SEED = os.environ.get('BATTLE_SEED')
 ENEMIES = int(os.environ.get('HARBOUR_ENEMIES','0'))
@@ -28,6 +29,7 @@ assert SEED is None or PRODUCTION and re.fullmatch(r'[0-9]{1,10}',SEED) and int(
 assert not DRAW_PROFILE or PRODUCTION, 'BATTLE_DRAW_PROFILE requires the separate production harness'
 assert not GPU_PROFILE or PRODUCTION, 'BATTLE_GPU_PROFILE requires the separate production harness'
 assert not FRAME_PHASES or PRODUCTION, 'BATTLE_FRAME_PHASES requires the separate production harness'
+assert not SNAPSHOT_PROFILE or PRODUCTION, 'BATTLE_SNAPSHOT_PROFILE requires the separate production harness'
 assert not NEAR_SPAWN or PRODUCTION and os.environ.get('BATTLE_MAP','storm')=='storm', 'HARBOUR_NEAR_SPAWN requires the isolated Island production harness'
 
 
@@ -347,6 +349,19 @@ def read_profile(page, name, during_turn=False):
         result['slowShaders']=page.evaluate("()=>window.slowShaders.filter(s=>s.start>=window.turnStarted).map(({start,duration,path})=>({start,duration,path}))")
     result['longTasks']=page.evaluate("""()=> (window.harbourLongFrames??[])
         .filter(f=>f.startTime>=(window.turnStarted??Infinity)).sort((a,b)=>b.duration-a.duration).slice(0,4)""")
+    if SNAPSHOT_PROFILE:
+        result['snapshotProfile']=page.evaluate("""frames=>{
+            const probe=window.harbourSnapshotProbe;
+            if(!probe)throw Error('Snapshot timing probe missing');
+            const start=window.turnStarted??Infinity;
+            const samples=probe.samples.filter(s=>s.end>=start);
+            const ranked=[...samples].sort((a,b)=>(b.end-b.start)-(a.end-a.start));
+            return {count:samples.length,truncated:probe.count>probe.samples.length&&samples.length===probe.samples.length,
+                slowest:ranked.slice(0,8),longFrameOverlaps:frames.map(f=>({
+                    start:f.startTime,duration:f.duration,
+                    snapshots:samples.filter(s=>s.start<f.startTime+f.duration&&s.end>f.startTime).sort((a,b)=>a.start-b.start)
+                }))};
+        }""",result['longTasks'])
     if os.environ.get('BATTLE_TIMER_PROFILE')=='1':
         result['timers']=page.evaluate(r"""()=> (window.roadTimers??[]).filter(t=>
           (window.harbourLongFrames??[]).some(f=>f.startTime>=window.turnStarted&&t.start>=f.startTime-1&&t.start<f.startTime+f.duration)
@@ -373,6 +388,8 @@ with sync_playwright() as pw:
         quality_suffix+='-gpu-profile'
     if FRAME_PHASES:
         quality_suffix+='-cpu-phases'
+    if SNAPSHOT_PROFILE:
+        quality_suffix+='-snapshot-phases'
     if headed:
         quality_suffix+='-window'
     if channel!='chrome':
