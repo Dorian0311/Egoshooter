@@ -22,6 +22,8 @@ GPU_PROFILE = os.environ.get('BATTLE_GPU_PROFILE') == '1'
 FRAME_PHASES = os.environ.get('BATTLE_FRAME_PHASES') == '1'
 NEAR_SPAWN = os.environ.get('HARBOUR_NEAR_SPAWN') == '1'
 SEED = os.environ.get('BATTLE_SEED')
+ENEMIES = int(os.environ.get('HARBOUR_ENEMIES','0'))
+assert 0 <= ENEMIES <= 4, 'HARBOUR_ENEMIES must be 0 for seven team bots, or 1–4 for a solo battle'
 assert SEED is None or PRODUCTION and re.fullmatch(r'[0-9]{1,10}',SEED) and int(SEED)<=0xffffffff, 'BATTLE_SEED requires an unsigned 32-bit integer in the production harness'
 assert not DRAW_PROFILE or PRODUCTION, 'BATTLE_DRAW_PROFILE requires the separate production harness'
 assert not GPU_PROFILE or PRODUCTION, 'BATTLE_GPU_PROFILE requires the separate production harness'
@@ -480,10 +482,9 @@ with sync_playwright() as pw:
     condition=os.environ.get('HARBOUR_CONDITION')
     if condition:
         page.get_by_label('Einsatzbedingungen').select_option(condition)
-    enemies = int(os.environ.get('HARBOUR_ENEMIES', '0'))
-    if enemies:
+    if ENEMIES:
         page.get_by_label('Gefecht',exact=True).select_option('alone')
-        page.get_by_label('Gegner',exact=True).select_option(str(enemies))
+        page.get_by_label('Gegner',exact=True).select_option(str(ENEMIES))
     else:
         page.get_by_label('Gefecht',exact=True).select_option('team')
     page.get_by_label('Schwierigkeit').select_option(difficulty)
@@ -529,7 +530,7 @@ with sync_playwright() as pw:
     assert renderer_info['quality']==quality,(renderer_info,quality)
     print(renderer_info,flush=True)
     bots = page.evaluate("harbourQA.state.players.filter(p=>p.kind==='bot').length")
-    assert bots == (enemies or 7), bots
+    assert bots == (ENEMIES or 7), bots
     if NEAR_SPAWN:
         position=page.evaluate('[harbourQA.player.x,harbourQA.player.z]')
         assert math.dist(position,(60,-41))<1, ('Expected the dedicated Harbour Road start',position)

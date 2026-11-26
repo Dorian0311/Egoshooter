@@ -27,7 +27,8 @@ import {loadEnvironmentUpgrade} from './environmentAssets';
 import {addMilitaryRoofs} from './militaryRoofs';
 import './weaponHud.css';
 import './sniperScope.css';
-import {createPlayerNameplate,nameplateOccluded} from './playerNameplate';
+import {createPlayerNameplate} from './playerNameplate';
+import './playerLabels.css';
 import {createResidentVoice,residentLine} from './residentBanter';
 import {residentProfile} from '../shared/residentProfiles';
 import './residentBanter.css';
@@ -332,7 +333,7 @@ export function createScene(
   let projectedScopeWeapon:Player['weapon']|undefined;
   const scope=document.createElement('div');scope.className='sniper-scope';scope.hidden=true;
   scope.setAttribute('aria-hidden','true');canvas.parentElement?.append(scope);
-  const ammoAnchor=new T.Vector3(),avatarPosition=new T.Vector3();
+  const ammoAnchor=new T.Vector3();
   const weapon = new T.Group();
   weapon.layers.set(1);
   const viewmodel=createViewmodel(weapon);
@@ -863,7 +864,7 @@ export function createScene(
     for (const g of avatars.values()) {
       const p = g.userData.target as Player;
       if(!p.hp&&!p.downedUntil&&snapshot?.corpses.some(c=>c.sourceId===p.id&&c.sourceLife===p.life&&remainsScene.isReady(c.id)))g.visible=false;
-      if(!g.visible){g.userData.nameplate?.render(camera,viewport.width,viewport.height,false,0);continue;}
+      if(!g.visible){g.userData.nameplate?.hide();continue;}
       const remote=(g.userData.motion as RemoteMotion|undefined)?.sample(t)??p;
       g.position.set(remote.x,remote.y,remote.z);
       g.userData.renderYaw=remote.yaw;
@@ -887,15 +888,14 @@ export function createScene(
       if(nameplate){
         if(isCrawling(p)){g.updateWorldMatrix(true,false);nameplate.anchor.position.copy(g.worldToLocal(new T.Vector3(p.x,p.y+.85,p.z)));}else nameplate.anchor.position.set(0,(p.crouching?1.43:p.kind==='resident'?(g.userData.human?.group.userData.nameplateHeight??2.06):2.06)/g.scale.y,0);
         const distance=g.position.distanceTo(camera.position),nearby=p.hp>0&&p.connected&&distance<45;
-        if(nearby&&t-(g.userData.labelCheckAt??-1000)>100){
-          nameplate.anchor.getWorldPosition(avatarPosition);g.userData.labelOccluded=nameplateOccluded(camera.position,avatarPosition,collisionWorld.boxes);g.userData.labelCheckAt=t;
-        }
-        const visible=nearby&&!g.userData.labelOccluded,now=(snapshot?.now??0)+t-receivedAt;
+        // Nearby residents can speak from outside the picture if there is line of sight.
+        const checkOffscreen=p.kind==='resident'&&distance<16;
+        const visible=nameplate.visibility(camera,camera.position,collisionWorld.boxes,nearby,checkOffscreen,t),now=(snapshot?.now??0)+t-receivedAt;
         if(p.kind==='resident'&&p.gestureUntil>now&&g.userData.banterGesture!==p.gestureUntil){
           g.userData.banterGesture=p.gestureUntil;
           if(enabled&&!menu&&local?.hp&&visible&&distance<16){const line=residentLine(p.gestureUntil,p.id);nameplate.say(line,t+Math.min(7500,Math.max(4500,line.length*65)));if(!readOnly&&audio?.state==='running')residentVoice.say(line,settings.volume*(1-distance/20),t,residentProfile(p.id).archetype);}
         }
-        nameplate.render(camera,viewport.width,viewport.height,visible,Math.min(1,Math.max(0,(45-distance)/12)),t);
+        nameplate.render(viewport.width,viewport.height,visible,Math.min(1,Math.max(0,(45-distance)/12)),t);
       }
       const distance=g.position.distanceTo(camera.position),animationInterval=distance>45?1000/15:distance>20?1000/30:0,animationElapsed=t-(g.userData.animatedAt??t-100);
       if(drawActor&&animationElapsed>=animationInterval){g.userData.human?.update({...p,crouching:p.crouching||p.treatment?.kind==='harvest',x:g.position.x,y:g.position.y,z:g.position.z,yaw:remote.yaw,pitch:remote.pitch},t,Math.min(.1,animationElapsed/1000),(snapshot?.now??0)+t-receivedAt);g.userData.animatedAt=t;}

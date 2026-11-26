@@ -1,10 +1,9 @@
 import * as T from 'three';
 import type {Box} from '../shared/world';
 import {nearbyBoxes} from '../shared/boxIndex';
-import './playerLabels.css';
 type Position={x:number;y:number;z:number};
 
-/** Segment/box visibility, evaluated at 10 Hz per nearby player. No allocations. */
+/** Test line of sight against solid boxes along the segment. */
 export function nameplateOccluded(eye:Position,head:Position,boxes:readonly Box[]){
  for(const box of nearbyBoxes(boxes,Math.min(eye.x,head.x),Math.min(eye.z,head.z),Math.max(eye.x,head.x),Math.max(eye.z,head.z))){
   if(box.kind==='glass')continue;
@@ -24,6 +23,7 @@ export function nameplateOccluded(eye:Position,head:Position,boxes:readonly Box[
 /** HTML stays at screen resolution even when adaptive 3D rendering is reduced. */
 export function createPlayerNameplate(parent:HTMLElement,name:string,friendly:boolean,residentBiography?:string){
  const anchor=new T.Object3D();anchor.position.y=2.06;
+ const document=parent.ownerDocument;
  const element=document.createElement('div'),label=document.createElement('span'),speech=document.createElement('span');
  element.className='player-label';speech.className='resident-banter';speech.hidden=true;element.append(label,speech);parent.append(element);
  if(residentBiography){element.setAttribute('aria-description',residentBiography);element.title=residentBiography;element.classList.add('is-resident');}
@@ -35,12 +35,28 @@ export function createPlayerNameplate(parent:HTMLElement,name:string,friendly:bo
   element.setAttribute('aria-label',`${residentBiography?'Stadtbewohner':isFriendly?'Verbündeter':'Gegner'}: ${nextName}`);
  }
  update(name,friendly);
- return {anchor,update,say(text:string,until:number){speech.textContent=text;speechUntil=until;},render(camera:T.Camera,width:number,height:number,visible:boolean,opacity:number,now=performance.now()){
+ const worldPosition=new T.Vector3();
+ let onScreen=false,occluded=false,lastSightCheck=-Infinity;
+ function visibility(camera:T.Camera,eye:Position,boxes:readonly Box[],nearby:boolean,checkOffscreen:boolean,now:number){
+  const previouslyOnScreen=onScreen;onScreen=false;
+  if(!nearby)return false;
+  anchor.getWorldPosition(worldPosition);projected.copy(worldPosition).project(camera);
+  onScreen=projected.z>-1&&projected.z<1&&Math.abs(projected.x)<1.1&&Math.abs(projected.y)<1.1;
+  if(!onScreen&&!checkOffscreen)return false;
+  if((onScreen&&!previouslyOnScreen)||now-lastSightCheck>100){
+   occluded=nameplateOccluded(eye,worldPosition,boxes);lastSightCheck=now;
+  }
+  return !occluded;
+ }
+ function hide(){
+  onScreen=false;
+  if(displayed){displayed=false;element.style.display='none';}
+ }
+ return {anchor,update,visibility,hide,say(text:string,until:number){speech.textContent=text;speechUntil=until;},render(width:number,height:number,visible:boolean,opacity:number,now=performance.now()){
   if(disposed)return;
   const hidden=now>=speechUntil;
   if(speech.hidden!==hidden)speech.hidden=hidden;
-  if(visible){anchor.getWorldPosition(projected);projected.project(camera);}
-  const show=visible&&projected.z>-1&&projected.z<1&&Math.abs(projected.x)<1.1&&Math.abs(projected.y)<1.1;
+  const show=visible&&onScreen;
   if(show!==displayed){displayed=show;element.style.display=show?'block':'none';}
   if(show){
    const transform=`translate(${(projected.x+1)*.5*width}px, ${(1-projected.y)*.5*height}px) translate(-50%, -100%)`;

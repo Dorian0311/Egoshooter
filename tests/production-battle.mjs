@@ -155,14 +155,32 @@ try {
     NODE_ENV:'production', BIND_HOST:'127.0.0.1', PORT:String(backendPort), DATABASE_URL:'',
     SHOOTER_ACCOUNTS_DB:join(scratch,'accounts.sqlite'), SHOOTER_ORIGINS:origin,
     SHOOTER_PUBLIC_URL:origin+'/game', SHOOTER_TICKET_SECRET:randomBytes(32).toString('hex')}});
+  const startup=new AbortController();
   const ready = async()=>{
-    for(let i=0;i<100;i++) {
-      if((await fetch(origin+'/game/health')).ok) return;
-      await delay(150);
-    }
-    throw Error('Game server startup timed out');
+    // Each isolated process warms navigation for all maps before it listens.
+    const deadline=Date.now()+60_000;
+    const health=async(url)=>{
+      try {
+        const response=await fetch(url,{signal:AbortSignal.timeout(1000)});
+        return {ok:response.ok,status:`HTTP ${response.status}`};
+      } catch(error) {
+        return {ok:false,status:String(error.cause?.code??error.name)};
+      }
+    };
+    let gatewayHealth;
+    do {
+      gatewayHealth=await health(origin+'/game/health');
+      if(gatewayHealth.ok) return;
+      await delay(150,undefined,{signal:startup.signal});
+    } while(Date.now()<deadline);
+    const backendHealth=await health(`http://127.0.0.1:${backendPort}/health`);
+    throw Error(`Game server startup timed out (gateway ${gatewayHealth.status}, backend ${backendHealth.status})`);
   };
-  await Promise.race([ready(),server.done.then(()=>{throw Error('Game server exited early');})]);
+  try {
+    await Promise.race([ready(),server.done.then(()=>{throw Error('Game server exited early');})]);
+  } finally {
+    startup.abort();
+  }
   const html = await (await fetch(origin)).text();
   assert(!html.includes('/@vite/client') && /\/assets\/[^"]+\.js/.test(html),'Expected built HTML');
   const bundle = (await readdir(join(dist,'assets'))).find(name=>/^App-[\w-]+\.js$/.test(name));
