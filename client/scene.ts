@@ -563,6 +563,7 @@ export function createScene(
       condition=s.operation.condition;
       mapDetails.setDampness(condition==='fog');
       const night=condition==='night',fog=condition==='fog';
+      environmentUpgrade.setNight(night);
       const weatherFog=night?new T.Fog(weatherHorizon.night,20,100):fog?new T.Fog(weatherHorizon.fog,4,42):null;
       scene.fog=weatherFog??daylightFog;
       sceneAssets.setWeatherBackground(night?'night':fog?'fog':null);

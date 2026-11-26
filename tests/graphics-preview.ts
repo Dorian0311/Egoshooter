@@ -64,8 +64,10 @@ function show() {
   if(view.value==='combat')Object.assign(player,{x:-43,y:0,z:8,yaw:0,pitch:-.02});
   if (view.value === 'river') Object.assign(player, { x: -34, y: 1, z: 24, yaw: -1.1, pitch: -.16 });
   if (view.value === 'alpine') Object.assign(player, { x: -62, y: 0, z: 0, yaw: -1.3, pitch: .06 });
+  const weather=params.get('condition');
+  const operation=createOperation(weather==='night'||weather==='fog'?{condition:weather}:undefined,getWorld(mapId),Math.random);
   const snapshot: Snapshot = {
-    version: VERSION, mapId, training: true, operation:createOperation(undefined,getWorld(mapId),Math.random),npcs:[],pickups:[],projectiles:[],corpses:[],bodyParts:[],aidTents:[], roomCode: 'REVIEW', matchId: 'review',
+    version: VERSION, mapId, training: true, operation,npcs:[],pickups:[],projectiles:[],corpses:[],bodyParts:[],aidTents:[], roomCode: 'REVIEW', matchId: 'review',
     interiors:initialInteriors(getWorld(mapId)),phase: 'playing', now: 0, startsAt: 0, endsAt: 600000, host: player.id,
     scores: { de: 0, fr: 0 }, players: [player], winner: null, events: [], persistence: 'practice',
   };

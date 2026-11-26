@@ -2,11 +2,23 @@ import * as T from 'three';
 import {mergeGeometries} from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type {World} from '../shared/world';
 
+type NightFixtures={intensity:{value:number};pools:T.Mesh[];papers:T.MeshStandardMaterial[]};
+const fixtures=new WeakMap<T.Group,NightFixtures>();
+
+export function setPeriodNight(group:T.Group,enabled:boolean){
+  const state=fixtures.get(group);if(!state)return;
+  state.intensity.value=enabled?1:0;
+  for(const mesh of state.pools)mesh.visible=enabled;
+  for(const paper of state.papers)paper.emissiveIntensity=enabled?.22:0;
+}
+
 /** Architectural trim for the pre-war masonry, goods depots and mountain barracks. */
 export function createPeriodArchitecture(world:World){
   const group=new T.Group();group.name='Period masonry and railway architecture';
   if(world.id==='storm')return group;
   const material=new T.MeshStandardMaterial({vertexColors:true,roughness:.84,metalness:.06});
+  const night:NightFixtures={intensity:{value:0},pools:[],papers:[]};
+  fixtures.set(group,night);
   const matrix=new T.Matrix4(),quaternion=new T.Quaternion(),angles=new T.Euler();
   const translation=new T.Vector3(),scale=new T.Vector3(1,1,1),tint=new T.Color();
   for(const [number,b] of world.buildings.entries()){
@@ -16,10 +28,20 @@ export function createPeriodArchitecture(world:World){
     const alpine=world.id==='alpine',cinema=b.name==='UNION-LICHTSPIELE';
     const station=/BAHNHOF|KÖLN-DEUTZ/.test(b.name);
     const deutz=world.id==='cologne'&&b.name==='DEUTZER BAHNHOF';
+    const illuminated=deutz||cinema;
+    const trim=illuminated?material.clone():material;
+    if(illuminated)trim.onBeforeCompile=shader=>{
+      shader.uniforms.periodNight=night.intensity;
+      shader.vertexShader='attribute float lampGlass; varying float vLampGlass;\n'+shader.vertexShader;
+      shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\nvLampGlass=lampGlass;');
+      shader.fragmentShader='varying float vLampGlass; uniform float periodNight;\n'+shader.fragmentShader;
+      shader.fragmentShader=shader.fragmentShader.replace('#include <emissivemap_fragment>',
+        '#include <emissivemap_fragment>\ntotalEmissiveRadiance+=periodNight*vLampGlass*vec3(1.0,.68,.35);');
+    };
     const shed=/HALLE|WERKSHOF|DEPOT/.test(b.name)&&!alpine;
     const stone=['#a79d86','#ae9f85','#aba393'][number%3],shadow='#766e60';
     const brick=number%2?'#905e4c':'#985e48',iron='#454a42',timber='#665742';
-    function add(g:T.BufferGeometry,x:number,y:number,z:number,color:string,rx=0,rz=0,near=false){
+    function add(g:T.BufferGeometry,x:number,y:number,z:number,color:string,rx=0,rz=0,near=false,glow=0){
       quaternion.setFromEuler(angles.set(rx,0,rz));
       g.applyMatrix4(matrix.compose(translation.set(x,y,z),quaternion,scale));
       const p=g.getAttribute('position'),n=g.getAttribute('normal'),rgb=new Float32Array(p.count*3);
@@ -28,6 +50,7 @@ export function createPeriodArchitecture(world:World){
         const wear=.90+.045*Math.sin(p.getX(i)*2.21+p.getY(i)*.87+p.getZ(i)*1.79)+.055*n.getY(i);
         rgb[i*3]=tint.r*wear;rgb[i*3+1]=tint.g*wear;rgb[i*3+2]=tint.b*wear;
       }
+      if(illuminated)g.setAttribute('lampGlass',new T.BufferAttribute(new Float32Array(p.count).fill(glow),1));
       g.setAttribute('color',new T.BufferAttribute(rgb,3));(near?close:broad).push(g);
     }
     function box(x:number,y:number,z:number,w:number,h:number,d:number,c:string,rx=0,rz=0,near=false){
@@ -108,7 +131,7 @@ export function createPeriodArchitecture(world:World){
             box(x,3.26,wallZ+.94,.080,.11,1.12,green);
             box(x,3.06,wallZ+.82,.065,.065,.93,green,-.37);
             add(new T.CylinderGeometry(.06,.30,.16,6),x,3.15,lampZ,green);
-            add(new T.CylinderGeometry(.265,.18,.42,6),x,2.87,lampZ,'#d9ccb1');
+            add(new T.CylinderGeometry(.265,.18,.42,6),x,2.87,lampZ,'#d9ccb1',0,0,false,1.55);
             add(new T.CylinderGeometry(.19,.09,.075,6),x,2.62,lampZ,green);
           }
           // Louvered attic openings flank the dial under its pitched stone pediment.
@@ -120,10 +143,12 @@ export function createPeriodArchitecture(world:World){
           const boardX=-3.93,boardZ=wallZ+.57;
           box(boardX,1.97,boardZ,2.38,1.84,.14,green);
           box(boardX,2.94,boardZ+.055,2.49,.10,.24,iron);
+          add(new T.BoxGeometry(1.72,.045,.115),boardX,2.885,boardZ+.115,'#cfb689',0,0,false,.67);
           box(boardX,1.02,boardZ+.06,2.48,.11,.24,stone);
           const paper=new T.TextureLoader().load('/shooter/environment/deutz-abfahrt.webp');
           paper.colorSpace=T.SRGBColorSpace;paper.anisotropy=4;
-          timetable=new T.Mesh(new T.PlaneGeometry(2.24,1.68),new T.MeshStandardMaterial({map:paper,roughness:.91}));
+          const print=new T.MeshStandardMaterial({map:paper,roughness:.91,emissive:'#e5bc83',emissiveMap:paper,emissiveIntensity:0});
+          night.papers.push(print);timetable=new T.Mesh(new T.PlaneGeometry(2.24,1.68),print);
           timetable.name='Deutzer Bahnhof – Abfahrtstafel';
           timetable.position.set(boardX,1.97,boardZ+.075);
           // Broad, flush joints define the forecourt pavement against the surrounding setts.
@@ -170,7 +195,7 @@ export function createPeriodArchitecture(world:World){
           // Vertical opal glass sconces light the ends of the poster cases.
           const x=wing*8.18;
           box(x,2.13,front,.31,1.42,.23,green);
-          add(new T.CylinderGeometry(.15,.15,1.18,8),x,2.13,front+.18,ivory);
+          add(new T.CylinderGeometry(.15,.15,1.18,8),x,2.13,front+.18,ivory,0,0,false,1.05);
           for(const y of [1.51,2.75])box(x,y,front+.11,.40,.10,.43,bronze);
           // Upper-floor masonry bands taper toward the centre above the existing marquee.
           for(let line=0;line<3;line++){
@@ -183,7 +208,8 @@ export function createPeriodArchitecture(world:World){
         const fan=new T.Shape();
         fan.moveTo(-radius,0);fan.absarc(0,0,radius,Math.PI,0,true);fan.closePath();
         const fanGeometry=new T.ShapeGeometry(fan,20);
-        add(fanGeometry,0,fanY,fanZ,'#42504a');
+        add(fanGeometry,0,fanY,fanZ,'#42504a',0,0,false,.12);
+        add(new T.BoxGeometry(3.56,.049,.15),0,3.64,wallZ+1.72,ivory,0,0,false,.83);
         box(0,fanY,fanZ,3.72,.12,.19,ivory);
         for(let i=0;i<9;i++){
           const a=Math.PI*i/8,x=Math.cos(a),y=Math.sin(a);
@@ -205,7 +231,7 @@ export function createPeriodArchitecture(world:World){
         box(bladeX,10.76,bladeZ,.53,.17,.46,ivory);
         const letterZ=bladeZ+.305;
         function stroke(y:number,x1:number,y1:number,x2:number,y2:number){
-          box(bladeX+(x1+x2)/2,y+(y1+y2)/2,letterZ,Math.hypot(x2-x1,y2-y1),.085,.048,ivory,0,Math.atan2(y2-y1,x2-x1));
+          add(new T.BoxGeometry(Math.hypot(x2-x1,y2-y1),.085,.048),bladeX+(x1+x2)/2,y+(y1+y2)/2,letterZ,ivory,0,Math.atan2(y2-y1,x2-x1),false,.72);
         }
         const left=-.30,right=.30,top=.42,bottom=-.42;
         stroke(9.55,left,bottom,left,top);stroke(9.55,left,-.05,right,top);stroke(9.55,-.17,.05,right,bottom);
@@ -252,12 +278,37 @@ export function createPeriodArchitecture(world:World){
       const geometry=mergeGeometries(details?[...broad,...close]:broad);
       if(!geometry)continue;
       geometry.computeBoundingSphere();
-      const mesh=new T.Mesh(geometry,material);mesh.receiveShadow=true;
+      const mesh=new T.Mesh(geometry,trim);mesh.receiveShadow=true;
       if(details&&timetable)mesh.add(timetable);
       lod.addLevel(mesh,distance,.10);
     }
     for(const geometry of [...broad,...close])geometry.dispose();
     group.add(lod);
+    if(illuminated){
+      // Faint, feathered spill directly on the stone and paving, kept off doors and sign faces.
+      const positions:number[]=[],rgba:number[]=[];
+      function pool(x:number,y:number,z:number,w:number,h:number,floor:boolean,intensity:number){
+        function point(r:number,a:number){
+          positions.push(x+w*r*Math.cos(a),floor?y:y+h*r*Math.sin(a),floor?z-h*r*Math.sin(a):z);
+          rgba.push(1,.57,.24,intensity*(1-r)*(1-r));
+        }
+        for(let row=0;row<3;row++)for(let i=0;i<20;i++){
+          const a=i*Math.PI/10,next=(i+1)*Math.PI/10,inner=row/3,outer=(row+1)/3;
+          point(inner,a);point(outer,a);point(outer,next);
+          if(row){point(inner,a);point(outer,next);point(inner,next);}
+        }
+      }
+      for(const side of [-1,1]){
+        const x=side*(deutz?7.65:8.18);
+        pool(x,deutz?2.68:2.12,wallZ+.585,deutz?1.12:.71,deutz?1.18:1.05,false,.15);
+        pool(x,.084,wallZ+1.68,1.65,1.20,true,.10);
+      }
+      if(cinema)pool(0,.084,wallZ+2.23,2.08,1.65,true,.105);
+      const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(positions,3));g.setAttribute('color',new T.Float32BufferAttribute(rgba,4));
+      const spill=new T.Mesh(g,new T.MeshBasicMaterial({vertexColors:true,transparent:true,blending:T.AdditiveBlending,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-1,polygonOffsetUnits:-1}));
+      spill.position.copy(lod.position);spill.name='Night pools from period entrance lamps';spill.visible=false;
+      night.pools.push(spill);group.add(spill);
+    }
   }
   return group;
 }

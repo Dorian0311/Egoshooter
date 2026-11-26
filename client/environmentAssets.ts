@@ -8,7 +8,7 @@ import {instanceStaticModel} from './scenery';
 import type {GraphicsQuality} from './graphicsSettings';
 import {scannedCliffFaces,shoreRockFinish} from './coastalHeadland';
 import {createPeriodQuarter} from './periodQuarter';
-import {createPeriodArchitecture} from './periodArchitecture';
+import {createPeriodArchitecture,setPeriodNight} from './periodArchitecture';
 import {createCoastalArchitecture} from './coastalArchitecture';
 import {applySurfaceFinish} from './surfaceFinish';
 
@@ -24,7 +24,8 @@ function disposeSource(root:T.Object3D){
 export function loadEnvironmentUpgrade(scene:T.Scene,world:World,renderer:T.WebGLRenderer){
  const loader=new GLTFLoader(),sources:T.Group[]=[],root=new T.Group();root.name='imported-environment';root.matrixAutoUpdate=false;scene.add(root);let disposed=false;
  const architecture=world.id==='storm'?createCoastalArchitecture(world.buildings):createPeriodArchitecture(world);
- if(world.id==='cologne'||world.id==='frontline')architecture.add(createPeriodQuarter(world.id));
+ const quarter=world.id==='cologne'||world.id==='frontline'?createPeriodQuarter(world.id):undefined;
+ if(quarter)architecture.add(quarter);
  root.add(architecture);sources.push(architecture);
  const distantDetails:T.InstancedMesh[]=[];
  const markDetails=(from:number)=>{
@@ -127,6 +128,7 @@ export function loadEnvironmentUpgrade(scene:T.Scene,world:World,renderer:T.WebG
  }
  return {
   ready:Promise.all(loading),
+  setNight(enabled:boolean){setPeriodNight(architecture,enabled);quarter?.setNight(enabled);},
   update(position:T.Vector3,quality:GraphicsQuality){
    const limit=quality==='auto'||quality==='performance'?45:Infinity;
    for(const item of distantDetails){

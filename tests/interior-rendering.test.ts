@@ -69,7 +69,7 @@ test('room lights keep two stable world slots without adding per-pixel lights to
 test('viewmodel uses its own scene/cache while retaining camera transforms, environment and world shadow map',()=>{
  const world=new T.Scene(),camera=new T.PerspectiveCamera(),weaponCamera=new T.PerspectiveCamera(),weapon=new T.Group();weaponCamera.layers.set(1);
  world.add(camera);camera.add(weapon);weapon.position.set(.2,-.2,-.5);camera.position.set(4,1.6,5);
- const sun=new T.DirectionalLight(),sky=new T.HemisphereLight(),room=new T.PointLight();sun.layers.enable(1);sky.layers.enable(1);sun.castShadow=true;world.add(sun,sun.target,sky,room);
+ const sun=new T.DirectionalLight(),sky=new T.HemisphereLight(),room=new T.PointLight(0xffffff,0);sun.layers.enable(1);sky.layers.enable(1);sun.castShadow=true;world.add(sun,sun.target,sky,room);
  const environment=new T.Texture();world.environment=environment;
  const viewmodel=createWeaponScene(world,camera,weaponCamera);assert.equal(camera.parent,viewmodel.scene);assert.equal(world.getObjectById(weapon.id),undefined);
  const copy=viewmodel.scene.children.find(o=>o instanceof T.DirectionalLight) as T.DirectionalLight;
@@ -144,4 +144,31 @@ test('furniture batches stay inside their own buildings; doors, glass and light 
  }finally{
   if(previous)Object.defineProperty(globalThis,'document',previous);else Reflect.deleteProperty(globalThis,'document');
  }
+});
+
+
+test('at night a switched indoor lamp lights the grip from its world direction without changing the viewmodel light budget',()=>{
+ const world=new T.Scene(),room=new T.Group(),eye=new T.PerspectiveCamera(),weapon=new T.PerspectiveCamera();
+ world.add(eye,room);weapon.layers.set(1);eye.position.set(8,1.6,7);
+ const sky=new T.HemisphereLight(0xa3b9df,0x756960,.22);sky.layers.enable(1);world.add(sky);
+ const lamp=new T.PointLight(0xffd59b,0,14,2);room.add(lamp);lamp.position.set(10,3,6);
+ const vm=createWeaponScene(world,eye,weapon),bounce=eye.getObjectByName('first-person-sky-bounce') as T.DirectionalLight;
+ const lights:T.Light[]=[];vm.scene.traverse(o=>{if(o instanceof T.Light)lights.push(o);});
+ assert.equal(lights.length,2);assert.ok(lights.every(l=>!(l instanceof T.PointLight)));
+ const blue=bounce.color.clone(),power=bounce.intensity;
+ lamp.intensity=38;vm.sync();
+ assert.ok(bounce.intensity>power+2);
+ assert.ok(bounce.color.r/bounce.color.b>blue.r/blue.b*2);
+ const actual=new T.Vector3(),expected=new T.Vector3(),target=new T.Vector3();
+ for(const yaw of [0,Math.PI/2,Math.PI]){
+  eye.rotation.y=yaw;vm.sync();bounce.target.getWorldPosition(target);
+  actual.subVectors(bounce.getWorldPosition(actual),target).normalize();
+  expected.subVectors(lamp.getWorldPosition(expected),target).normalize();
+  assert.ok(actual.dot(expected)>.995,'the lamp stays fixed in the world as the player turns');
+ }
+ room.visible=false;vm.sync();assert.ok(Math.abs(bounce.intensity-power)<1e-9);
+ room.visible=true;lamp.position.x+=20;vm.sync();assert.ok(Math.abs(bounce.intensity-power)<1e-9);
+ lamp.position.x-=20;lamp.intensity=0;vm.sync();assert.ok(Math.abs(bounce.intensity-power)<1e-9);
+ assert.ok(Math.abs(bounce.color.r-blue.r)<1e-9&&Math.abs(bounce.color.b-blue.b)<1e-9);
+ vm.dispose();
 });

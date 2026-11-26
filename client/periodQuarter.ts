@@ -7,13 +7,16 @@ type Point=[number,number,number];
 /** Opaque baked masonry bays and pitched rooflines beyond the playable district. */
 export function createPeriodQuarter(id:Extract<MapId,'cologne'|'frontline'>,loader=new T.TextureLoader()){
   const cologne=id==='cologne',position:number[]=[],uv:number[]=[],colors:number[]=[],indices:number[]=[];
+  const windows:number[]=[];
+  const night={value:0};
   let seed=cologne?1938:1944;
   const random=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};
-  function face(points:Point[],tile:number,shade=1){
+  function face(points:Point[],tile:number,shade=1,windowLight=0){
     const first=position.length/3,u0=(tile%4+.016)/4,v0=(3-Math.floor(tile/4)+.016)/4,span=.968/4;
     for(let i=0;i<points.length;i++){
       const u=i===1?1:i===2?(points.length===3?.5:1):0,v=i>1?1:0;
       position.push(...points[i]);uv.push(u0+span*u,v0+span*v);colors.push(shade,shade,shade);
+      windows.push(windowLight);
     }
     indices.push(first,first+1,first+2);
     if(points.length===4)indices.push(first,first+2,first+3);
@@ -63,8 +66,12 @@ export function createPeriodQuarter(id:Extract<MapId,'cologne'|'frontline'>,load
         const a=j/bays,b=(j+1)/bays;
         for(let k=0;k<floors;k++){
           const bottom=y+(h-y)*k/floors,top=y+(h-y)*(k+1)/floors;
+          // A separate deterministic sample keeps the original town layout.
+          const hash=Math.sin(cx*8.47+cz*12.67+x0*3.7+z0*4.6+j*7.23+k*21.9)*43758.54;
+          const chance=hash-Math.floor(hash);
+          const windowLight=chance<.082?Math.round(116+chance*1390):0;
           face([pt(x0+(x1-x0)*a,bottom,z0+(z1-z0)*a),pt(x0+(x1-x0)*b,bottom,z0+(z1-z0)*b),
-            pt(x0+(x1-x0)*b,top,z0+(z1-z0)*b),pt(x0+(x1-x0)*a,top,z0+(z1-z0)*a)],facade,tone*finish);
+            pt(x0+(x1-x0)*b,top,z0+(z1-z0)*b),pt(x0+(x1-x0)*a,top,z0+(z1-z0)*a)],facade,tone*finish,windowLight);
         }
       }
     }
@@ -102,8 +109,30 @@ export function createPeriodQuarter(id:Extract<MapId,'cologne'|'frontline'>,load
   geometry.setAttribute('position',new T.Float32BufferAttribute(position,3));
   geometry.setAttribute('uv',new T.Float32BufferAttribute(uv,2));
   geometry.setAttribute('color',new T.Float32BufferAttribute(colors,3));
+  geometry.setAttribute('windowLight',new T.Uint8BufferAttribute(windows,1,true));
   geometry.setIndex(indices);geometry.computeVertexNormals();geometry.computeBoundingSphere();
   const map=loader.load('/shooter/environment/period-quarter.webp');map.colorSpace=T.SRGBColorSpace;map.anisotropy=4;
-  const mesh=new T.Mesh(geometry,new T.MeshLambertMaterial({map,vertexColors:true}));
-  mesh.name='Outer quarter and embankments';mesh.matrixAutoUpdate=false;return mesh;
+  const material=new T.MeshLambertMaterial({map,vertexColors:true});
+  material.onBeforeCompile=shader=>{
+    shader.uniforms.quarterNight=night;
+    shader.vertexShader=shader.vertexShader.replace('#include <common>',
+      '#include <common>\nattribute float windowLight; varying float vWindowLight;')
+      .replace('#include <begin_vertex>','#include <begin_vertex>\nvWindowLight=windowLight;');
+    shader.fragmentShader=shader.fragmentShader.replace('#include <common>',
+      '#include <common>\nuniform float quarterNight; varying float vWindowLight;')
+      .replace('#include <emissivemap_fragment>',`#include <emissivemap_fragment>
+        if(quarterNight*vWindowLight>.0){
+          vec2 tileUv=fract(vMapUv*4.0);
+          float wide=step(2.1,vMapUv.y*4.0)*step(vMapUv.y*4.0,2.9)*step(vMapUv.x*4.0,2.99);
+          float edge=mix(.233,.172,wide);
+          vec2 interior=min(tileUv,1.0-tileUv);
+          float pane=smoothstep(edge,edge+.026,interior.x)*smoothstep(.193,.219,interior.y);
+          float glass=1.0-smoothstep(.20,.34,dot(sampledDiffuseColor.rgb,vec3(.2126,.7152,.0722)));
+          totalEmissiveRadiance+=vec3(.68,.30,.091)*quarterNight*vWindowLight*pane*glass;
+        }
+      `);
+  };
+  const mesh=new T.Mesh(geometry,material);
+  mesh.name='Outer quarter and embankments';mesh.matrixAutoUpdate=false;
+  return Object.assign(mesh,{setNight(enabled:boolean){night.value=Number(enabled);}});
 }
