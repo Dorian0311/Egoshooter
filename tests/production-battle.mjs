@@ -4,6 +4,7 @@
 // The Python harness accepts the same BATTLE_* and HARBOUR_* options as in development.
 // Set BATTLE_FIXED_TURNS=1 for repeatable 100 ms sweeps from the same compass heading.
 // Set BATTLE_DRAW_PROFILE=1 to trace CPU draw submission and actual WebGL program binds.
+// Set BATTLE_GPU_PROFILE=1 to sample raw GPU frame times, including on High and Ultra.
 import assert from 'node:assert/strict';
 import {spawn} from 'node:child_process';
 import {randomBytes} from 'node:crypto';
@@ -47,19 +48,36 @@ process.once('SIGTERM', () => {process.exitCode=143; stop();});
 try {
   assert(process.argv.slice(2).every(arg=>arg==='--check'), 'Expected --check or no arguments');
   assert(process.env.BATTLE_SHADER_PROFILE!=='1','Shader material tagging requires the development build');
-  let patched = false, drawPatched=false;
+  let patched = false, drawPatched=false, gpuHooks=0;
   const traceDraws=process.env.BATTLE_DRAW_PROFILE==='1';
+  const traceGpu=process.env.BATTLE_GPU_PROFILE==='1';
   await build({root, mode:'production', logLevel:'warn', build:{outDir:dist}, plugins:[{
     name:'local-battle-observation', enforce:'pre',
     transform(source, id) {
-      if(traceDraws && id.replaceAll('\\','/').endsWith('/client/scene.ts')) {
+      const path=id.replaceAll('\\','/');
+      if(traceGpu&&path.endsWith('/client/gpuTiming.ts')){
+        const anchor='state.samples++;';
+        assert.equal(source.split(anchor).length,2,'GPU sample hook changed');
+        gpuHooks++;
+        return source.replace(anchor,anchor+'state.latestSample=ms;');
+      }
+      if(traceGpu&&path.endsWith('/client/graphics.ts')){
+        const sampling='timingEnabled&&adaptiveQuality&&adaptive&&currentTimingFrame%17===0';
+        const capture='frameState.gpuMs=gpuTiming.state.ms;';
+        assert.equal(source.split(sampling).length,2,'GPU timing condition changed');
+        assert.equal(source.split(capture).length,2,'GPU frame capture hook changed');
+        gpuHooks++;
+        return source.replace(sampling,'timingEnabled&&adaptive&&currentTimingFrame%17===0')
+          .replace(capture,capture+'frameState.gpuQueryCount=gpuTiming.state.samples;frameState.gpuQueryMs=gpuTiming.state.latestSample;');
+      }
+      if(traceDraws && path.endsWith('/client/scene.ts')) {
         const marker=/^  const renderer = new T\.WebGLRenderer\([^\n]+;$/gm;
         assert.equal([...source.matchAll(marker)].length,1,'Scene renderer hook changed');
         drawPatched=true;
         return "import {attachBattleDrawProbe} from '../tests/battle-draw-probe.mjs';\n"+
           source.replace(marker,'$&\nwindow.battleDrawProbe=attachBattleDrawProbe(renderer);');
       }
-      if(!id.replaceAll('\\','/').endsWith('/client/App.tsx')) return;
+      if(!path.endsWith('/client/App.tsx')) return;
       const anchor = 'scene.current?.update(s, access.playerId);';
       assert.equal(source.split(anchor).length, 2, 'App snapshot hook changed');
       patched = true;
@@ -69,6 +87,7 @@ try {
   }]});
   assert(patched, 'Missing App observation hook');
   assert.equal(drawPatched,traceDraws,'Missing scene renderer hook');
+  assert.equal(gpuHooks,traceGpu?2:0,'Missing GPU profile hook');
   await child(process.execPath, [join(root,'scripts/compress-client.mjs')], {cwd:scratch}).done;
 
   const reservation = createServer();

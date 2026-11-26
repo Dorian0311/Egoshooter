@@ -207,12 +207,13 @@ export function move(p: Player, i: Input, dt = STEP,world:World=getWorld(),now=i
     p.prone=obstacles.some(b=>b.kind==='rock'?rockBlocks(b,p.x,p.y,p.z,height,radius):
       p.y+height>b.y-b.h/2+.04&&p.y<b.y+b.h/2-.29&&Math.abs(p.x-b.x)<b.w/2+radius&&Math.abs(p.z-b.z)<b.d/2+radius);
   }else p.prone=wantsProne;
-  if(isCrawling(p))i={...i,sprint:false,jump:false,crouch:false};
+  const crawling=isCrawling(p);
+  if(crawling)i={...i,sprint:false,jump:false,crouch:false};
   if(p.uniform==='leatherface'&&p.weapon===4&&!p.carriedCorpse&&!p.heldPart&&armCount(p)===2&&p.hp>0&&i.fire&&now>=p.powerReadyAt){
     p.powerUntil=now+SAW_POWER_MS;p.powerReadyAt=p.powerUntil+SAW_RECOVERY_MS;
   }
   p.crouching=i.crouch;
-  const moving=Math.hypot(i.forward,i.side)>.01;
+  const inputLength=Math.hypot(i.forward,i.side),moving=inputLength>.01;
   const powered=p.uniform==='leatherface'&&p.weapon===4&&!p.carriedCorpse&&!p.heldPart&&armCount(p)===2&&i.fire&&now<p.powerUntil;
   p.stamina=Number.isFinite(p.stamina)?p.stamina:SPRINT_DURATION_MS;
   p.sprinting=!!(i.sprint&&moving&&!i.crouch&&!i.aim&&!p.sprintExhausted&&p.stamina>0&&!powered);
@@ -223,21 +224,22 @@ export function move(p: Player, i: Input, dt = STEP,world:World=getWorld(),now=i
     p.stamina=Math.min(SPRINT_DURATION_MS,p.stamina+dt*1000*SPRINT_DURATION_MS/SPRINT_RECHARGE_MS);
     if(p.stamina>=SPRINT_DURATION_MS-.001){p.stamina=SPRINT_DURATION_MS;p.sprintExhausted=false;}
   }
-  const speed = (isCrawling(p) ? 4.3*.3 : i.crouch ? 2.3 : powered ? 9.2 : p.sprinting ? 6.2 : 4.3)*(p.carriedCorpse?.55:1),
-    len = Math.max(1, Math.hypot(i.forward, i.side));
+  const speed = (crawling ? 4.3*.3 : i.crouch ? 2.3 : powered ? 9.2 : p.sprinting ? 6.2 : 4.3)*(p.carriedCorpse?.55:1),
+    len = Math.max(1, inputLength),sinYaw=Math.sin(i.yaw),cosYaw=Math.cos(i.yaw);
   const dx =
-    ((Math.cos(i.yaw) * i.side - Math.sin(i.yaw) * i.forward) * speed * dt) /
+    ((cosYaw * i.side - sinYaw * i.forward) * speed * dt) /
     len;
   const dz =
-    ((-Math.sin(i.yaw) * i.side - Math.cos(i.yaw) * i.forward) * speed * dt) /
+    ((-sinYaw * i.side - cosYaw * i.forward) * speed * dt) /
     len;
-  const h = isCrawling(p) ? .6 : i.crouch ? 1.15 : 1.75,
+  const h = crawling ? .6 : i.crouch ? 1.15 : 1.75,
     r = 0.34;
-  const padding=r+(isCrawling(p)?.8:0);
-  const boxes=nearbyBoxes(world.boxes,Math.min(p.x,p.x+dx)-padding,Math.min(p.z,p.z+dz)-padding,
-    Math.max(p.x,p.x+dx)+padding,Math.max(p.z,p.z+dz)+padding);
+  const padding=r+(crawling?.8:0),nextX=p.x+dx,nextZ=p.z+dz;
+  const boxes=nearbyBoxes(world.boxes,Math.min(p.x,nextX)-padding,Math.min(p.z,nextZ)-padding,
+    Math.max(p.x,nextX)+padding,Math.max(p.z,nextZ)+padding);
   function blocked(x: number, z: number) {
-    return (isCrawling(p)?[0,-.55,.8]:[0]).some(offset=>blockedPoint(x+Math.sin(i.yaw)*offset,z+Math.cos(i.yaw)*offset));
+    return blockedPoint(x,z)||crawling&&(
+      blockedPoint(x-sinYaw*.55,z-cosYaw*.55)||blockedPoint(x+sinYaw*.8,z+cosYaw*.8));
   }
   function blockedPoint(x:number,z:number){
     return (
@@ -251,8 +253,8 @@ export function move(p: Player, i: Input, dt = STEP,world:World=getWorld(),now=i
       )
     );
   }
-  if (!blocked(p.x + dx, p.z)) p.x += dx;
-  if (!blocked(p.x, p.z + dz)) p.z += dz;
+  if (!Object.is(nextX,p.x) && !blocked(nextX,p.z)) p.x=nextX;
+  if (!Object.is(nextZ,p.z) && !blocked(p.x,nextZ)) p.z=nextZ;
   if (i.jump && p.grounded) {
     p.vy = 5.5;
     p.grounded = false;

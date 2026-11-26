@@ -1,4 +1,4 @@
-import { LinearFilter, PerspectiveCamera, RedFormat, type Object3D } from 'three';
+import { HalfFloatType, LinearFilter, PerspectiveCamera, RedFormat, UnsignedByteType, type Object3D } from 'three';
 import { SSAOPass } from 'three/examples/jsm/postprocessing/SSAOPass.js';
 
 /** Only visible points and lines need a visibility override in the normal/depth pass. */
@@ -56,6 +56,15 @@ export class WorldOcclusionPass extends SSAOPass {
   override render(...args: Parameters<SSAOPass['render']>) {
     this.copyMaterial.uniforms.scalarInput.value = this.output !== SSAOPass.OUTPUT.Normal;
     super.render(...args);
+  }
+
+  setNormalPrecision(fullPrecision: boolean) {
+    const target = this.normalRenderTarget;
+    const type = fullPrecision ? HalfFloatType : UnsignedByteType;
+    if (target.texture.type === type) return;
+    // Normals are already encoded in [0,1]. Scene depth uses its own 24-bit texture.
+    target.dispose();
+    target.texture.type = type;
   }
 
   overrideVisibility() {

@@ -1,7 +1,27 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { Color, Group, LineSegments, Mesh, PerspectiveCamera, Points, RedFormat, RGBAFormat, Scene, Vector4, WebGLRenderTarget, type WebGLRenderer } from 'three';
+import { Color, Group, HalfFloatType, LineSegments, Mesh, PerspectiveCamera, Points, RedFormat, RGBAFormat, Scene, UnsignedByteType, Vector4, WebGLRenderTarget, type WebGLRenderer } from 'three';
 import { WorldOcclusionPass } from '../client/worldOcclusionPass';
+
+test('switching AO normal precision reallocates only on changes and retains depth sampling', () => {
+  const pass = new WorldOcclusionPass(new Scene(), new PerspectiveCamera(), 4, 4, 4);
+  const target = pass.normalRenderTarget, depth = target.depthTexture;
+  let disposals = 0;
+  target.addEventListener('dispose', () => disposals++);
+  try {
+    pass.setNormalPrecision(false);
+    pass.setNormalPrecision(false);
+    assert.equal(target.texture.type, UnsignedByteType);
+    assert.equal(disposals, 1);
+    pass.setNormalPrecision(true);
+    assert.equal(target.texture.type, HalfFloatType);
+    assert.equal(disposals, 2);
+    assert.equal(pass.ssaoMaterial.uniforms.tDepth.value, depth);
+    assert.equal(pass.ssaoMaterial.uniforms.tNormal.value, target.texture);
+  } finally {
+    pass.dispose();
+  }
+});
 
 test('AO sample projection preserves screen coordinates with zoom and an asymmetric perspective', () => {
   const camera = new PerspectiveCamera(72, 16 / 9, .1, 350);

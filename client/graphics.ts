@@ -114,6 +114,7 @@ export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
       sun.shadow.mapSize.set(shadowSize, shadowSize);
     }
     ao.enabled = preset.ao;
+    if (ao.enabled) ao.setNormalPrecision(quality === 'ultra');
     bloom.enabled = preset.bloom;
     fxaa.enabled=preset.antialias==='fxaa';smaa.enabled=preset.antialias==='smaa';
     // EffectComposer.setSize also touches disabled passes. Only the active preset owns full-size buffers.

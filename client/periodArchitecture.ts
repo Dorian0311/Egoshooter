@@ -79,12 +79,33 @@ export function createPeriodArchitecture(world:World){
         for(let i=0;i<uv.count;i++){
           const along=river?-pos.getZ(i):pos.getX(i),u=(along+half)/(2*half);
           const v=(8-pos.getY(i))/4;
-          uv.setXY(i,(3.5+u*1007)/1024,1-((river?258.5:3.5)+v*247)/512);
+          uv.setXY(i,(3.5+u*1007)/1024,1-((river?258.5:3.5)+v*247)/816);
         }
       }
       elevation(false,-wallX,wallX,4.01,8);
       for(const [bottom,top] of [[4.01,5.2],[6.5,8]])elevation(true,-wallZ,wallZ,bottom,top);
       for(const [left,right] of [[-wallZ,-5],[-1.5,1.5],[5,wallZ]])elevation(true,left,right,5.2,6.5);
+      // Two display cases sit on the solid ground-floor wings. Illustrated book
+      // covers and a leaded transom sit behind the projecting shop joinery.
+      for(const wing of [-1,1]){
+        const cx=wing*5.50,face=wallZ+.434,joinery='#374d43';
+        const art=new T.PlaneGeometry(6.18,2.89);
+        add(art,cx,1.89,face,'#fff9eb');
+        const uv=art.getAttribute('uv'),pos=art.getAttribute('position'),tile=wing<0?4:510;
+        for(let i=0;i<uv.count;i++){
+          const u=(pos.getX(i)-cx)/6.18+.5,v=(1.89-pos.getY(i))/2.89+.5;
+          uv.setXY(i,(tile+1+u*497)/1024,1-(519+v*289)/816);
+        }
+        for(const edge of [-1,1]){
+          box(cx+edge*3.10,1.89,face+.053,.15,2.97,.18,joinery);
+          box(cx+edge*3.10,1.89,face+.153,.055,2.83,.033,'#8d7957',0,0,true);
+        }
+        box(cx,3.38,face+.07,6.40,.13,.29,joinery);
+        box(cx,3.48,face+.06,6.50,.073,.34,'#968869');
+        box(cx,.49,face+.08,6.37,.14,.31,'#837863');
+        box(cx,2.89,face+.053,6.15,.055,.096,joinery);
+        for(const pane of [-1,1])box(cx+pane*1.02,1.995,face+.045,.052,1.73,.084,joinery);
+      }
       for(const x of [-6.43,-2.70,2.70,6.43]){
         box(x,4.88,wallZ+.51,2.34,.12,.32,'#a5967d');
         if(Math.abs(x)>3)continue;
