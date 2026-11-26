@@ -1,10 +1,13 @@
 // Test-only wall-clock timing around existing WebGL calls. Never asks the driver for extra state.
-export function attachBattleGlStalls(renderer, clock=()=>performance.now()) {
+export function attachBattleGlStalls(renderer, clock=()=>performance.now(), traceWeaponShadow=false) {
   const gl=renderer.getContext();
   const events=[],frames=[];
   let eventCount=0,frameCount=0,context=null,start=0,composer=0,shadowMs=0,inShadow=false,active=false;
   const programs=new WeakMap();
   let nextProgramId=0;
+  let weaponWarmup=false,currentWeapon=false;
+  const weaponPrograms={warmup:new Map(),world:new Map()};
+  const weaponChecks=[];
   const programCalls=new Set(['linkProgram','getProgramParameter','getProgramInfoLog','getUniformLocation','getAttribLocation','useProgram']);
   function shaderVariant(program){
     if(!program)return undefined;
@@ -34,6 +37,8 @@ export function attachBattleGlStalls(renderer, clock=()=>performance.now()) {
       try{return original.apply(this,arguments);}
       finally{
         const end=clock(),ms=end-before;
+        if(currentWeapon&&method==='getProgramInfoLog'&&weaponChecks.length<32)
+          weaponChecks.push({phase:weaponWarmup?'warmup':'world',ms});
         if(ms>2){
           const object=context?.[4],material=context?.[3],path=[];
           for(let node=object;node&&path.length<8;node=node.parent)if(node.name)path.push(node.name);
@@ -48,7 +53,17 @@ export function attachBattleGlStalls(renderer, clock=()=>performance.now()) {
   const direct=renderer.renderBufferDirect;
   renderer.renderBufferDirect=function(){
     const previous=context;context=arguments;
-    try{return direct.apply(this,arguments);}finally{context=previous;}
+    const previousWeapon=currentWeapon;
+    currentWeapon=traceWeaponShadow&&inShadow&&arguments[4]?.material?.name==='MI_Kar98k.1';
+    try{
+      const result=direct.apply(this,arguments);
+      if(currentWeapon){
+        const program=renderer.properties.get(arguments[3]).currentProgram;
+        const observed=weaponPrograms[weaponWarmup?'warmup':'world'];
+        if(program&&!observed.has(program.id))observed.set(program.id,program.cacheKey);
+      }
+      return result;
+    }finally{context=previous;currentWeapon=previousWeapon;}
   };
   const shadow=renderer.shadowMap.render;
   renderer.shadowMap.render=function(){
@@ -58,6 +73,8 @@ export function attachBattleGlStalls(renderer, clock=()=>performance.now()) {
     finally{if(active&&!previous)shadowMs+=clock()-before;inShadow=previous;}
   };
   return {
+    weaponWarmup(active){weaponWarmup=active;},
+    weaponShadow(){return {warmup:[...weaponPrograms.warmup],world:[...weaponPrograms.world],checks:weaponChecks};},
     frame(){start=clock();active=true;composer=0;shadowMs=0;},
     composer(){composer=clock();},
     end(){

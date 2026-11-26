@@ -194,6 +194,7 @@ export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
       ] as const;
       const prepared:string[]=[];
       const restoreDepth:(()=>void)[]=[];
+      let weaponShadowDrawn=false;
       try{
         for(const [name,property] of sources){
           if(warmedShadowSources.has(name))continue;
@@ -201,6 +202,14 @@ export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
           if(!(caster instanceof T.Mesh))continue;
           const culled=caster.frustumCulled,cast=caster.castShadow,mask=caster.layers.mask;
           restoreDepth.push(()=>{caster.frustumCulled=culled;caster.castShadow=cast;caster.layers.mask=mask;});
+          if(name==='world-kar98k'){
+            const before=caster.onBeforeShadow,after=caster.onAfterShadow;
+            // Three shares the opaque depth material. Recheck its texture/side key
+            // for this draw and for the next caster that uses the same material.
+            caster.onBeforeShadow=function(...args){before.apply(this,args);args[5].needsUpdate=true;};
+            caster.onAfterShadow=function(...args){after.apply(this,args);args[5].needsUpdate=true;weaponShadowDrawn=true;};
+            restoreDepth.push(()=>{caster.onBeforeShadow=before;caster.onAfterShadow=after;});
+          }
           caster.frustumCulled=false;caster.castShadow=true;caster.layers.mask|=camera.layers.mask;
           for(let node:T.Object3D|null=caster;node;node=node.parent){
             if(!node.visible){const hiddenNode=node;node.visible=true;restoreDepth.push(()=>{hiddenNode.visible=false;});}
@@ -210,7 +219,7 @@ export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
         if(wound||prepared.length||(!actorsOnly&&!sun.shadow.map)){
           renderer.shadowMap.needsUpdate=true;
           renderer.render(scene,camera);
-          prepared.forEach(name=>warmedShadowSources.add(name));
+          prepared.forEach(name=>{if(name!=='world-kar98k'||weaponShadowDrawn)warmedShadowSources.add(name);});
         }
       }finally{for(const restore of restoreDepth)restore();}
       withBodyDistanceUpload(actorRoots,()=>{

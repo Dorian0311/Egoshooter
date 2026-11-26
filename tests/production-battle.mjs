@@ -8,6 +8,7 @@
 // Set BATTLE_FRAME_PHASES=1 to attribute long CPU frames to work inside the game callback.
 // BATTLE_SNAPSHOT_PROFILE=1 times client snapshot merge, HUD/event dispatch, scene sync and the test observer.
 // BATTLE_GL_STALLS=1 records existing WebGL calls taking over 2 ms and shadow/composer CPU time.
+// BATTLE_WEAPON_SHADOW=1 also checks exact Kar98k shadow program reuse in the real battle.
 // BATTLE_STARTUP_SHADER=1 verifies shader readiness before play; timeout blocks the asset to test fallback.
 // HARBOUR_NEAR_SPAWN=1 starts the tester behind the Diner on the isolated server.
 // BATTLE_SEED sets the isolated server's starting random sequence for comparable runs.
@@ -61,6 +62,8 @@ try {
   const traceDraws=process.env.BATTLE_DRAW_PROFILE==='1';
   const traceGpu=process.env.BATTLE_GPU_PROFILE==='1';
   const traceGl=process.env.BATTLE_GL_STALLS==='1';
+  const traceWeaponShadow=process.env.BATTLE_WEAPON_SHADOW==='1';
+  assert(!traceWeaponShadow||traceGl,'BATTLE_WEAPON_SHADOW requires BATTLE_GL_STALLS');
   let glPatched=false;
   const tracePhases=process.env.BATTLE_FRAME_PHASES==='1';
   const traceStartup=['1','timeout'].includes(process.env.BATTLE_STARTUP_SHADER);
@@ -85,7 +88,13 @@ try {
         };
         source="import {attachBattleGlStalls} from '../tests/battle-gl-stalls.mjs';\n"+source;
         instrument('const composer = new EffectComposer(renderer);',
-          'const stallProbe=window.battleGlStalls=attachBattleGlStalls(renderer);\nconst composer = new EffectComposer(renderer);');
+          `const stallProbe=window.battleGlStalls=attachBattleGlStalls(renderer,undefined,${traceWeaponShadow});\nconst composer = new EffectComposer(renderer);`);
+        if(traceWeaponShadow){
+          const start='const target=composer.readBuffer,previous=renderer.getRenderTarget();';
+          const finish='shaderProbe?.removeFromParent();';
+          instrument(start,'stallProbe.weaponWarmup(true);'+start);
+          instrument(finish,'stallProbe.weaponWarmup(false);'+finish);
+        }
         instrument('const currentTimingFrame=timingFrame++;','stallProbe.frame();\nconst currentTimingFrame=timingFrame++;');
         instrument('composer.render(dt);','stallProbe.composer();try{composer.render(dt);}finally{stallProbe.end();}');
         glPatched=true;

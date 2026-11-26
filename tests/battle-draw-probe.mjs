@@ -4,7 +4,29 @@ export function attachBattleDrawProbe(renderer) {
   const draw=renderer.renderBufferDirect;
   const use=gl.useProgram;
   let frameProfile, samples=[], switches=[], bucket, lastProgram=null;
-  let rootSamples,roots;
+  let rootSamples,roots,materialLabels;
+  function rootLabel(object) {
+    let root=object;
+    while(root.parent&&!root.parent.isScene)root=root.parent;
+    if(root.name)return root.name;
+    if(root.isCamera||root.parent?.name==='first-person-scene')return 'first-person viewmodel';
+    if(root.userData?.team!==undefined)return root.userData.civilian?'live civilians':'soldiers';
+    if(root===object&&root.parent?.isScene&&root.isMesh)return 'direct world mesh';
+    return 'unlabelled world meshes';
+  }
+  function surfaceLabel(material) {
+    let label=materialLabels.get(material);
+    if(label!==undefined)return label;
+    const image=material.map?.source?.data;
+    const url=image?.currentSrc||image?.src;
+    if(typeof url==='string'&&url&&!/^(blob:|data:)/i.test(url)){
+      // Local PBR sets all end in albedo.jpg; the parent directory identifies the surface.
+      label=url.split(/[?#]/,1)[0].split('/').slice(-2).join('/');
+    }
+    label||=material.name||(material.map?'generated texture':material.color?'#'+material.color.getHexString():material.type);
+    materialLabels.set(material,label);
+    return label;
+  }
   const idsByProgram=new Map(),programsById=[null],descriptions=new Map();
   function programId(program) {
     if(!program) return 0;
@@ -48,13 +70,14 @@ export function attachBattleDrawProbe(renderer) {
     const row=sample[key]??={calls:0,wallMs:0,programBinds:0};
     let rootRow;
     if(rootSamples){
-      if(!roots.has(object)){
-        let root=object;
-        while(root.parent&&!root.parent.isScene)root=root.parent;
-        roots.set(object,root.name||'unlabelled world meshes');
+      let label=roots.get(object);
+      if(label===undefined){label=rootLabel(object);roots.set(object,label);}
+      if(label==='direct world mesh'){
+        const source=Array.isArray(object.material)?object.material[group?.materialIndex]:object.material;
+        label+='/'+geometry.type+'/'+surfaceLabel(source??material);
       }
       const groups=rootSamples[frameProfile.length]??=Object.create(null);
-      rootRow=groups[phase+'/'+roots.get(object)]??={calls:0,wallMs:0};
+      rootRow=groups[phase+'/'+label]??={calls:0,wallMs:0};
     }
     const outer=bucket;
     bucket=row;
@@ -72,6 +95,7 @@ export function attachBattleDrawProbe(renderer) {
       frameProfile=frames; samples=[]; switches=[];
       rootSamples=groupBySceneRoot?[]:undefined;
       roots=groupBySceneRoot?new WeakMap():undefined;
+      materialLabels=groupBySceneRoot?new WeakMap():undefined;
     },
     finish(ranges) {
       const frames=frameProfile;

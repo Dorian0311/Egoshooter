@@ -22,6 +22,7 @@ GPU_PROFILE = os.environ.get('BATTLE_GPU_PROFILE') == '1'
 FRAME_PHASES = os.environ.get('BATTLE_FRAME_PHASES') == '1'
 SNAPSHOT_PROFILE = os.environ.get('BATTLE_SNAPSHOT_PROFILE') == '1'
 GL_STALLS = os.environ.get('BATTLE_GL_STALLS') == '1'
+WEAPON_SHADOW = os.environ.get('BATTLE_WEAPON_SHADOW') == '1'
 NEAR_SPAWN = os.environ.get('HARBOUR_NEAR_SPAWN') == '1'
 SEED = os.environ.get('BATTLE_SEED')
 ENEMIES = int(os.environ.get('HARBOUR_ENEMIES','0'))
@@ -397,6 +398,8 @@ with sync_playwright() as pw:
         quality_suffix+='-snapshot-phases'
     if GL_STALLS:
         quality_suffix+='-gl-stalls'
+    if WEAPON_SHADOW:
+        quality_suffix+='-weapon-shadow'
     if headed:
         quality_suffix+='-window'
     if channel!='chrome':
@@ -770,6 +773,14 @@ with sync_playwright() as pw:
             walk(page,sx+4,sz)
             warm=measure(page,map_id+' repeat')
         result['warm']=warm
+        if WEAPON_SHADOW:
+            shadow=page.evaluate('battleGlStalls.weaponShadow()')
+            result['weaponShadow']=shadow
+            report.write_text(json.dumps(result,indent=2))
+            reused=set(row[0] for row in shadow['warmup'])&set(row[0] for row in shadow['world'])
+            assert reused,shadow
+            assert all(check['phase']=='warmup' for check in shadow['checks']),shadow
+            print('Kar98k shadow program reused',sorted(reused),shadow['checks'],flush=True)
         page.screenshot(path=str(OUT/f'{map_id}-live-{width}x{height}.jpg'),type='jpeg',quality=88)
         if os.environ.get('BATTLE_SHADER_PROFILE')=='1':
             (OUT/f'{map_id}-slow-shaders.json').write_text(json.dumps(page.evaluate('window.slowShaders'),indent=2))
