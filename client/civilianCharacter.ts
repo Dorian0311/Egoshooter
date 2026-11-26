@@ -63,6 +63,13 @@ export function createCivilianCharacter(data:CivilianCharacterData,residentId='r
  }
  const fingerJoints={armL:handJoints('L'),armR:handJoints('R')};
  const fingerTip=new T.Vector3(),fingerBase=new T.Vector3();
+ function fingerDirection(base:T.Object3D,tip:T.Object3D){
+  tip.getWorldPosition(fingerTip);
+  // A direct child's world-position query has just updated its parent.
+  if(tip.parent===base)fingerBase.setFromMatrixPosition(base.matrixWorld);
+  else base.getWorldPosition(fingerBase);
+  return from.subVectors(fingerTip,fingerBase);
+ }
  const decompositionPosition=new T.Vector3(),decompositionScale=new T.Vector3();
  function rotateInWorld(bone:T.Object3D){
   bone.getWorldQuaternion(world); // Also updates every ancestor's matrixWorld.
@@ -74,14 +81,14 @@ export function createCivilianCharacter(data:CivilianCharacterData,residentId='r
  function gesture(side:'armL'|'armR'){
   const arm=arms[side];if(!arm)return;const {middle,next,index,pinky,straighten}=fingerJoints[side];if(!middle||!next||!index||!pinky)return;
   const up=new T.Vector3(0,1,0).applyQuaternion(group.getWorldQuaternion(q)),forward=new T.Vector3(0,0,-1).applyQuaternion(q);
-  from.copy(next.getWorldPosition(fingerTip)).sub(middle.getWorldPosition(fingerBase));align(arm.hand,from,to.copy(up));
+  align(arm.hand,fingerDirection(middle,next),to.copy(up));
   const across=index.getWorldPosition(new T.Vector3()).sub(pinky.getWorldPosition(new T.Vector3())),normal=across.cross(up).normalize();
   if(side==='armR')normal.negate();const angle=Math.atan2(up.dot(normal.clone().cross(forward)),normal.dot(forward));rotation.setFromAxisAngle(up,angle);rotateInWorld(arm.hand);
-  for(const {bone,child} of straighten){if(bone&&child){from.copy(child.getWorldPosition(fingerTip)).sub(bone.getWorldPosition(fingerBase));align(bone,from,to.copy(up));}}
+  for(const {bone,child} of straighten){if(bone&&child)align(bone,fingerDirection(bone,child),to.copy(up));}
  }
  function relaxedHand(side:'armL'|'armR'){
   const arm=arms[side];if(!arm)return;const {middle,next}=fingerJoints[side];if(!middle||!next)return;
-  from.copy(next.getWorldPosition(fingerTip)).sub(middle.getWorldPosition(fingerBase));to.set(0,-1,0).applyQuaternion(group.getWorldQuaternion(q));align(arm.hand,from,to);
+  to.set(0,-1,0).applyQuaternion(group.getWorldQuaternion(q));align(arm.hand,fingerDirection(middle,next),to);
  }
  const skinMeshes:{mesh:T.SkinnedMesh;weights:Float32Array;clothes:Uint8Array;head:boolean}[]=[];
  body.traverse(o=>{

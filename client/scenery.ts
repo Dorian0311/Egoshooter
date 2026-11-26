@@ -124,14 +124,24 @@ export function createRiver(scene: T.Scene,width=60,depth=420,height=-4,color='#
       uniform float riverHalfWidth;
       varying vec2 vRiverPosition;
     `).replace('#include <color_fragment>',`#include <color_fragment>
-      float bank = smoothstep(riverHalfWidth - 5.0, riverHalfWidth, abs(vRiverPosition.x));
+      float bankDistance = riverHalfWidth - abs(vRiverPosition.x);
+      float bank = 1.0 - smoothstep(0.0, 5.0, bankDistance);
       diffuseColor.rgb *= mix(vec3(.90, 1.03, 1.06), vec3(1.32, 1.15, .84), bank);
+      if (bankDistance < 2.5) {
+        float downstream = vRiverPosition.y - riverTime * .72;
+        float ripple = sin(bankDistance * 9.0 + sin(downstream * .64) * 2.1 - riverTime * 1.1);
+        float breaks = sin(downstream * 1.13) * .58 + sin(downstream * 2.37) * .42;
+        float foam = smoothstep(.56, .94, ripple) * smoothstep(.05, .7, breaks);
+        foam *= (1.0 - smoothstep(.25, 2.5, bankDistance)) * (1.0 - smoothstep(35.0, 90.0, vViewPosition.z));
+        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(.30,.39,.36), foam * .38);
+      }
     `).replace('#include <normal_fragment_maps>',`#include <normal_fragment_maps>
       // The fine current lives in the normal, so distant ripples do not need vertices.
       float rippleFade = 1.0 - smoothstep(30.0, 120.0, length(vViewPosition));
-      float bend = sin(dot(vRiverPosition, vec2(.063, -.14)) + riverTime * .24);
-      vec2 current = vec2(.054, .026) * sin(dot(vRiverPosition, vec2(1.12, 1.54)) - riverTime * 2.2 + bend * 1.7)
-        + vec2(-.032, .047) * sin(dot(vRiverPosition, vec2(-1.28, 2.01)) - riverTime * 2.73 - bend * 1.1);
+      float bend = sin(dot(vRiverPosition, vec2(.39, -.21)) + riverTime * .24);
+      float cross = sin(dot(vRiverPosition, vec2(-.27, .61)) - riverTime * .46);
+      vec2 current = vec2(.031, .018) * sin(dot(vRiverPosition, vec2(1.12, 1.54)) - riverTime * 2.2 + bend * 2.3)
+        + vec2(-.024, .026) * sin(dot(vRiverPosition, vec2(-1.28, 2.01)) - riverTime * 2.73 - cross * 1.7);
       normal = normalize(normal + mat3(viewMatrix) * vec3(current.x, 0.0, current.y) * rippleFade);
     `).replace('#include <clearcoat_normal_fragment_maps>',`#include <clearcoat_normal_fragment_maps>
       #ifdef USE_CLEARCOAT
@@ -139,7 +149,7 @@ export function createRiver(scene: T.Scene,width=60,depth=420,height=-4,color='#
       #endif
     `);
   };
-  material.customProgramCacheKey = () => 'river-waves-v2';
+  material.customProgramCacheKey = () => 'river-waves-v3';
   const geometry = new T.PlaneGeometry(width, depth, ...segments);
   geometry.rotateX(-Math.PI / 2);
   const river = new T.Mesh(geometry, material);

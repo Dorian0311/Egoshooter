@@ -562,12 +562,30 @@ export function addIslandStreet(scene:T.Group){
     cuboid(s.x+s.w*.23,s.h+.52,s.z,2.1,.94,1.35,concrete);
     for(let n=0;n<4;n++)cuboid(s.x+s.w*.23,s.h+.26+n*.14,s.z+.69,1.75,.055,.05,iron);
   });
-  const timber=paint('#76624b');
+  const timber=paint('#76624b'),lampEnamel=paint('#536860');
   for(const x of streetPoles){
-    cuboid(x,3.7,-29.2,.28,7.4,.28,timber);
+    const poleZ=-29.2,shadeZ=-26.88;
+    solid(new T.CylinderGeometry(.127,.172,7.4,9),x,3.7,poleZ,timber).castShadow=true;
+    solid(new T.CylinderGeometry(.174,.184,.43,9),x,.215,poleZ,iron);
     cuboid(x,7.04,-29.2,.18,.16,1.65,timber);
-    cuboid(x,5.6,-28,.09,.09,2.4,iron);
-    cuboid(x,5.50,-26.88,.46,.16,.65,trim);
+    for(const offset of [-.70,0,.70]){
+      const cups=new T.LatheGeometry([[.059,0],[.081,.044],[.049,.067],[.056,.123]]
+        .map(([r,h])=>new T.Vector2(r,h)),6);
+      solid(cups,x,offset===0?7.40:7.115,poleZ+offset,porcelain);
+    }
+    // A braced swan neck suspends an enamel shade over the street. Its rolled
+    // lip and opal bowl are solid surfaces; they need no transparent pass.
+    const arm=new T.CatmullRomCurve3([new T.Vector3(0,5.32,.10),new T.Vector3(0,5.62,.43),
+      new T.Vector3(0,5.72,1.18),new T.Vector3(0,5.76,1.97),new T.Vector3(0,5.59,2.32)]);
+    solid(new T.TubeGeometry(arm,6,.048,5,false),x,0,poleZ,iron);
+    cuboid(x,5.47,poleZ+.13,.22,.42,.088,lampEnamel);
+    cuboid(x,5.33,poleZ+.58,.055,.061,1.10,iron).rotation.x=-.46;
+    const shield=new T.LatheGeometry([[.363,-.201],[.372,-.18],[.195,-.095],[.141,.03],[.085,.08]]
+      .map(([r,h])=>new T.Vector2(r,h)),10);
+    solid(shield,x,5.55,shadeZ,lampEnamel);
+    const lens=new T.LatheGeometry([[.008,-.326],[.228,-.287],[.305,-.193]]
+      .map(([r,h])=>new T.Vector2(r,h)),10);
+    solid(lens,x,5.55,shadeZ,porcelain);
   }
   // Mount the exchange telephone on the existing pole, on the seaward side of the footway.
   const phoneX=55,phoneZ=-28.91,phoneEnamel=paint('#355b54'),bakelite=paint('#302e29');
@@ -594,7 +612,8 @@ export function addIslandStreet(scene:T.Group){
   const points:number[]=[];
   for(let span=1;span<streetPoles.length;span++)for(const offset of [-.7,0,.7]){
     const start=streetPoles[span-1],end=streetPoles[span];
-    for(let n=0;n<8;n++)for(const t of [n/8,(n+1)/8])points.push(start+(end-start)*t,7.24-2.4*t*(1-t),-29.2+offset);
+    const wireHeight=offset===0?7.52:7.24;
+    for(let n=0;n<8;n++)for(const t of [n/8,(n+1)/8])points.push(start+(end-start)*t,wireHeight-2.4*t*(1-t),-29.2+offset);
   }
   const cables=new T.BufferGeometry();cables.setAttribute('position',new T.Float32BufferAttribute(points,3));
   const cableMaterial=new T.LineBasicMaterial({color:'#393d3b'});street.add(new T.LineSegments(cables,cableMaterial));

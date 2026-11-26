@@ -39,13 +39,16 @@ export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
   renderer.shadowMap.autoUpdate = false;
   const render = new WorldRenderPass(scene, camera);
   const rooms = createStaticRoomCulling(scene);
-  render.afterWorld = rooms.afterWorld;
   const weaponCamera=new T.PerspectiveCamera(62,1,.025,8);
   weaponCamera.layers.set(1);
   const viewmodel=createWeaponScene(scene,camera,weaponCamera);
   const weaponPass=new WeaponPass(viewmodel.scene,weaponCamera);
   weaponPass.clear=false;weaponPass.clearDepth=true;
   const ao = new WorldOcclusionPass(scene, camera, 1, 1, 24);
+  render.afterWorld = () => {
+    rooms.afterWorld();
+    if (ao.enabled) ao.worldRendered(renderer.info.render.frame);
+  };
   ao.kernelRadius = .65;
   const bloom = new UnrealBloomPass(new T.Vector2(1, 1), .075, .3, 1.65);
   const smaa = new SMAAPass(1, 1);

@@ -1,9 +1,13 @@
 import { HalfFloatType, LinearFilter, PerspectiveCamera, RedFormat, UnsignedByteType, type Object3D } from 'three';
 import { SSAOPass } from 'three/examples/jsm/postprocessing/SSAOPass.js';
 import {createRoomNormalProxies} from './roomNormalProxies';
+import {fixedRooms} from './staticRoomCulling';
+import {WorldNormalSelection} from './worldNormalSelection';
 
 /** Only visible points and lines need a visibility override in the normal/depth pass. */
 export class WorldOcclusionPass extends SSAOPass {
+  private selection?: WorldNormalSelection;
+  private worldFrame = -1;
   private roomNormals?: ReturnType<typeof createRoomNormalProxies>;
   private readonly hiddenPrimitives: Object3D[] = [];
   private readonly hidePrimitive = (object: Object3D & { isPoints?: boolean; isLine?: boolean }) => {
@@ -63,6 +67,7 @@ export class WorldOcclusionPass extends SSAOPass {
   setNormalPrecision(fullPrecision: boolean) {
     // Build only for presets that render SSAO. Reuse the geometry across subsequent switches.
     this.roomNormals ??= createRoomNormalProxies(this.scene);
+    this.selection ??= new WorldNormalSelection(this.scene, fixedRooms(this.scene));
     const target = this.normalRenderTarget;
     const type = fullPrecision ? HalfFloatType : UnsignedByteType;
     if (target.texture.type === type) return;
@@ -70,6 +75,8 @@ export class WorldOcclusionPass extends SSAOPass {
     target.dispose();
     target.texture.type = type;
   }
+
+  worldRendered(frame: number) { this.worldFrame = frame; }
 
   overrideVisibility() {
     this.scene.traverseVisible(this.hidePrimitive);
@@ -89,9 +96,18 @@ export class WorldOcclusionPass extends SSAOPass {
     scene.matrixWorldAutoUpdate = false;
     scene.background = null;
     try {
-      if (args[1] === this.normalMaterial) this.roomNormals?.show();
+      const renderer = args[0];
+      if (args[1] === this.normalMaterial) {
+        this.roomNormals?.show();
+        if (this.worldFrame >= 0 && renderer.info.render.frame === this.worldFrame &&
+            renderer.sortObjects && !renderer.xr.isPresenting && !renderer.shadowMap.autoUpdate && !renderer.shadowMap.needsUpdate) {
+          this.selection?.use(renderer.renderLists.get(scene, 0));
+        }
+      }
+      this.worldFrame = -1;
       super.renderOverride(...args);
     } finally {
+      this.selection?.restore();
       this.roomNormals?.restore();
       scene.background = background;
       scene.matrixWorldAutoUpdate = updateMatrices;
