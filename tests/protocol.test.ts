@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { Game } from "../shared/game.ts";
-import { difference, mergeSnapshot } from "../shared/protocol.ts";
+import { createSnapshotPublisher, difference, mergeSnapshot, type SnapshotPacket } from "../shared/protocol.ts";
 test("delta snapshots reconstruct joins, updates and leaves", () => {
   const g = new Game("ABC234");
   g.add("a", "Anna");
@@ -30,6 +30,28 @@ test('unchanged network entities share storage, while patches leave past frames 
  assert.equal(updated.players[0].z,6);
  assert.equal(tick.players[0],a);
  assert.notEqual(tick.players[0].x,9);
+});
+
+test('the publisher tracks in-place mutations and retains the baseline on send failure',()=>{
+ const game=new Game('PUBLISH');
+ const anna=game.add('a','Anna');game.add('b','Bruno');
+ anna.treatment={kind:'bandage',target:'a',targetLife:anna.life,started:0,until:4000,x:anna.x,z:anna.z};
+ const packets:SnapshotPacket[]=[];
+ let reject=false;
+ const publish=createSnapshotPublisher(packet=>{
+  if(reject)throw Error('send failed');
+  packets.push(structuredClone(packet));
+ });
+ publish(game.state);
+ assert.deepEqual(packets[0],{full:game.state});
+ game.state.now=50;anna.x=22;delete anna.treatment;game.remove('b');
+ reject=true;
+ assert.throws(()=>publish(game.state),/send failed/);
+ reject=false;
+ publish(game.state);
+ assert.deepEqual(packets[1],{patch:{now:50},players:[{id:'a',x:22,_clear:['treatment']}],removed:['b']});
+ publish(game.state);
+ assert.deepEqual(packets[2],{patch:{},players:[],removed:[]});
 });
 
 test('persistent corpse and body-part ownership replicate as entity deltas without retransmitting the graveyard',()=>{

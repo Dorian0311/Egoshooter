@@ -9,7 +9,7 @@ import {createNavigation} from './navigation';
 import {parseOperation} from '../shared/operationConfig';
 import {validMap,mapIds} from "../shared/world.ts";
 import { Game,neutral,validLoadout } from "../shared/game.ts";
-import { difference } from "../shared/protocol.ts";
+import { createSnapshotPublisher } from "../shared/protocol.ts";
 import { identity } from "./auth.ts";
 import { Store } from "./store.ts";
 import {Accounts} from './accounts';
@@ -32,7 +32,7 @@ export class CityRoom extends Room {
   pausedAt=0;
   now(){return Date.now()-this.clockOffset;}
   saving = false;
-  baseline: Game["state"] | null = null;
+  private readonly publishSnapshot = createSnapshotPublisher(packet => this.broadcast("snapshot", packet));
   async onCreate(options:{mapId?:unknown;training?:unknown;operation?:unknown}={}) {
     const config=parseOperation(options.operation??(options.training===true?{kind:'solo',mode:'training'}:undefined));
     this.training=config.kind!=='multiplayer';
@@ -108,13 +108,7 @@ export class CityRoom extends Room {
       }
     }, 1000 / 30);
     this.clock.setInterval(() => {
-      this.broadcast(
-        "snapshot",
-        this.baseline
-          ? difference(this.baseline, this.game.state)
-          : { full: this.game.state },
-      );
-      this.baseline = structuredClone(this.game.state);
+      this.publishSnapshot(this.game.state);
       this.game.state.events = [];
     }, 50);
   }
