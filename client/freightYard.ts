@@ -133,6 +133,53 @@ export function freightYard(world:World){
         add(new T.PlaneGeometry(.91,.054),side*1.76,.057,z+line*.14,'#5b7467',0,-Math.PI/2);
       }
     }
+    ox=cinema.x;oz=cinema.z;
+    const screenZ=cinema.d/2-.48,velvet='#843e3e',gold='#bd9f67',lacquer='#543633';
+    // A gathered house curtain sits outside the projected photograph. The left
+    // drape finishes at the solid jamb, so the neighbouring entrance stays clear.
+    function curtain(cols:number,rows:number,sample:(u:number,v:number)=>[number,number,number]){
+      const vertices:number[]=[],uv:number[]=[],indices:number[]=[];
+      for(let row=0;row<=rows;row++)for(let col=0;col<=cols;col++){
+        const u=col/cols,v=row/rows;vertices.push(...sample(u,v));uv.push(u,v);
+        if(col<cols&&row<rows){
+          const a=row*(cols+1)+col;
+          indices.push(a,a+cols+1,a+1,a+1,a+cols+1,a+cols+2);
+        }
+      }
+      const cloth=new T.BufferGeometry();cloth.setAttribute('position',new T.Float32BufferAttribute(vertices,3));
+      cloth.setAttribute('uv',new T.Float32BufferAttribute(uv,2));cloth.setIndex(indices);cloth.computeVertexNormals();
+      add(cloth,0,0,screenZ,velvet);
+    }
+    for(const [left,width] of [[2.035,.265],[5.76,.57]]){
+      curtain(20,5,(u,v)=>{
+        const gather=1-.36*Math.exp(-((v-.43)**2)/.026);
+        const x=left+(left<3?u:gather*u+1-gather)*width*(left<3?gather:1);
+        return [x,.54+v*2.84+(1-v)*.033*Math.cos(u*8*Math.PI),-.071-.072*Math.cos(u*8*Math.PI)*gather];
+      });
+      box(left+width*(left<3?.32:.67),1.76,screenZ-.104,width*.67,.055,.052,gold);
+    }
+    curtain(48,3,(u,v)=>{
+      const scallop=.115*(.5-.5*Math.cos(u*Math.PI*6));
+      const hem=3.38-scallop;
+      return [2.04+4.33*u,hem+v*(3.61-hem),-.074-.044*Math.cos(u*Math.PI*44)-.038*(1-v)];
+    });
+    box(4.20,3.64,screenZ-.05,4.44,.12,.24,lacquer);
+    box(4.20,3.685,screenZ-.153,4.50,.035,.065,gold);
+    box(4.20,.66,screenZ-.06,4.34,.19,.23,lacquer);
+    box(4.20,.74,screenZ-.16,4.35,.033,.062,gold);
+    // The cloth slips cover the existing seat backs. Rows keep the original width
+    // and sightline; the ceiling ribs sit against the underside of the upper floor.
+    for(const rowZ of [-4,-1.7,.6,2.9]){
+      for(let seat=0;seat<4;seat++){
+        const x=3.9+(seat-1.5)*.78;
+        box(x,.727,rowZ-.375,.746,.422,.123,velvet);
+        box(x,.934,rowZ-.375,.746,.027,.133,'#a16450');
+      }
+    }
+    for(const z of [-4.8,-1.55,1.70,4.95]){
+      box(0,3.82,z,9.78,.081,.17,'#a39a84');
+      box(0,3.773,z,9.66,.023,.065,'#bda370');
+    }
   }
   const postOffice=world.buildings.find(b=>b.name==='FELDPOST');
   if(postOffice){

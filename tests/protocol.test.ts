@@ -16,6 +16,22 @@ test("delta snapshots reconstruct joins, updates and leaves", () => {
   assert.equal(mergeSnapshot(null, {}), null);
 });
 
+test('unchanged network entities share storage, while patches leave past frames intact',()=>{
+ const g=new Game('SHARE');g.add('a','Anna');g.add('b','Bruno');g.add('c','Chris');
+ const before=structuredClone(g.state),a=before.players.find(p=>p.id==='a')!,b=before.players.find(p=>p.id==='b')!;
+ const tick=mergeSnapshot(before,{patch:{now:99}})!;
+ assert.equal(tick.players,before.players);
+ assert.equal(tick.corpses,before.corpses);
+ assert.equal(tick.bodyParts,before.bodyParts);
+ const updated=mergeSnapshot(tick,{players:[{id:'a',x:9},{id:'a',z:6}],removed:['c']})!;
+ assert.deepEqual(updated.players.map(p=>p.id),['a','b']);
+ assert.equal(updated.players[1],b);
+ assert.equal(updated.players[0].x,9);
+ assert.equal(updated.players[0].z,6);
+ assert.equal(tick.players[0],a);
+ assert.notEqual(tick.players[0].x,9);
+});
+
 test('persistent corpse and body-part ownership replicate as entity deltas without retransmitting the graveyard',()=>{
  const g=new Game('REMAINS');g.add('a','Anna');g.add('b','Bruno');g.ready('a',true,1000);g.ready('b',true,1000);g.tick(4000);g.player('b')!.protectedUntil=0;
  const before=structuredClone(g.state);g.operation.damage(g.player('b')!,'a',0,50,'armL',[0,1,0]);g.operation.damage(g.player('b')!,'a',0,100,'body',[0,1,0]);

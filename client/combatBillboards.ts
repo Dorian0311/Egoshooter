@@ -8,9 +8,12 @@ export function createCombatBillboards(texture:T.Texture,capacity:number,blendin
   geometry.setAttribute('position',quad.getAttribute('position').clone());
   geometry.setAttribute('uv',quad.getAttribute('uv').clone());
   quad.dispose();
-  const centers=new T.InstancedBufferAttribute(new Float32Array(capacity*3),3).setUsage(T.DynamicDrawUsage);
-  const appearance=new T.InstancedBufferAttribute(new Float32Array(capacity*2),2).setUsage(T.DynamicDrawUsage);
-  const colors=new T.InstancedBufferAttribute(new Float32Array(capacity*3),3).setUsage(T.DynamicDrawUsage);
+  // Position, size, opacity and colour are authored together for every live
+  // instance. One interleaved upload updates all three shader attributes.
+  const particles=new T.InstancedInterleavedBuffer(new Float32Array(capacity*8),8).setUsage(T.DynamicDrawUsage);
+  const centers=new T.InterleavedBufferAttribute(particles,3,0);
+  const appearance=new T.InterleavedBufferAttribute(particles,2,3);
+  const colors=new T.InterleavedBufferAttribute(particles,3,5);
   geometry.setAttribute('centerWorld',centers);
   geometry.setAttribute('sizeOpacity',appearance);
   geometry.setAttribute('particleColor',colors);
@@ -68,7 +71,11 @@ export function createCombatBillboards(texture:T.Texture,capacity:number,blendin
     flush(){
       mesh.visible=count>0;
       geometry.instanceCount=count;
-      if(count>0){centers.needsUpdate=true;appearance.needsUpdate=true;colors.needsUpdate=true;}
+      if(count>0){
+        particles.clearUpdateRanges();
+        particles.addUpdateRange(0,count*particles.stride);
+        particles.needsUpdate=true;
+      }
       count=0;
     },
     dispose(){mesh.removeFromParent();geometry.dispose();material.dispose();},

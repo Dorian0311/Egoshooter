@@ -4,10 +4,15 @@ import { ShaderMaterial, type WebGLRenderer } from 'three';
 import { FullScreenQuad } from 'three/examples/jsm/postprocessing/Pass.js';
 import { skipRedundantSmaaClears } from '../client/smaaClears';
 
-test('SMAA keeps the edge clear and restores renderer state after each full write', () => {
+test('SMAA clears only the edge attachment to zero and restores renderer state', () => {
   const edges = new ShaderMaterial(), weights = new ShaderMaterial(), blend = new ShaderMaterial();
   const quad = new FullScreenQuad(edges);
-  const renderer = { autoClear: true } as WebGLRenderer;
+  const maskClears: number[][] = [];
+  const gl = { COLOR: 0x1800, clearBufferfv: (type:number, index:number, value:Float32Array) => {
+    maskClears.push([type, index, ...value]);
+  } };
+  const renderer = { autoClear: true, getContext: () => gl,
+    state: {buffers: {color: {setMask: (value:boolean) => assert.equal(value, true)}}} } as unknown as WebGLRenderer;
   const clears: boolean[] = [];
   let fail = false;
   quad.render = r => {
@@ -22,7 +27,8 @@ test('SMAA keeps the edge clear and restores renderer state after each full writ
     assert.equal(material.depthTest, material === edges);
     assert.equal(material.depthWrite, material === edges);
   }
-  assert.deepEqual(clears, [true, false, false]);
+  assert.deepEqual(clears, [false, false, false]);
+  assert.deepEqual(maskClears, [[gl.COLOR, 0, 0, 0, 0, 0]]);
   fail = true;
   for (const value of [true, false]) {
     renderer.autoClear = value;
