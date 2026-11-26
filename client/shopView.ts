@@ -1,4 +1,4 @@
-import {Box3, Vector3, type Camera, type Frustum} from 'three';
+import {Box3, MathUtils, Vector3, type Camera, type Frustum, type Matrix4, type PerspectiveCamera} from 'three';
 import {islandShops,shopParts} from '../shared/islandStreet';
 
 export const streetRooms=islandShops.map(shop=>{
@@ -32,6 +32,16 @@ export function shopOpeningInView(frustum:Frustum,opening:Box3){
   if(normal.x*x+normal.y*y+normal.z*z+constant<0)return false;
  }
  return true;
+}
+
+/** The viewmodel can widen the render FOV and a pending resize can widen the aspect later in the frame. */
+export function shopVisibilityFrustum(camera:PerspectiveCamera,normalFov:number,renderAspect:number,current:Frustum,wide:Frustum,projection:Matrix4){
+ if(camera.view?.enabled||camera.filmOffset!==0)return undefined;
+ if(camera.fov>=normalFov&&camera.aspect>=renderAspect)return current;
+ const top=camera.near*Math.tan(MathUtils.degToRad(Math.max(camera.fov,normalFov)*.5))/camera.zoom;
+ const right=top*Math.max(camera.aspect,renderAspect);
+ projection.makePerspective(-right,right,top,-top,camera.near,camera.far,camera.coordinateSystem).multiply(camera.matrixWorldInverse);
+ return wide.setFromProjectionMatrix(projection,camera.coordinateSystem);
 }
 
 /** Furthest room corner in view space with clearance for wall caps and trim. */

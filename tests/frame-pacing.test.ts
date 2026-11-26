@@ -6,7 +6,7 @@ import {createActorDetails} from '../client/actorDetails';
 import {createGpuTiming} from '../client/gpuTiming';
 import {ResolutionGovernor} from '../client/graphicsSettings';
 import {ShadowCadence} from '../client/shadowCadence';
-import {closedShopViewDepth,shopOpeningInView,streetRooms} from '../client/shopView';
+import {closedShopViewDepth,shopOpeningInView,shopVisibilityFrustum,streetRooms} from '../client/shopView';
 
 test('cached static transforms preserve world placement and still follow a moving parent',()=>{
  const parent=new T.Group(),root=new T.Group(),mesh=new T.Mesh(new T.BoxGeometry(),new T.MeshBasicMaterial());parent.add(root);root.add(mesh);parent.position.x=10;mesh.position.set(2,3,4);
@@ -89,6 +89,33 @@ test('solid fascia and sills are excluded from the shop openings',()=>{
  assert.equal(seesOpening(3,.25,3,.25),false);
  assert.equal(seesOpening(0,.25,0,.25),true);
  assert.equal(seesOpening(3,1.65,3,1.65),true);
+});
+
+test('aimed shop turns use the widest pending projection for doors and display windows',()=>{
+ const camera=new T.PerspectiveCamera(18,4/3,.08,2),reference=new T.PerspectiveCamera(88,2.1,.08,350);
+ const current=new T.Frustum(),wide=new T.Frustum(),expected=new T.Frustum(),projection=new T.Matrix4();
+ let widenedOpenings=0;
+ for(const {shop,openings} of streetRooms){
+  camera.position.set(shop.x,1.6,shop.z);
+  for(let step=0;step<48;step++){
+   camera.rotation.y=step*Math.PI/24;camera.updateMatrixWorld();
+   const original=camera.projectionMatrix.clone();
+   current.setFromProjectionMatrix(projection.multiplyMatrices(original,camera.matrixWorldInverse));
+   expected.setFromProjectionMatrix(projection.multiplyMatrices(reference.projectionMatrix,camera.matrixWorldInverse));
+   const visibility=shopVisibilityFrustum(camera,reference.fov,reference.aspect,current,wide,projection)!;
+   assert.equal(visibility,wide);assert.ok(camera.projectionMatrix.equals(original));
+   for(const opening of openings){
+    const visible=shopOpeningInView(visibility,opening);
+    assert.equal(visible,shopOpeningInView(expected,opening));
+    if(visible&&!shopOpeningInView(current,opening))widenedOpenings++;
+   }
+   if(step===(shop.front===1?0:24))assert.ok(openings.every(opening=>!shopOpeningInView(visibility,opening)));
+  }
+ }
+ assert.ok(widenedOpenings>0);
+ assert.equal(shopVisibilityFrustum(camera,18,4/3,current,wide,projection),current);
+ camera.filmOffset=2;
+ assert.equal(shopVisibilityFrustum(camera,88,2.1,current,wide,projection),undefined);
 });
 
 test('automatic shadows never redraw on consecutive slow frames and retain a 30 Hz ceiling',()=>{

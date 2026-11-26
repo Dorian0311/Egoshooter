@@ -1,7 +1,7 @@
 import {weaponSlot,fallbackSidearm,SNIPER_ID,G43_SCOPE_ID,ROCKET_ID} from '../shared/weapons';
 import {createCatSilencer} from './catSilencer';
 import {createHarbourClaims} from './harbourClaims';
-import {closedShopViewDepth,shopOpeningInView,streetRooms} from './shopView';
+import {closedShopViewDepth,shopOpeningInView,shopVisibilityFrustum,streetRooms} from './shopView';
 import {nearbyBoxes} from '../shared/boxIndex';
 import {createBattleAudio,advanceFootstep,footstepMaterial,type StepState} from './battleAudio';
 import {createAnatomy} from './anatomy';
@@ -411,6 +411,7 @@ export function createScene(
   const contactShadows=createContactShadows(scene,buildings,world);
   const opaqueWalls=world.boxes.filter(box=>box.kind==='wall');
   const actorFrustum=new T.Frustum(),actorProjection=new T.Matrix4(),actorBounds=new T.Sphere(new T.Vector3(),3.5);
+  const wideShopFrustum=new T.Frustum();
   const residentVoice=createResidentVoice();
   const wanderers=inspectionView?createWanderers(scene,mapId):{update(_time:number,_dt:number){},dispose(){}};
   const pendingActors=new Set<Promise<void>>(),preparedActors=new Set<T.Group>();
@@ -885,11 +886,16 @@ export function createScene(
       Math.abs(eye.x-s.x)<s.w/2-.4&&Math.abs(eye.z-s.z)<s.d/2-.4):undefined;
     let occlusionFar=camera.far;
     if(island){
-      // Keep the full depth when the next projection may widen out of weapon zoom.
-      const far=room&&camera.fov>=(inspectionView?50:settings.fov)&&!room.openings.some(opening=>shopOpeningInView(actorFrustum,opening))
-        ?closedShopViewDepth(camera,room.shop):350;
-      // Preserve the previous world-space AO range while looking at the front wall.
-      occlusionFar=room&&far<350&&!shopOpeningInView(actorFrustum,room.facade)?24:350;
+      const normalFov=inspectionView?50:settings.fov;
+      const visibility=room&&!renderer.xr.isPresenting?shopVisibilityFrustum(camera,normalFov,
+        Math.max(1,viewport.width)/Math.max(1,viewport.height),actorFrustum,wideShopFrustum,actorProjection):undefined;
+      let far=350;
+      if(room&&visibility){
+        far=closedShopViewDepth(camera,room.shop);
+        for(const opening of room.openings)if(shopOpeningInView(visibility,opening)){far=350;break;}
+      }
+      // Keep the existing AO range during aim and its wider-FOV transition.
+      occlusionFar=room&&visibility&&camera.fov>=normalFov&&far<350&&!shopOpeningInView(visibility,room.facade)?24:350;
       if(camera.far!==far){
         camera.far=far;camera.updateProjectionMatrix();
         actorFrustum.setFromProjectionMatrix(actorProjection.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse));

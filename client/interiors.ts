@@ -20,6 +20,7 @@ export function createInteriors(scene:T.Scene,world:World){
  const box=(x:number,y:number,z:number,w:number,h:number,d:number,m:T.Material)=>mesh({x,y,z,w,h,d},m);
  const signMaterial=new T.MeshStandardMaterial({roughness:1});materials.push(signMaterial);
  const signFaces=new Map<string,T.BufferAttribute[]>();
+ const alpineDoorWood=world.id==='alpine';
  function sign(text:string,x:number,y:number,z:number,width:number){
   const geometry=new T.PlaneGeometry(width,width/4);
   const faces=signFaces.get(text)??[];faces.push(geometry.attributes.uv as T.BufferAttribute);signFaces.set(text,faces);
@@ -28,7 +29,8 @@ export function createInteriors(scene:T.Scene,world:World){
  function paintSigns(){
   if(!signFaces.size)return;
   const width=512,height=128,padding=16,stepX=width+2*padding,stepY=height+2*padding;
-  const columns=Math.min(3,signFaces.size),rows=Math.ceil(signFaces.size/columns);
+  const tiles=signFaces.size+(alpineDoorWood?1:0);
+  const columns=Math.min(3,tiles),rows=Math.ceil(tiles/columns);
   const canvas=document.createElement('canvas');canvas.width=columns*stepX;canvas.height=rows*stepY;
   const ctx=canvas.getContext('2d')!;ctx.fillStyle='#303a33';ctx.fillRect(0,0,canvas.width,canvas.height);
   ctx.strokeStyle='#b8b08d';ctx.lineWidth=6;ctx.fillStyle='#dfd5b3';ctx.font='bold 40px serif';ctx.textAlign='center';
@@ -38,6 +40,32 @@ export function createInteriors(scene:T.Scene,world:World){
    ctx.strokeRect(x+8,y+8,496,112);ctx.fillText(text,x+256,y+80,470);
    for(const uv of faces)for(let i=0;i<uv.count;i++){
     uv.setXY(i,(x+uv.getX(i)*width)/canvas.width,1-(y+(1-uv.getY(i))*height)/canvas.height);
+   }
+  }
+  if(alpineDoorWood){
+   const x=index%columns*stepX+padding,y=Math.floor(index/columns)*stepY+padding;
+   ctx.fillStyle='#554434';ctx.fillRect(x-padding,y-padding,stepX,stepY);
+   const planks=['#574535','#534334','#584838','#544334','#594736'];
+   for(let n=0;n<16;n++){
+    const start=x+n*32;
+    ctx.fillStyle=planks[(n*7)%planks.length];ctx.fillRect(start,y,32,height);
+    ctx.fillStyle='#403428';ctx.fillRect(start,y,1.5,height);
+    ctx.fillStyle='#6b5743';ctx.fillRect(start+1.5,y,1,height);
+    ctx.strokeStyle='rgba(49,35,26,.28)';ctx.lineWidth=.8;
+    for(let fiber=0;fiber<6;fiber++){
+     const u=start+4+fiber*4.4,drift=2.8*Math.sin(n*2.3+fiber*.9);
+     ctx.beginPath();ctx.moveTo(u,y);
+     ctx.bezierCurveTo(u+drift,y+42,u-drift,y+90,u+drift*.5,y+height);ctx.stroke();
+    }
+   }
+   for(const door of doors.values()){
+    const normal=door.geometry.getAttribute('normal'),uv=door.geometry.getAttribute('uv');
+    for(let i=0;i<uv.count;i++){
+     const face=Math.abs(normal.getZ(i))>.5;
+     const u=face?.5+uv.getX(i)*(width-1):-padding/2;
+     const v=face?.5+(1-uv.getY(i))*(height-1):-padding/2;
+     uv.setXY(i,(x+u)/canvas.width,1-(y+v)/canvas.height);
+    }
    }
   }
   const atlas=new T.CanvasTexture(canvas);atlas.colorSpace=T.SRGBColorSpace;
@@ -52,7 +80,7 @@ export function createInteriors(scene:T.Scene,world:World){
  glass.forceSinglePass=true;
  const panes=createWindowPanes(root,fixtures,glass);
  for(const f of fixtures){
-  if(f.type==='door'){const o=mesh(doorBox(f,false),wood);doors.set(f.id,o);const handle=new T.Mesh(new T.BoxGeometry(.18,.05,.08),metal);handle.position.set(1.4,0,.13);o.add(handle);}
+  if(f.type==='door'){const o=mesh(doorBox(f,false),alpineDoorWood?signMaterial:wood);doors.set(f.id,o);const handle=new T.Mesh(new T.BoxGeometry(.18,.05,.08),metal);handle.position.set(1.4,0,.13);o.add(handle);}
   if(f.type==='light'){mesh(f.box,paper);box(f.box.x,f.box.y,f.box.z+.07,.06,.12,.03,metal);}
  }
  const floors=new Map<number,T.MeshStandardMaterial>();
