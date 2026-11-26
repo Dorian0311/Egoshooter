@@ -30,8 +30,13 @@ test('hidden render rigs skip matrix propagation and immediately catch up when v
  assert.equal(bone.getWorldPosition(worldPosition).x,10);
  parent.position.x=20;root.visible=true;scene.updateMatrixWorld(true);
  assert.equal(bone.matrixWorld.elements[12],20);
- details.dispose();root.visible=false;parent.position.x=30;scene.updateMatrixWorld(true);
- assert.equal(bone.matrixWorld.elements[12],30);
+ parent.visible=false;parent.position.x=30;scene.updateMatrixWorld(true);
+ assert.equal(bone.matrixWorld.elements[12],20);
+ assert.equal(bone.getWorldPosition(worldPosition).x,30);
+ parent.visible=true;parent.position.x=40;scene.updateMatrixWorld(true);
+ assert.equal(bone.matrixWorld.elements[12],40);
+ details.dispose();root.visible=false;parent.position.x=50;scene.updateMatrixWorld(true);
+ assert.equal(bone.matrixWorld.elements[12],50);
 });
 
 test('blocked shop views keep every room corner and trim within the far plane',()=>{

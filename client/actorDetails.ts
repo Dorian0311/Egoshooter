@@ -26,10 +26,10 @@ export function createActorDetails(root:T.Group){
  const skins:{mesh:T.SkinnedMesh;culled:boolean;sphere:T.SkinnedMesh['boundingSphere']}[]=[];
  root.updateWorldMatrix(true,true);
  const updateMatrixWorld=root.updateMatrixWorld;
- // Three's render traversal still walks the bones of invisible actors. Explicit
- // pose reads use updateWorldMatrix and can still request the current transform.
+ // Skip renderer propagation when the rig or its actor is hidden. Explicit
+ // pose reads still use updateWorldMatrix to request current transforms.
  root.updateMatrixWorld=function(force){
-  if(this.visible)updateMatrixWorld.call(this,force);
+  if(this.visible&&this.parent?.visible!==false)updateMatrixWorld.call(this,force);
  };
  // Same conservative envelope as the actor-level visibility test. Convert it
  // to each mesh's local coordinates so all animation poses remain enclosed.
