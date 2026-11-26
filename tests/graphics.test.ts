@@ -71,15 +71,24 @@ test('facade instancing fits allocated buffers on both maps', () => {
   }
 });
 
-test('alpine terrain faces upward and keeps the playable area clear', () => {
+test('alpine ridges face upward and meet the pass without sky gaps', () => {
   const scene = new T.Scene();
   addAlpineBackdrop(scene);
   const mountain = scene.children[0] as T.Mesh;
   const positions = mountain.geometry.getAttribute('position');
   const normals = mountain.geometry.getAttribute('normal');
   for (let i = 0; i < positions.count; i++) {
-    assert.ok(Math.hypot(positions.getX(i), positions.getZ(i)) >= 87.99);
+    assert.ok(Math.max(Math.abs(positions.getX(i)), Math.abs(positions.getZ(i))) > 74);
     assert.ok(normals.getY(i) >= 0);
+  }
+  const probe = new T.Raycaster(new T.Vector3(), new T.Vector3(0, -1, 0));
+  const facing = new T.Vector2();
+  for (let i = 0; i < 64; i++) {
+    const angle = i * Math.PI / 32;
+    facing.set(Math.cos(angle), Math.sin(angle));
+    facing.multiplyScalar(88.5 / Math.max(Math.abs(facing.x), Math.abs(facing.y)));
+    probe.ray.origin.set(facing.x, 120, facing.y);
+    assert.ok(probe.intersectObject(mountain).length > 0, `Gap at ${i} of 64 rim angles`);
   }
 });
 

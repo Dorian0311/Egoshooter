@@ -128,8 +128,27 @@ export function createActorEquipment(root:T.Group,chains:Partial<Record<'armL'|'
   mount.rotation.set((crawl?Math.PI/2:0)+p.pitch-(p.sprinting?.28:0)-(reloading?.25:0)-recoil*.055,0,reloading?.18:0);
   // updateMatrix is explicit: the IK targets must match this frame's weapon pose.
   for(const arm of Object.values(arms))if(arm)root.worldToLocal(arm.upper.getWorldPosition(arm.shoulder));
-  for(let iteration=0;iteration<4;iteration++)for(const side of ['armR','armL'] as const){const arm=arms[side];if(!arm||hasLost(p,side)||p.carriedCorpse&&side==='armL')continue;mount.updateMatrix();localGrip.set(0,side==='armR'||hasLost(p,'armR')?.025:.015,side==='armR'||hasLost(p,'armR')?.035:weapons[p.weapon].kind==='pistol'?-.025:-.22).applyMatrix4(mount.matrix);offset.copy(arm.shoulder).sub(localGrip);const distance=offset.length();if(distance>arm.reach)mount.position.addScaledVector(offset,(distance-arm.reach)/distance);}
-  mount.updateMatrix();right.set(0,.025,.035).applyMatrix4(mount.matrix);left.set(0,.015,weapons[p.weapon].kind==='pistol'?-.025:-.22).applyMatrix4(mount.matrix);
+  mount.updateMatrix();
+  const missingRight=hasLost(p,'armR'),supportZ=weapons[p.weapon].kind==='pistol'?-.025:-.22;
+  for(let iteration=0;iteration<4;iteration++){
+   let adjusted=false;
+   for(const side of ['armR','armL'] as const){
+    const arm=arms[side];
+    if(!arm||hasLost(p,side)||p.carriedCorpse&&side==='armL')continue;
+    const mainGrip=side==='armR'||missingRight;
+    localGrip.set(0,mainGrip?.025:.015,mainGrip?.035:supportZ).applyMatrix4(mount.matrix);
+    offset.copy(arm.shoulder).sub(localGrip);
+    const distance=offset.length();
+    if(distance>arm.reach){
+     mount.position.addScaledVector(offset,(distance-arm.reach)/distance);
+     // Reach constraints move the mount without changing its orientation or scale.
+     mount.matrix.setPosition(mount.position);
+     adjusted=true;
+    }
+   }
+   if(!adjusted)break;
+  }
+  right.set(0,.025,.035).applyMatrix4(mount.matrix);left.set(0,.015,supportZ).applyMatrix4(mount.matrix);
   for(const side of ['armR','armL'] as const){if(hasLost(p,side))continue;const arm=arms[side];if(arm){let point=side==='armR'&&!hasLost(p,'armR')?right:hasLost(p,'armR')?right:left;if(p.carriedCorpse&&side==='armL'){const clip=sampleCombatHands('carry',(time/1800)%1);point=clip?.left.clone().lerp(new T.Vector3(-.12,1.28,-.48),.65)??new T.Vector3(-.12,1.28,-.48);}grip(arm,point,side==='armL'?-1:1);}}
   for(const {bone,x,z} of gripFingers){
    const pose=bone.rotation;

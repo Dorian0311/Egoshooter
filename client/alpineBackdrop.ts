@@ -24,38 +24,51 @@ function height(a:number,r:number){
   return Math.max(-.12,h1,h2)-.10;
 }
 function firGeometry(){
-  const vertices:number[]=[],colors:number[]=[];
-  const shade=new T.Color(),needles=['#344943','#485c50','#546357'];
-  for(let row=0;row<5;row++){
-    const y=row*.15,r=.33-row*.05;
-    for(let i=0;i<7;i++){
-      const a=i*tau/7+row*.84,b=(i+1)*tau/7+row*.84;
-      const wing=(i%3)*.012;
-      vertices.push(0,y+.40,0,Math.cos(b)*(r-wing),y+.03,Math.sin(b)*(r-wing),Math.cos(a)*r,y-.055,Math.sin(a)*r);
-      shade.set(needles[(i+row)%3]);
-      colors.push(shade.r*1.14,shade.g*1.14,shade.b*1.14,shade.r*.89,shade.g*.89,shade.b*.89,shade.r,shade.g,shade.b);
+  const vertices:number[]=[],uv:number[]=[],normals:number[]=[],indices:number[]=[];
+  // Narrow each section to the crown. Mirrored backs have their own upward
+  // normals so the canopy keeps receiving skylight when the camera turns.
+  for(let plane=0;plane<3;plane++){
+    const angle=plane*Math.PI/3,dx=Math.cos(angle),dz=Math.sin(angle),cell=plane%2;
+    for(const facing of [-1,1]){
+      const start=vertices.length/3;
+      for(const [y,extent] of [[0,.91],[.23,1],[.67,.58],[1,.06]]){
+        for(const sign of [-1,1]){
+          const lateral=sign*extent;
+          vertices.push(dx*lateral*.33,y,dz*lateral*.33);
+          uv.push((cell+.5+lateral*.496)/2,.002+.996*y);
+          normals.push(-dz*facing*.50,.866,dx*facing*.50);
+        }
+      }
+      for(let row=0;row<3;row++){
+        const a=start+row*2;
+        if(facing===1)indices.push(a,a+1,a+2,a+2,a+1,a+3);
+        else indices.push(a,a+2,a+1,a+2,a+3,a+1);
+      }
     }
   }
   const g=new T.BufferGeometry();
   g.setAttribute('position',new T.Float32BufferAttribute(vertices,3));
-  g.setAttribute('color',new T.Float32BufferAttribute(colors,3));g.computeVertexNormals();return g;
+  g.setAttribute('normal',new T.Float32BufferAttribute(normals,3));
+  g.setAttribute('uv',new T.Float32BufferAttribute(uv,2));g.setIndex(indices);return g;
 }
 
 /** Twin ridges outside the square fort perimeter. Ground and snow cover share one draw. */
 export function addAlpineBackdrop(scene:T.Scene,rock?:T.Texture,snow?:T.Texture){
   const segments=192,rings=24,positions:number[]=[],uv:number[]=[],indices:number[]=[];
-  for(let row=0;row<=rings;row++){
-    const t=row/rings;
+  for(let row=0;row<=rings+1;row++){
+    const t=(row-1)/rings;
     for(let i=0;i<=segments;i++){
       const a=i*tau/segments;
-      const border=Math.max(88,74.4/Math.max(Math.abs(Math.cos(a)),Math.abs(Math.sin(a))));
-      const r=T.MathUtils.lerp(border,247,t);
-      const y=height(a,r);
+      const axis=Math.max(Math.abs(Math.cos(a)),Math.abs(Math.sin(a)));
+      const border=Math.max(88,74.4/axis);
+      // Start below the pass floor so the ridges meet solid ground between peaks.
+      const r=row===0?T.MathUtils.clamp(border-3,74.1/axis,87/axis):T.MathUtils.lerp(border,247,t);
+      const y=row===0?-.20:height(a,r);
       positions.push(Math.cos(a)*r,y,Math.sin(a)*r);
       uv.push(i/segments*56,(r*.65+y*.95)/12);
-      if(row<rings&&i<segments){
+      if(row<=rings&&i<segments){
         const v=row*(segments+1)+i,next=v+segments+1;
-        if((row+i)%2)indices.push(v,v+1,next,next,v+1,next+1);
+        if((row+i+1)%2)indices.push(v,v+1,next,next,v+1,next+1);
         else indices.push(v,v+1,next+1,v,next+1,next);
       }
     }
@@ -90,14 +103,24 @@ export function addAlpineBackdrop(scene:T.Scene,rock?:T.Texture,snow?:T.Texture)
                             mix(drift,vec3(.92,.96,.99),.33),snowLine);`);
   };
   const mountain=new T.Mesh(geo,material);mountain.name='Ubaye limestone ridges and snowfields';scene.add(mountain);
-  const trees=new T.InstancedMesh(firGeometry(),new T.MeshStandardMaterial({vertexColors:true,roughness:1}),120);
-  const object=new T.Object3D();
+  const canopy=typeof document==='undefined'?null:new T.TextureLoader().load('/shooter/environment/alpine-firs.webp');
+  if(canopy)canopy.colorSpace=T.SRGBColorSpace;
+  const trees=new T.InstancedMesh(firGeometry(),new T.MeshStandardMaterial({
+    map:canopy,color:canopy?'#ffffff':'#415b4b',alphaTest:.27,roughness:1,
+  }),120);
+  const object=new T.Object3D(),groundProbe=new T.Raycaster(new T.Vector3(),new T.Vector3(0,-1,0));
+  const groundHits:T.Intersection[]=[];
   for(let i=0;i<trees.count;i++){
     const cluster=Math.floor(i/5),a=cluster*2.39996+Math.sin(i*3.5)*.080;
     const border=75/Math.max(Math.abs(Math.cos(a)),Math.abs(Math.sin(a)));
     const r=border+11+(Math.sin(i*1.77)+1)*6;
     const h=4+1.9*(1+Math.sin(i*11.2));
-    object.position.set(r*Math.cos(a),height(a,r)-.04,r*Math.sin(a));
+    const x=r*Math.cos(a),z=r*Math.sin(a);
+    groundProbe.ray.origin.set(x,120,z);
+    groundHits.length=0;groundProbe.intersectObject(mountain,false,groundHits);
+    const ridge=groundHits[0]?.point.y??0;
+    const y=Math.max(ridge,Math.max(Math.abs(x),Math.abs(z))<=88.5?.02:-Infinity);
+    object.position.set(x,y-.06,z);
     object.rotation.y=i*.83;object.scale.set(h*.90,h,h*.90);object.updateMatrix();trees.setMatrixAt(i,object.matrix);
   }
   trees.name='Subalpine fir stands';scene.add(trees);
