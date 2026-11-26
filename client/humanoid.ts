@@ -379,7 +379,8 @@ export function createHuman(data:HumanData|BonusCharacterData|CivilianCharacterD
  // Each branch is rigid in its own bone space. Never merge across animated bones.
  batchDetails(equipment);batchDetails(headgear);
  if(!civilian){group.updateMatrixWorld(true);named.get('spine01')?.attach(equipment);}
- const motion=data.motion&&!civilian?createCharacterMotion(group,named,data.motion,false):undefined;
+ // These two rotations are set from aim after each locomotion sample.
+ const motion=data.motion&&!civilian?createCharacterMotion(group,named,data.motion,false,new Set(['spine01','head'])):undefined;
  group.userData.limbRoots={head:'head',armL:'upperarm01.L',armR:'upperarm01.R',legL:'upperleg01.L',legR:'upperleg01.R'};
  const held=createActorEquipment(group,{armL:rigArm(group,['upperarm01.L','lowerarm01.L','wrist.L']),armR:rigArm(group,['upperarm01.R','lowerarm01.R','wrist.R'])},civilian,false,purpose==='actor');
  group.userData.hasCrouchAnimation=!!motion;

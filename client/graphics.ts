@@ -16,6 +16,7 @@ import {createGpuTiming} from './gpuTiming';
 import {withBodyDistanceUpload} from './actorDetails';
 import {ShadowCadence} from './shadowCadence';
 import {createReceiverShadowFrustum,setReceiverShadowScissor} from './receiverShadowFrustum';
+import {createShadowMapFootprint} from './projectedShadowBounds';
 
 // Keep the environment's lighting while preventing its sky from covering the
 // world during the second, depth-cleared first-person render.
@@ -82,6 +83,7 @@ export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
   const gpuTiming=createGpuTiming(renderer.getContext() as WebGL2RenderingContext);
   const shadowCadence=new ShadowCadence();let timingFrame=0,timingEnabled=true;
   const receiverFrustum=createReceiverShadowFrustum(),lightFrustum=sun.shadow.getFrustum;
+  const worldReceiverFootprint=createShadowMapFootprint();
   let clippedShadow:T.Frustum|undefined;
   const savedShadowScissor=new T.Vector4();
   sun.shadow.getFrustum=()=>clippedShadow??lightFrustum.call(sun.shadow);
@@ -283,13 +285,16 @@ export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
       if(timingEnabled&&adaptiveQuality&&adaptive&&currentTimingFrame%17===0)gpuTiming.begin();
       // These presets refresh the map on every frame, including the first view back outside.
       let restrictedTarget:T.WebGLRenderTarget|undefined;
-      if((quality==='high'||quality==='ultra')&&camera.far<shadowExtent){
+      if(quality==='high'||quality==='ultra'){
         sun.updateWorldMatrix(true,false);
         sun.shadow.updateMatrices(sun);
         const full=lightFrustum.call(sun.shadow);
         // Cover biased receiver positions and every PCFSoft tap before restricting writes.
         const padding=Math.abs(sun.shadow.normalBias)+3*shadowExtent*2/sun.shadow.mapSize.x;
-        clippedShadow=receiverFrustum(full,camera,weaponVisible?weaponCamera:undefined,padding);
+        const weaponReceiver=weaponVisible?weaponCamera:undefined;
+        clippedShadow=camera.far<shadowExtent
+          ?receiverFrustum(full,camera,weaponReceiver,padding)
+          :worldReceiverFootprint(full,camera,weaponReceiver,padding,shadowExtent*2);
         const target=sun.shadow.map;
         if(target&&!target.scissorTest){
           savedShadowScissor.copy(target.scissor);

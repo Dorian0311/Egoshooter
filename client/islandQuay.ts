@@ -63,9 +63,30 @@ export function createIslandQuay(){
       bar([x+side*2.6,2,z-2.55],[x+side*1.9,8.7,z+1.5],.19,red);
       bar([x+side*2.6,2,z+2.55],[x+side*1.9,8.7,z-1.5],.19,red);
     }
-    box(x,9,z,5,.8,4.6,dark);box(x+.8,10.6,z,3.2,2.4,3.2,red);
-    box(x-1.2,10.3,z-1.4,1.55,1.7,1.5,'#d1bd93');
-    box(x-2,10.55,z-1.4,.08,.62,1.22,'#354b50');
+    const enamel=height>16?'#c4ae81':'#b8b9a0',wire='#4b514e';
+    box(x,9,z,5,.8,4.6,dark);
+    finish(new T.CylinderGeometry(1.56,1.66,.34,12).translate(x,9.52,z),'#655f51','metal');
+    box(x+.8,10.68,z,3.2,2.08,3.2,red,'metal');
+    box(x+.84,11.80,z,3.49,.18,3.44,'#696356','metal');
+    box(x-1.2,10.54,z-1.4,1.55,1.78,1.54,enamel,'cabin');
+    box(x-2.00,10.67,z-1.4,.07,.86,1.38,'#59716f','glass');
+    box(x-1.20,10.67,z-2.19,1.37,.86,.07,'#59716f','glass');
+    box(x-2.05,10.67,z-1.39,.058,.91,.062,enamel);
+    box(x-1.21,11.49,z-1.40,1.85,.15,1.89,enamel);
+    // The machinery deck, projecting counterweight and stayed mast give each crane a working profile.
+    box(x+2.86,10.16,z,1.82,1.23,2.87,'#66695f','concrete');
+    for(const side of [-1,1]){
+      const crown:Point=[x+.83,14.22,z+side*.68];
+      bar([x-1.03,9.64,z+side*1.13],crown,.18,red);
+      bar([x+2.66,10.74,z+side*.97],crown,.17,red);
+      bar(crown,[x-10.77,height+.35,z+side*.45],.077,wire);
+    }
+    box(x+.83,14.21,z,.32,.25,1.59,dark);
+    // Narrow seaward maintenance catwalk, below the driver's glazed corner cab.
+    box(x-2.43,9.28,z,.87,.13,4.92,'#787a6b','metal');
+    for(const dz of [-2.34,0,2.34])box(x-2.82,9.75,z+dz,.076,.91,.076,enamel);
+    box(x-2.82,10.21,z,.075,.075,4.76,enamel);
+    box(x-2.82,9.87,z,.050,.050,4.76,enamel);
     for(const offset of [-.45,.45]){
       bar([x,10,z+offset],[x-11,height,z+offset],.19,red);
       bar([x,11.6,z+offset],[x-11,height+.48,z+offset],.18,red);
@@ -74,14 +95,17 @@ export function createIslandQuay(){
         bar([x-11*t,10+(height-10)*t,z+offset],[x-11*u,11.6+(height-11.12)*u,z+offset],.12,red);
       }
     }
-    bar([x-11,height,z],[x-11,6,z],.07,dark);box(x-11,5.9,z,.5,.5,.36,dark);
+    finish(new T.CylinderGeometry(.36,.36,1.15,10).rotateX(Math.PI/2).translate(x-11,height+.20,z),dark);
+    for(const dx of [-.17,.17])bar([x-11+dx,height+.12,z],[x-11+dx,6.18,z],.060,wire);
+    box(x-11,5.94,z,.61,.52,.40,'#b29352','metal');
+    finish(new T.TorusGeometry(.23,.064,5,10,Math.PI*1.62).rotateY(Math.PI/2).translate(x-11,5.51,z),dark);
   }
   for(let i=0;i<8;i++){
     const z=-55+i*6,x=147.5,y=i%3===1?2.7:0;
     const color=['#725950','#64766b','#8d7957','#657479'][i%4];
     box(x,y+1.3,z,2.7,2.6,5.7,color,'container');
     if(y)box(x,1.3,z,2.7,2.6,5.7,'#81877e','container');
-    for(let rib=0;rib<12;rib++)box(x-1.36,y+1.3,z-2.52+rib*.455,.08,2.35,.07,color);
+    // The shared steel atlas already carries the full corrugated profile at this distance.
   }
   // A coastal cargo vessel, broadside to the quay. Ring widths form the bow and stern.
   const hull=new T.BufferGeometry(),vertices:number[]=[],bootTop:number[]=[];

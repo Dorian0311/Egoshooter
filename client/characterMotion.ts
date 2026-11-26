@@ -9,12 +9,12 @@ let library:Promise<MotionLibrary|undefined>|undefined;
 export function loadMotionLibrary(){return library??=fetch('/shooter/animations/locomotion.json').then(async response=>{if(!response.ok)throw Error('Character motion unavailable');return await response.json() as MotionLibrary;}).catch(error=>{console.warn('Motion asset unavailable; keeping fallback movement',error);return undefined;});}
 
 /** Imported pose clips blended independently of authoritative movement/aim. */
-export function createCharacterMotion(root:T.Group,bones:Map<string,T.Bone>,data:MotionLibrary,civilian=false){
+export function createCharacterMotion(root:T.Group,bones:Map<string,T.Bone>,data:MotionLibrary,civilian=false,aimBones?:ReadonlySet<string>){
  const mixer=new T.AnimationMixer(root),actions=new Map<MotionName,T.AnimationAction>();
  for(const [name,clip]of Object.entries(data.clips) as [MotionName,MotionClip][]){
   const tracks:T.KeyframeTrack[]=[];
   for(const [boneName,values]of Object.entries(clip.rotations)){
-   const bone=bones.get(boneName);if(!bone||!civilian&&/^(clavicle|upperarm|lowerarm|wrist)/.test(boneName))continue;
+   const bone=bones.get(boneName);if(!bone||aimBones?.has(boneName)||!civilian&&/^(clavicle|upperarm|lowerarm|wrist)/.test(boneName))continue;
    tracks.push(new T.QuaternionKeyframeTrack(bone.uuid+'.quaternion',clip.times,values));
   }
   const hip=bones.get('root');if(hip)tracks.push(new T.VectorKeyframeTrack(hip.uuid+'.position',clip.times,clip.rootPositions));
