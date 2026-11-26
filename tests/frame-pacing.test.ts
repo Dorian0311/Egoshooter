@@ -11,7 +11,12 @@ import {closedShopViewDepth,shopOpeningInView,streetRooms} from '../client/shopV
 test('cached static transforms preserve world placement and still follow a moving parent',()=>{
  const parent=new T.Group(),root=new T.Group(),mesh=new T.Mesh(new T.BoxGeometry(),new T.MeshBasicMaterial());parent.add(root);root.add(mesh);parent.position.x=10;mesh.position.set(2,3,4);
  freezeStaticTransforms(root);assert.equal(mesh.matrixAutoUpdate,false);assert.deepEqual(mesh.getWorldPosition(new T.Vector3()).toArray(),[12,3,4]);
+ let matrixUpdates=0;const update=mesh.updateMatrixWorld;
+ mesh.updateMatrixWorld=function(force){matrixUpdates++;update.call(this,force);};
+ root.updateMatrixWorld();assert.equal(matrixUpdates,0);
+ root.matrixWorldNeedsUpdate=true;root.updateMatrixWorld();assert.equal(matrixUpdates,1);
  parent.position.x=20;parent.updateMatrixWorld(true);assert.deepEqual(mesh.getWorldPosition(new T.Vector3()).toArray(),[22,3,4]);
+ assert.equal(matrixUpdates,2);
  mesh.geometry.dispose();(mesh.material as T.Material).dispose();
 });
 

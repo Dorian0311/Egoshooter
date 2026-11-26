@@ -329,6 +329,16 @@ export function addIslandStreet(scene:T.Group){
           continue;
         }
         cuboid(center,.477,frontZ+s.front*.03,panelWidth,.43,.085,wood);
+        if(panel===1){
+          // One painted trade panel each side of the door. Select a different half
+          // of the shop's own atlas strip for each window, viewed from the street.
+          const plaque=new T.PlaneGeometry(panelWidth-.055,.40),uv=plaque.getAttribute('uv');
+          const u=direction<0?.502:.002;
+          for(let i=0;i<uv.count;i++)uv.setXY(i,u+.496*uv.getX(i),1-(index*512+432-200*uv.getY(i))/2048);
+          const face=solid(plaque,center,.477,frontZ+s.front*.093,facade);
+          face.rotation.y=Math.PI;face.castShadow=true;
+          continue;
+        }
         cuboid(center,.48,frontZ+s.front*.081,panelWidth-.105,.32,.034,accent);
         cuboid(center,.614,frontZ+s.front*.110,panelWidth-.155,.038,.024,trim);
       }

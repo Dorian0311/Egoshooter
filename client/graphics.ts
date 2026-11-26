@@ -49,6 +49,10 @@ export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
    #include <colorspace_fragment>`);
   smaa.materialBlend.toneMapped=true;
   const fxaa=new ShaderPass(fxaaOutputShader);fxaa.material.toneMapped=true;
+  // Both AA passes write directly to the screen. Swapping here makes the next
+  // world frame allocate a second full-size HDR target and depth attachment.
+  fxaa.needsSwap=false;
+  smaa.needsSwap=false;
   fxaa.setSize=(w:number,h:number)=>{fxaa.uniforms.resolution.value.set(1/Math.max(1,w),1/Math.max(1,h));};
   const pipeline=[render,ao,weaponPass,bloom,fxaa,smaa];
   // The composer receives physical pixels; changing viewport and DPR together must resize its targets only once.

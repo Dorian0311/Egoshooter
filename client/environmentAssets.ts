@@ -12,6 +12,7 @@ import {createPeriodArchitecture,setPeriodNight} from './periodArchitecture';
 import {createCoastalArchitecture} from './coastalArchitecture';
 import {applySurfaceFinish} from './surfaceFinish';
 import {createFacadeBatches} from './facadeBatches';
+import {freezeStaticTransforms} from './staticTransforms';
 
 function disposeSource(root:T.Object3D){
  const geometries=new Set<T.BufferGeometry>(),materials=new Set<T.Material>(),textures=new Set<T.Texture>();
@@ -143,7 +144,7 @@ export function loadEnvironmentUpgrade(scene:T.Scene,world:World,renderer:T.WebG
   }).catch(error=>console.warn('Natural detail unavailable:',name,error)));
  }
  return {
-  ready:Promise.all(loading),
+  ready:Promise.all(loading).then(()=>{if(!disposed)freezeStaticTransforms(root);}),
   setNight(enabled:boolean){setPeriodNight(architecture,enabled);quarter?.setNight(enabled);},
   update(position:T.Vector3,quality:GraphicsQuality){
    quarter?.setQuality(quality);
