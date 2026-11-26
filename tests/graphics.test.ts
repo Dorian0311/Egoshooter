@@ -4,6 +4,7 @@ import { parseGraphicsQuality, renderPixelRatio,ResolutionGovernor } from '../cl
 import {addMilitaryRoofs} from '../client/militaryRoofs';
 import * as T from 'three';
 import {createMuzzleEffects} from '../client/muzzleEffects';
+import {dampSurface} from '../client/dampSurface';
 import { addFacadeDetails, addAlpineBackdrop, createRiver, batchStaticMeshes, instanceStaticModel } from '../client/scenery.ts';
 import { getWorld } from '../shared/world.ts';
 
@@ -119,6 +120,23 @@ test('tracers batch shots with independent ages and release expired slots',()=>{
     if(oldDocument)Object.defineProperty(globalThis,'document',oldDocument);
     else Reflect.deleteProperty(globalThis,'document');
   }
+});
+
+test('surface dampness restores dry colors and roughness without recompiling',()=>{
+  const material=new T.MeshStandardMaterial({color:'#9b8a6c',roughness:.9});
+  const original=material.color.clone(),version=material.version;
+  const setDamp=dampSurface(material);
+  setDamp(true);
+  assert.ok(material.color.r<original.r);
+  assert.ok(material.roughness<.9);
+  const damp=material.color.clone();
+  setDamp(true);
+  assert.ok(material.color.equals(damp));
+  setDamp(false);
+  assert.ok(material.color.equals(original));
+  assert.equal(material.roughness,.9);
+  assert.equal(material.version,version);
+  material.dispose();
 });
 
 test('static batching preserves world positions and replaceable cover meshes', () => {

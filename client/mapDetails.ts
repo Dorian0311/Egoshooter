@@ -15,6 +15,7 @@ import {inIslandStreet} from '../shared/islandStreet';
 import {createBattleTerrain} from './battleTerrain';
 import {freightStreet} from './freightStreet';
 import {freightCartSite,freightYard} from './freightYard';
+import {dampSurface} from './dampSurface';
 
 export const detailedPropKinds=new Set(['sandbags','container','truck','ruin','tree','platform','coastal-portal','shop','street-pole']);
 
@@ -192,7 +193,7 @@ export function createMapDetails(scene:T.Scene,world:World,get:(color:string)=>T
   if(terrain)root.add(terrain.mesh);
   const roadTextures:T.Texture[]=[];
   let roadSurface:T.MeshStandardMaterial|undefined;
-  const disposeStreet=island?addIslandStreet(root):undefined;
+  const street=island?addIslandStreet(root):undefined;
   if(island){
     root.add(createIslandQuay());
     root.add(harbourEntrance(world,get('#818783').map));
@@ -427,5 +428,11 @@ export function createMapDetails(scene:T.Scene,world:World,get:(color:string)=>T
   const tintable=new Set([...colors.values()].filter(m=>m.onBeforeCompile===T.Material.prototype.onBeforeCompile&&
     !Object.values(m).some(value=>value instanceof T.Texture)));
   batchStaticMeshes(root,new Set(),64,tintable);
-  return {update(seconds:number){ocean?.update(seconds);if(radarRotor)radarRotor.rotation.y=seconds*.25;},dispose(){ocean?.dispose();disposeStreet?.();roadSurface?.dispose();roadTextures.forEach(texture=>texture.dispose());terrain?.dispose();colors.forEach(m=>m.dispose());}};
+  const wetGround=roadSurface?dampSurface(roadSurface):war&&terrain?dampSurface(terrain.mesh.material,.67):
+    world.id==='cologne'?dampSurface(get('#77766b'),.78):undefined;
+  return {
+    update(seconds:number){ocean?.update(seconds);if(radarRotor)radarRotor.rotation.y=seconds*.25;},
+    setDampness(damp:boolean){wetGround?.(damp);street?.setDampness(damp);},
+    dispose(){ocean?.dispose();street?.dispose();roadSurface?.dispose();roadTextures.forEach(texture=>texture.dispose());terrain?.dispose();colors.forEach(m=>m.dispose());},
+  };
 }

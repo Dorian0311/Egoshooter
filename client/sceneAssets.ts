@@ -4,11 +4,13 @@ import {GLTFLoader} from 'three/examples/jsm/loaders/GLTFLoader.js';
 import {RGBELoader} from 'three/examples/jsm/loaders/RGBELoader.js';
 import type {Box} from '../shared/world.ts';
 import {createCrateShadows} from './crateShadows';
+import {makeWeatherSky,type WeatherSky} from './weatherSky';
 import type {GraphicsQuality} from './graphicsSettings';
 function disposeObject(root:T.Object3D){root.traverse(o=>{if(o instanceof T.Mesh){o.geometry.dispose();for(const m of Array.isArray(o.material)?o.material:[o.material]){for(const value of Object.values(m))if(value instanceof T.Texture)value.dispose();m.dispose();}}});}
 export function loadSceneAssets(scene:T.Scene,renderer:T.WebGLRenderer,covers:{box:Box;mesh:T.Mesh}[],quality:GraphicsQuality,island=false){
  let disposed=false;let environment:T.WebGLRenderTarget|undefined;
- let weatherBackground:T.Color|null=null;
+ let weatherBackground:T.CubeTexture|null=null;
+ const skies=new Map<WeatherSky,T.CubeTexture>();
  if(island){
   // The solar disc in the source panorama lies 34.3 degrees east of +X.
   const rotation=T.MathUtils.degToRad(34.3)-Math.atan2(55,-70);
@@ -59,8 +61,15 @@ export function loadSceneAssets(scene:T.Scene,renderer:T.WebGLRenderer,covers:{b
  return {
   ready,
   updateCrates:crateShadows.updateColor,
-  setWeatherBackground(color:T.Color|null){weatherBackground=color;scene.background=color??environment?.texture??null;},
+  setWeatherBackground(weather:WeatherSky|null){
+   if(weather&&!skies.has(weather))skies.set(weather,makeWeatherSky(weather));
+   weatherBackground=weather?skies.get(weather)!:null;
+   scene.background=weatherBackground??environment?.texture??null;
+   scene.backgroundIntensity=weather||island?1:.65;
+   scene.backgroundBlurriness=weather||island?0:.025;
+   scene.backgroundRotation.y=weather?0:scene.environmentRotation.y;
+  },
   setQuality:(value:GraphicsQuality)=>crateShadows.setCompact(compact(value)),
-  dispose(){disposed=true;crateShadows.dispose();environment?.dispose();loadedModels.forEach(disposeObject);},
+  dispose(){disposed=true;crateShadows.dispose();for(const sky of skies.values())sky.dispose();environment?.dispose();loadedModels.forEach(disposeObject);},
  };
 }

@@ -3,6 +3,7 @@ import {RoundedBoxGeometry} from 'three/examples/jsm/geometries/RoundedBoxGeomet
 import {islandShops,shopParts,streetPoles} from '../shared/islandStreet';
 import {createHarbourPosters} from './harbourPosters';
 import {batchStaticMeshes} from './scenery';
+import {dampSurface} from './dampSurface';
 
 export function addIslandStreet(scene:T.Group){
   const street=new T.Group();street.name='Harbour Road';scene.add(street);
@@ -312,5 +313,9 @@ export function addIslandStreet(scene:T.Group){
   const cables=new T.BufferGeometry();cables.setAttribute('position',new T.Float32BufferAttribute(points,3));
   const cableMaterial=new T.LineBasicMaterial({color:'#393d3b'});street.add(new T.LineSegments(cables,cableMaterial));
   batchStaticMeshes(street,new Set(),32,new Set(palette.values()));
-  return ()=>{cables.dispose();cableMaterial.dispose();normal.dispose();palette.forEach(m=>m.dispose());};
+  const dampRoad=dampSurface(pavement),dampSlabs=dampSurface(pavingMaterial,.68);
+  return {
+    setDampness(damp:boolean){dampRoad(damp);dampSlabs(damp);},
+    dispose(){cables.dispose();cableMaterial.dispose();normal.dispose();palette.forEach(m=>m.dispose());},
+  };
 }

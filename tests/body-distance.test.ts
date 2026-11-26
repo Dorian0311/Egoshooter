@@ -5,7 +5,7 @@ import {createHash} from 'node:crypto';
 import * as T from 'three';
 import {decodeBodyDistance,matchingBodyDistance} from '../client/bodyDistance';
 import {createHuman} from '../client/humanoid';
-import {createActorDetails} from '../client/actorDetails';
+import {createActorDetails,withBodyDistanceUpload} from '../client/actorDetails';
 import {createAnatomy} from '../client/anatomy';
 
 test('standard distance body uses original skinned vertices and retreats on injury, approach and scope zoom',async()=>{
@@ -39,11 +39,21 @@ test('standard distance body uses original skinned vertices and retreats on inju
  const check=(distance:number,fov:number,expected:boolean)=>{
   details.update(distance,720,fov);assert.equal(far.visible,expected);assert.equal(full.visible,!expected);
  };
- check(8,80,false);check(60,80,true);check(60,20,false);check(60,80,true);
- anatomy.setLost(2);check(60,80,false);assert.ok(full.geometry.drawRange.count<full.geometry.index!.count);
+ function checkUploadRestores(expectedFar:boolean){
+  assert.throws(()=>withBodyDistanceUpload([human.group],()=>{
+   assert.ok(full.visible&&far.visible);throw Error('simulated draw failure');
+  }),/simulated draw failure/);
+  assert.equal(full.visible,!expectedFar);assert.equal(far.visible,expectedFar);
+ }
+ check(8,80,false);checkUploadRestores(false);
+ check(60,80,true);checkUploadRestores(true);
+ check(60,20,false);check(60,80,true);
+ anatomy.setLost(2);check(60,80,false);checkUploadRestores(false);assert.ok(full.geometry.drawRange.count<full.geometry.index!.count);
  assert.ok(anatomy.detach('armL'));anatomy.setLost(0);check(60,80,true);check(8,80,false);
  let released=false;
  far.geometry.addEventListener('dispose',()=>{assert.equal(Object.keys(far.geometry.attributes).length,0);released=true;});
- details.dispose();assert.ok(released);assert.ok(full.geometry.getAttribute('position').count>10000);
+ details.dispose();assert.ok(released);
+ withBodyDistanceUpload([human.group],()=>assert.equal(human.group.getObjectByName('distance-body'),undefined));
+ assert.ok(full.geometry.getAttribute('position').count>10000);
  anatomy.dispose();human.dispose();
 });

@@ -1,6 +1,17 @@
 import * as T from 'three';
 import {createDistanceBody} from './bodyDistance';
 
+type DistanceBody=NonNullable<ReturnType<typeof createDistanceBody>>;
+const distanceBodies=new WeakMap<T.Group,DistanceBody[]>();
+
+/** Expose both index buffers only during the renderer's offscreen colour upload.
+ * The active LOD, injury visibility and layers are unchanged after the draw. */
+export function withBodyDistanceUpload(roots:readonly T.Group[],draw:()=>void){
+ const restore:(()=>void)[]=[];
+ for(const root of roots)for(const body of distanceBodies.get(root)??[])restore.push(body.showBothForUpload());
+ try{draw();}finally{for(const reset of restore)reset();}
+}
+
 /** Keep full silhouettes/skinning; omit only subpixel rigid accessories. Uses
  * layer 0 so animation/injury visibility remains owned by the character rig. */
 export function createActorDetails(root:T.Group){
@@ -28,6 +39,7 @@ export function createActorDetails(root:T.Group){
   const body=createDistanceBody(mesh,mesh.userData.bodyDistance);
   return body?[body]:[];
  });
+ if(bodies.length)distanceBodies.set(root,bodies);
  return {
   update(distance:number,height:number,fov:number){
    const pixelsPerMetre=height/(2*Math.tan(T.MathUtils.degToRad(fov/2))*Math.max(.1,distance));
@@ -41,6 +53,6 @@ export function createActorDetails(root:T.Group){
    }
    return hidden;
   },
-  dispose(){for(const body of bodies)body.dispose();for(const detail of details){if(detail.hidden)detail.mesh.layers.enable(0);detail.mesh.castShadow=detail.shadow;}for(const skin of skins){skin.mesh.frustumCulled=skin.culled;skin.mesh.boundingSphere=skin.sphere;}details.length=skins.length=0;},
+  dispose(){distanceBodies.delete(root);for(const body of bodies)body.dispose();for(const detail of details){if(detail.hidden)detail.mesh.layers.enable(0);detail.mesh.castShadow=detail.shadow;}for(const skin of skins){skin.mesh.frustumCulled=skin.culled;skin.mesh.boundingSphere=skin.sphere;}details.length=skins.length=0;},
  };
 }

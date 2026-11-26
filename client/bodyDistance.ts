@@ -46,6 +46,11 @@ export function createDistanceBody(full:T.SkinnedMesh,asset:BodyDistanceAsset){
    const far=!zoom&&intact&&pixelsPerMetre*1.8<(distant.visible?78:60);
    full.visible=!far;distant.visible=far;
   },
+  showBothForUpload(){
+   const nearVisible=full.visible,farVisible=distant.visible;
+   full.visible=distant.visible=true;
+   return ()=>{full.visible=nearVisible;distant.visible=farVisible;};
+  },
   dispose(){
    full.visible=true;distant.removeFromParent();
    // Full geometry retains ownership of the shared GPU vertex streams.

@@ -12,6 +12,7 @@ import {createOperationScene,createThrowingStarGeometry} from './operationScene'
 import {isCrawling,shotStability,eyeHeight as actorEyeHeight,eyePosition as actorEyePosition,armCount,hasLost} from '../shared/injuries';
 import {createInteriors} from './interiors';
 import {bakeShopLights} from './shopLighting';
+import {weatherHorizon} from './weatherSky';
 import {interiorWorld,insideBuilding,interiorFixtures} from '../shared/interiors';
 import {createChainsaw} from './chainsaw';
 import {createWanderers} from './wanderers';
@@ -108,6 +109,7 @@ export function createScene(
   }):[];
   const daylight=island?.70:.64;
   const skyLight=new T.HemisphereLight(island?'#c2d8f2':'#cfdaeb',island?'#9b8f77':'#827662',daylight);
+  const daylightSky=skyLight.color.clone(),daylightGround=skyLight.groundColor.clone();
   skyLight.layers.enable(1);scene.add(skyLight);
   const sun = new T.DirectionalLight("#fff0e0", 2.8);
   if(mapId==='storm'){sun.color.set('#fff0db');sun.intensity=2.9;}
@@ -559,14 +561,16 @@ export function createScene(
     snapshot = s;interiors.sync(s.interiors);operationScene.sync(s);remainsScene.sync(s);
     if(condition!==s.operation.condition){
       condition=s.operation.condition;
+      mapDetails.setDampness(condition==='fog');
       const night=condition==='night',fog=condition==='fog';
-      const weatherFog=night?new T.Fog('#131d2c',20,100):fog?new T.Fog('#a8b3b0',4,42):null;
+      const weatherFog=night?new T.Fog(weatherHorizon.night,20,100):fog?new T.Fog(weatherHorizon.fog,4,42):null;
       scene.fog=weatherFog??daylightFog;
-      sceneAssets.setWeatherBackground(weatherFog?.color??null);
+      sceneAssets.setWeatherBackground(night?'night':fog?'fog':null);
       renderer.setClearColor(weatherFog?.color??daylightClear);
-      sun.color.copy(daylightSun);
-      if(night)sun.color.set('#abc8ee');
-      sun.intensity=night?.24:fog?daylightStrength*.35:daylightStrength;
+      skyLight.color.copy(daylightSky);skyLight.groundColor.copy(daylightGround);sun.color.copy(daylightSun);
+      if(night){skyLight.color.set('#a3b9df');skyLight.groundColor.set('#756960');sun.color.set('#abc8ee');}
+      if(fog){skyLight.color.set('#e0e5e4');skyLight.groundColor.set('#a6a49a');sun.color.set('#efe4c9');}
+      sun.intensity=night?.29:fog?daylightStrength*.27:daylightStrength;
     }
     collisionWorld=interiorWorld(world,s.interiors);
     myId = id;
@@ -988,7 +992,7 @@ export function createScene(
     const shop=room?.shop;
     const shopDepth=shop?shop.d/2-(eye.z-shop.z)*shop.front:0;
     const skyAccess=shop?1-.56*T.MathUtils.smoothstep(shopDepth,0,shop.d):covered?.38:1;
-    const ambient=condition==='night'?.15:condition==='fog'?.90:daylight;
+    const ambient=condition==='night'?.22:condition==='fog'?.90:daylight;
     const reflection=condition==='night'?.055:condition==='fog'?.32:island?.55:.48;
     const adapt=Math.min(1,dt*4);
     skyLight.intensity+=(ambient*skyAccess-skyLight.intensity)*adapt;

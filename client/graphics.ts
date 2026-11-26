@@ -10,6 +10,7 @@ import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { graphicsPresets, renderPixelRatio, ResolutionGovernor, type GraphicsQuality } from './graphicsSettings.ts';
 import {createWeaponScene} from './weaponScene';
 import {createGpuTiming} from './gpuTiming';
+import {withBodyDistanceUpload} from './actorDetails';
 import {ShadowCadence} from './shadowCadence';
 
 // Keep the environment's lighting while preventing its sky from covering the
@@ -130,7 +131,6 @@ export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
       // The first spawn camera can face away from completed avatars. Upload their real skinned buffers now.
       for(const actor of actorRoots){
         for(const root of [actor.parent,actor])if(root&&!root.visible){root.visible=true;hidden.push(root);}
-        if(actorsOnly)actor.traverseVisible(enableUpload);
       }
       target.scissor.set(0,0,1,1);target.scissorTest=true;
       renderer.setRenderTarget(target);
@@ -162,15 +162,18 @@ export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
           prepared.forEach(name=>warmedShadowSources.add(name));
         }
       }finally{for(const restore of restoreDepth)restore();}
-      if(actorsOnly){
-        scene.traverseVisible(object=>{if(object instanceof T.Light)enableUpload(object);});
-        camera.layers.set(uploadLayer);
-      }
-      scene.traverseVisible(object=>{
-        if(object instanceof T.Mesh&&object.layers.test(camera.layers)&&object.frustumCulled){uncull.push(object);object.frustumCulled=false;}
+      withBodyDistanceUpload(actorRoots,()=>{
+        if(actorsOnly){
+          for(const actor of actorRoots)actor.traverseVisible(enableUpload);
+          scene.traverseVisible(object=>{if(object instanceof T.Light)enableUpload(object);});
+          camera.layers.set(uploadLayer);
+        }
+        scene.traverseVisible(object=>{
+          if(object instanceof T.Mesh&&object.layers.test(camera.layers)&&object.frustumCulled){uncull.push(object);object.frustumCulled=false;}
+        });
+        renderer.shadowMap.needsUpdate=false;
+        renderer.render(scene,camera);
       });
-      renderer.shadowMap.needsUpdate=false;
-      renderer.render(scene,camera);
     }finally{
       camera.layers.mask=cameraLayers;
       for(const object of extraLayer)object.layers.disable(uploadLayer);
