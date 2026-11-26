@@ -19,7 +19,7 @@ import {WeaponPicker} from './WeaponPicker';
 import {validLoadout,type Loadout} from '../shared/weapons';
 import {LiveRooms} from './LiveRooms';
 import './mapCards.css';
-import React, { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Client, type Room } from "@colyseus/sdk";
 import { mergeSnapshot, type SnapshotPacket } from "../shared/protocol.ts";
 import type { Snapshot } from "../shared/game.ts";
@@ -59,7 +59,7 @@ export default function App({
   const [hits,setHits]=useState<ReceivedHit[]>([]),[deathReason,setDeathReason]=useState('');
   const feedSequence=useRef(0);
   const [headshotAt,setHeadshotAt]=useState(0);
-  const keyLabel=(action:keyof typeof settings.bindings)=>settings.bindings[action].replace('Key','').replace('Digit','');
+  const keyLabel=useCallback((action:keyof typeof settings.bindings)=>settings.bindings[action].replace('Key','').replace('Digit',''),[settings.bindings]);
   const [graphicsQuality,setGraphicsQuality]=useState<GraphicsQuality>(()=>{
     try{return parseGraphicsQuality(localStorage.getItem(graphicsStorageKey));}catch{return 'auto';}
   });
@@ -285,9 +285,13 @@ export default function App({
   const health=Math.ceil(me?.hp??0),hasShield=!!me?.carriedCorpse,shield=me?.carriedCorpse?me.corpseShield:0;
   const kills=me?.kills??0,deaths=me?.deaths??0,stamina=me?.stamina??SPRINT_DURATION_MS;
   const sprinting=!!me?.sprinting,exhausted=!!me?.sprintExhausted;
+  const loadout=me?.loadout,equippedWeapon=me?.weapon;
   // Movement snapshots update the scene at network rate. Rebuild these HUD
   // subtrees only when a displayed field or the list of kills changes.
   const feedDisplay=useMemo(()=>active&&<section className="combat-feed live-killfeed" aria-label="Live-Abschüsse"><header><span>ABSCHÜSSE</span><small>● LIVE</small></header><div role="log" aria-live="polite">{killfeed.length===0?<p className="killfeed-empty">Noch keine Abschüsse</p>:killfeed.map(item=><div key={item.key} className={`killfeed-entry ${item.mine?'is-mine':item.friendly?'is-friendly':'is-enemy'}`}><strong>{item.killer}</strong><span className="killfeed-weapon" title={item.weapon}>{item.headshot?'◎':'▸'}</span><b>{item.victim}</b></div>)}</div></section>,[active,killfeed]);
+  const loadoutDisplay=useMemo(()=>active&&loadout&&<ol className="loadout-hud" aria-label="Deine Waffenplätze">
+    {loadout.map((id,slot)=><li key={slot} className={equippedWeapon===id?'equipped':''}><kbd>{keyLabel(('weapon'+(slot+1)) as keyof typeof settings.bindings)}</kbd><span>{weapons[id].name}</span></li>)}
+  </ol>,[active,loadout,equippedWeapon,keyLabel]);
   const statusDisplay=useMemo(()=>active&&<>
     <div className="city-hud"><strong>{health}<small>GESUNDHEIT</small></strong>{hasShield&&<CorpseShield value={shield}/>}</div>
     <div className="personal-score" aria-label="Eigene Abschüsse und Tode"><span><b>{kills}</b> KILLS</span><span><b>{deaths}</b> TODE</span></div>
@@ -306,7 +310,7 @@ export default function App({
       {startIntent&&!snapshot&&(!choosingWeapons?<CharacterPicker map={selectedMap} value={preferredUniform} onClose={()=>{setStartIntent(null);setChoosingWeapons(false);}} onSelect={id=>{setPreferredUniform(id);setError('');setChoosingWeapons(true);}}/>:preferredUniform&&<WeaponPicker island={selectedMap==='storm'} uniform={preferredUniform} busy={busy} error={error} onBack={()=>setChoosingWeapons(false)} onClose={()=>{setStartIntent(null);setChoosingWeapons(false);}} onStart={loadout=>void connect(startIntent.create,startIntent.training,preferredUniform,startIntent.operation,loadout)}/>)}
       {snapshot&&(scoreboardOpen||scoreboardHeld)&&<MatchScoreboard snapshot={snapshot} playerId={access?.playerId} onClose={()=>{setScoreboardOpen(false);setScoreboardHeld(false);}}/>}
       {active&&!!me?.rockets&&<div className="rocket-count">{keyLabel('rocket')} · Stielraketen: {me.rockets}</div>}
-      {active&&me&&<ol className="loadout-hud" aria-label="Deine Waffenplätze">{me.loadout.map((id,slot)=><li key={slot} className={me.weapon===id?'equipped':''}><kbd>{keyLabel(('weapon'+(slot+1)) as keyof typeof settings.bindings)}</kbd><span>{weapons[id].name}</span></li>)}</ol>}
+      {loadoutDisplay}
       {snapshot&&<nav className="game-toolbar" aria-label="Spielbedienung">
         <button aria-expanded={scoreboardOpen||scoreboardHeld} onClick={()=>setScoreboardOpen(v=>!v)}>Rangliste{!tabAssigned?' · Tab':''}</button>
         <button onClick={()=>{document.exitPointerLock();setSettingsOpen(true);}}>Einstellungen</button>

@@ -13,11 +13,12 @@ export function createPeriodQuarter(id:Extract<MapId,'cologne'|'frontline'>,load
   const night={value:0};
   let seed=cologne?1938:1944;
   const random=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};
-  function face(points:Point[],tile:number,shade=1,windowLight=0){
+  function face(points:Point[],tile:number,shade=1,windowLight=0,half?:number){
     const first=position.length/3,u0=(tile%4+.016)/4,v0=(3-Math.floor(tile/4)+.016)/4,span=.968/4;
     for(let i=0;i<points.length;i++){
       const u=i===1?1:i===2?(points.length===3?.5:1):0,v=i>1?1:0;
-      position.push(...points[i]);uv.push(u0+span*u,v0+span*v);colors.push(shade,shade,shade);
+      const textureU=half===undefined?u0+span*u:(tile%4+(half+.016+.968*u)/2)/4;
+      position.push(...points[i]);uv.push(textureU,v0+span*v);colors.push(shade,shade,shade);
       windows.push(windowLight);
     }
     indices.push(first,first+1,first+2);
@@ -64,6 +65,10 @@ export function createPeriodQuarter(id:Extract<MapId,'cologne'|'frontline'>,load
     }
     function wall(x0:number,z0:number,x1:number,z1:number,finish:number){
       const bays=Math.max(1,Math.round(Math.hypot(x1-x0,z1-z0)/(factory?4.5:3.35)));
+      // At the freight sidings one bay opens to the yard rather than repeating
+      // another ground-floor window. The paired doors reuse a spare atlas tile.
+      const yardFront=!cologne&&tier===0&&cx>0&&Math.abs(cz)<80&&z0===-d&&z1===-d;
+      const doorBay=Math.floor(bays/2)-(bays>3&&Math.floor(Math.abs(cz))%2===1?1:0);
       for(let j=0;j<bays;j++){
         const a=j/bays,b=(j+1)/bays;
         for(let k=0;k<floors;k++){
@@ -72,8 +77,10 @@ export function createPeriodQuarter(id:Extract<MapId,'cologne'|'frontline'>,load
           const hash=Math.sin(cx*8.47+cz*12.67+x0*3.7+z0*4.6+j*7.23+k*21.9)*43758.54;
           const chance=hash-Math.floor(hash);
           const windowLight=chance<.082?Math.round(116+chance*1390):0;
+          const door=yardFront&&j===doorBay&&k===0;
           face([pt(x0+(x1-x0)*a,bottom,z0+(z1-z0)*a),pt(x0+(x1-x0)*b,bottom,z0+(z1-z0)*b),
-            pt(x0+(x1-x0)*b,top,z0+(z1-z0)*b),pt(x0+(x1-x0)*a,top,z0+(z1-z0)*a)],facade,tone*finish,windowLight);
+            pt(x0+(x1-x0)*b,top,z0+(z1-z0)*b),pt(x0+(x1-x0)*a,top,z0+(z1-z0)*a)],
+            door?7:facade,tone*finish,door?0:windowLight,door?(factory?1:0):undefined);
         }
       }
     }
