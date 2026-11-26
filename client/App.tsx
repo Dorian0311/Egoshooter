@@ -6,7 +6,6 @@ import {VictimFace,CorpseShield} from './VictimFace';
 import {HitReport,receivedHit,type ReceivedHit} from './HitReport';
 import {type OperationConfig,modeLabels} from '../shared/operationConfig';
 import {HighlightRecorder,type Highlight} from './highlights';
-import {HighlightPlayer} from './HighlightPlayer';
 import {saveBest,readBests} from './operationRecords';
 import {GameSettingsPanel} from './GameSettingsPanel';
 import {MatchScoreboard} from './MatchScoreboard';
@@ -24,13 +23,14 @@ import { Client, type Room } from "@colyseus/sdk";
 import { mergeSnapshot, type SnapshotPacket } from "../shared/protocol.ts";
 import type { Snapshot } from "../shared/game.ts";
 import {getWorld,mapIds,type MapId} from "../shared/world.ts";
-import { createScene } from "./scene.ts";
+import type { createScene } from "./scene.ts";
 import {graphicsPresets,graphicsStorageKey,parseGraphicsQuality,type GraphicsQuality} from './graphicsSettings.ts';
 import "./style.css";
 import './crosshair.css';
 import "./combatUI.css";
 import './lobby.css';
 const CommanderEasterEgg=lazy(()=>import('./CommanderEasterEgg'));
+const HighlightPlayer=lazy(()=>import('./HighlightPlayer').then(({HighlightPlayer})=>({default:HighlightPlayer})));
 type Score = {
   name: string;
   wins: number;
@@ -107,6 +107,7 @@ export default function App({
   const room = useRef<Room | null>(null),
     canvas = useRef<HTMLCanvasElement>(null),
     scene = useRef<ReturnType<typeof createScene> | null>(null),
+    sceneFactory = useRef<typeof createScene | null>(null),
     accessRef = useRef<Access | null>(null),
     last = useRef<Snapshot | null>(null);
   useEffect(() => {
@@ -147,8 +148,8 @@ export default function App({
     };
   }, [accessToken,account?.id]);
   useEffect(() => {
-    if (snapshot && canvas.current && !scene.current) {
-      scene.current = createScene(canvas.current, (i) => room.current?.send("input", i),snapshot.mapId,graphicsQuality,settings,id=>room.current?.send("interact",id));
+    if (snapshot && canvas.current && !scene.current && sceneFactory.current) {
+      scene.current = sceneFactory.current(canvas.current, (i) => room.current?.send("input", i),snapshot.mapId,graphicsQuality,settings,id=>room.current?.send("interact",id));
       scene.current.setEnabled(!settingsOpen&&!connection);
       if (accessRef.current && last.current)
         scene.current.update(last.current, accessRef.current.playerId);
@@ -190,7 +191,8 @@ export default function App({
     setBusy(true);
     setError("");
     try {
-      const access = await refreshAccess();
+      const [access, {createScene}] = await Promise.all([refreshAccess(),import('./scene.ts')]);
+      sceneFactory.current=createScene;
       const client = new Client(access.serverUrl);
       let r: Room;
       if (create)
@@ -536,7 +538,7 @@ export default function App({
           )}
         </div>
       )}
-      {highlight&&<HighlightPlayer clip={highlight} settings={settings} onClose={()=>setHighlight(null)}/>}
+      {highlight&&<Suspense fallback={null}><HighlightPlayer clip={highlight} settings={settings} onClose={()=>setHighlight(null)}/></Suspense>}
       {showBests&&<section className="city-stats"><button onClick={()=>setShowBests(false)}>Schließen ×</button><h2>Lokale Bestwerte</h2><p>Nur in diesem Browser gespeichert.</p>{readBests().map(r=><article key={r.key}><strong>{r.label}</strong><p>{r.matches} Einsätze · {r.wins} Siege · Bestwert {r.kills} Abschüsse · {r.headshots} Kopftreffer · Welle {r.waves}</p></article>)}</section>}
       {stats !== null && (
         <section className="city-stats">
