@@ -16,6 +16,7 @@ OUT = Path('artifacts/harbour-battle') / ('production' if PRODUCTION else '')
 OUT.mkdir(parents=True, exist_ok=True)
 COMBAT_MOVEMENT = os.environ.get('BATTLE_COMBAT_MOVEMENT') == '1'
 FIXED_TURNS = os.environ.get('BATTLE_FIXED_TURNS') == '1'
+NATIVE_TURNS = os.environ.get('BATTLE_NATIVE_TURNS') == '1'
 DRAW_PROFILE = os.environ.get('BATTLE_DRAW_PROFILE') == '1'
 GPU_PROFILE = os.environ.get('BATTLE_GPU_PROFILE') == '1'
 FRAME_PHASES = os.environ.get('BATTLE_FRAME_PHASES') == '1'
@@ -134,6 +135,29 @@ def mouse(page, dx):
     page.evaluate("dx=>document.dispatchEvent(new MouseEvent('mousemove',{movementX:dx,bubbles:true}))", dx)
 
 
+def native_turn(page, cdp, x, y, direction):
+    page.evaluate('window.nativeTurn={first:null,end:0,firstAt:0,lastAt:0}')
+    start = time.perf_counter()
+    last = 0
+    while last < 1571:
+        offset = min(1571, round((time.perf_counter() - start) * 15710))
+        if offset != last:
+            cdp.send('Input.dispatchMouseEvent', {'type':'mouseMoved','x':x+direction*offset,'y':y})
+            last = offset
+        if last < 1571:
+            time.sleep(.008)
+    page.evaluate("""async()=>{
+        const {first,end,firstAt,lastAt}=window.nativeTurn;
+        delete window.nativeTurn;
+        if(first===null) throw Error('No trusted pointer movement reached the game');
+        while(harbourQA.scene.frameProfile().length<end){
+            await new Promise(resolve=>requestAnimationFrame(resolve));
+        }
+        turnRanges.push([first,end]);
+        nativeTurnSpans.push(lastAt-firstAt);
+    }""")
+
+
 def measure(page, name):
     if not COMBAT_MOVEMENT:
         return measure_turns(page,name)
@@ -162,7 +186,16 @@ def measure_turns(page, name):
         if not page.evaluate("life=>harbourQA.player.life===life && harbourQA.player.hp>0",life):
             raise TurnLifeInterrupted((name,'align',life))
     pose=page.evaluate('()=>{const {x,z,yaw}=harbourQA.player;return {x,z,yaw}}')
-    page.evaluate('window.turnStarted=performance.now();window.turnRanges=[];harbourQA.scene.profileFrames(3000)')
+    if NATIVE_TURNS:
+        assert page.evaluate('!!document.pointerLockElement'), 'Browser-native turns require pointer lock'
+        viewport=page.viewport_size
+        pointer_x,pointer_y=(viewport['width']-1571)//2,viewport['height']//2
+        page.evaluate('window.ignoreMeasurementMouse=true')
+        try:
+            pointer.send('Input.dispatchMouseEvent', {'type':'mouseMoved','x':pointer_x,'y':pointer_y})
+        finally:
+            page.evaluate('window.ignoreMeasurementMouse=false')
+    page.evaluate('window.turnStarted=performance.now();window.turnRanges=[];window.nativeTurnSpans=[];harbourQA.scene.profileFrames(3000)')
     if DRAW_PROFILE:
         page.evaluate('battleDrawProbe.start(harbourQA.scene.frameProfile())')
     life,start = page.evaluate('[harbourQA.player.life,harbourQA.player.yaw]')
@@ -174,7 +207,11 @@ def measure_turns(page, name):
                 page.keyboard.press('r')
             if n%12<8:
                 page.mouse.down()
-        if FIXED_TURNS:
+        if NATIVE_TURNS:
+            direction=1 if n%2==0 else -1
+            native_turn(page,pointer,pointer_x,pointer_y,direction)
+            pointer_x+=direction*1571
+        elif FIXED_TURNS:
             # Same angular trajectory in real time at any refresh rate. The final
             # packet always reaches 180 degrees, including after a dropped frame.
             page.evaluate("""sign=>new Promise(resolve=>{
@@ -221,8 +258,11 @@ def measure_turns(page, name):
         hp,current_life=page.evaluate('[harbourQA.player.hp,harbourQA.player.life]')
         if not hp or current_life!=life:
             raise TurnLifeInterrupted((name,n+1,life,current_life,hp))
-    return dict(read_profile(page, name, during_turn=True),turns=turns,startPose=pose,
+    result=dict(read_profile(page,name,during_turn=True),turns=turns,startPose=pose,
                 inputMode='fixed-100ms' if FIXED_TURNS else 'six-mouse-steps')
+    if NATIVE_TURNS:
+        result.update(inputMode='browser-pointer',inputSpanMs=distribution(page.evaluate('nativeTurnSpans')))
+    return result
 
 
 def read_profile(page, name, during_turn=False):
@@ -271,8 +311,10 @@ def read_profile(page, name, during_turn=False):
 
 with sync_playwright() as pw:
     headed=os.environ.get('HARBOUR_HEADED')=='1'
-    browser = pw.chromium.launch(channel='chrome', headless=not headed, args=['--enable-webgl','--ignore-gpu-blocklist'])
     width,height = map(int,os.environ.get('HARBOUR_VIEWPORT','1280x720').split('x'))
+    assert not NATIVE_TURNS or headed and FIXED_TURNS and width>1571, 'Browser-native turns require a visible window, fixed turns and width above 1571 px'
+    channel=os.environ.get('HARBOUR_CHANNEL','chrome')
+    browser = pw.chromium.launch(channel=channel, headless=not headed, args=['--enable-webgl','--ignore-gpu-blocklist'])
     quality=os.environ.get('BATTLE_GRAPHICS','performance')
     assert quality in ('auto','performance','high','ultra'),quality
     difficulty=os.environ.get('HARBOUR_DIFFICULTY','easy')
@@ -288,7 +330,22 @@ with sync_playwright() as pw:
         quality_suffix+='-cpu-phases'
     if headed:
         quality_suffix+='-window'
+    if channel!='chrome':
+        quality_suffix+='-'+channel
+    if NATIVE_TURNS:
+        quality_suffix+='-browser-pointer'
     page = browser.new_page(viewport=dict(width=width,height=height), device_scale_factor=1)
+    if NATIVE_TURNS:
+        pointer=page.context.new_cdp_session(page)
+        page.add_init_script("""window.addEventListener('mousemove',event=>{
+            if(window.ignoreMeasurementMouse){event.stopImmediatePropagation();return;}
+            const turn=window.nativeTurn;
+            if(!turn||!event.isTrusted||!event.movementX||!document.pointerLockElement)return;
+            const count=harbourQA.scene.frameProfile().length;
+            if(turn.first===null){turn.first=count;turn.firstAt=event.timeStamp;}
+            turn.end=count+1;
+            turn.lastAt=event.timeStamp;
+        },true);""")
     page.add_init_script(f"localStorage.setItem('altstadt.graphics.v3',{json.dumps(quality)})")
     page.add_init_script("""if(PerformanceObserver.supportedEntryTypes.includes('long-animation-frame')){
         window.harbourLongFrames=[];
@@ -420,6 +477,7 @@ with sync_playwright() as pw:
             quality:harbourQA.scene.getRenderStats().quality};
     }""")
     renderer_info['presentation']='window' if headed else 'headless'
+    renderer_info['browserChannel']=channel
     renderer_info['lobbyFrameMs']=distribution(baseline_frames) if baseline_frames else None
     assert renderer_info['quality']==quality,(renderer_info,quality)
     print(renderer_info,flush=True)
