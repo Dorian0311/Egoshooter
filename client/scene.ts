@@ -205,6 +205,11 @@ export function createScene(
     );
     const roofPositions=roof.geometry.getAttribute('position'),roofUVs=roof.geometry.getAttribute('uv');
     for(let i=0;i<roofPositions.count;i++)roofUVs.setXY(i,roofPositions.getZ(i)/3,Math.abs(roofPositions.getX(i))/3);
+    // The plaster end caps lie in XY. Only the slate sides use the depth projection.
+    for(const group of roof.geometry.groups)if(group.materialIndex===0){
+      for(let i=group.start;i<group.start+group.count;i++)
+        roofUVs.setXY(i,roofPositions.getX(i)/3,roofPositions.getY(i)/3);
+    }
     roof.position.set(b.x, b.upper ? 8.3 : 4.3, b.z - b.d / 2 - 0.5);
     roof.castShadow = true;
     roof.receiveShadow = true;
