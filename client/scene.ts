@@ -55,6 +55,7 @@ import {createFallbackHands} from './fallbackHands.ts';
 import {RoundedBoxGeometry} from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import {loadSceneAssets} from './sceneAssets.ts';
 import {loadHuman,createHuman} from './humanoid.ts';
+import {createCivilianBodyShaderProbe,loadCivilianCharacter} from './civilianCharacter';
 import {islandUnderpass} from '../shared/islandRoute';
 import { getWorld,type MapId } from "../shared/world.ts";
 import {
@@ -740,7 +741,28 @@ export function createScene(
   }
   const graphics=createGraphics(renderer,scene,camera,sun,graphicsQuality);
   renderer.initTexture(muzzleEffects.texture);
-  const worldPrepared=Promise.all([environmentUpgrade.ready,sceneAssets.ready,mapDetails.ready]).then(async()=>{
+  let civilianShaderMaterial:T.Material|undefined;
+  let finishCivilianShaderWarmup:(()=>void)|undefined;
+  const civilianShaderReady=mapId==='alpine'||mapId==='cologne'?new Promise<void>(resolve=>{
+    function finish(){
+      clearTimeout(deadline);
+      finishCivilianShaderWarmup=undefined;
+      resolve();
+    }
+    // The round must still start when the model fetch hangs. A late asset
+    // skips the startup draw instead of interrupting a round already in play.
+    const deadline=setTimeout(finish,18_000);
+    finishCivilianShaderWarmup=finish;
+    void loadCivilianCharacter().then(data=>{
+      if(!finishCivilianShaderWarmup)return;
+      const probe=createCivilianBodyShaderProbe(data);
+      if(!probe)return;
+      civilianShaderMaterial=probe.material;
+      try{graphics.warmupWorldDraw([],true,probe);}
+      finally{probe.geometry.dispose();}
+    }).catch(error=>console.warn('Civilian shader warmup unavailable',error)).finally(finish);
+  }):undefined;
+  const worldPrepared=Promise.all([environmentUpgrade.ready,sceneAssets.ready,mapDetails.ready,civilianShaderReady]).then(async()=>{
     if(stopped)return;
     // Bot equipment can resolve after actor preparation. Use the actual shared materials and buffers
     // before a turn first exposes a distant bot and forces the driver to link its weapon program.
@@ -1059,6 +1081,7 @@ export function createScene(
     setSettings(value:GameSettings){settings=value;if(!value.volume)residentVoice.stop();if(audioOutput)audioOutput.gain.value=value.volume===0?0:1;release();},
     setEnabled(value:boolean){enabled=value;if(!value){residentVoice.stop();release();dragLook=false;if(document.pointerLockElement===canvas)document.exitPointerLock();}},
     startAudio,
+    civilianShaderReady,
     get worldPrepared(){
       return pendingActors.size?Promise.all([worldPrepared,...pendingActors]).then(()=>{}):worldPrepared;
     },
@@ -1102,6 +1125,7 @@ export function createScene(
           }
         }
       });
+      finishCivilianShaderWarmup?.();civilianShaderMaterial?.dispose();
       viewmodel.dispose();detailedWeapons.dispose();graphics.dispose();environment.dispose();materialLibrary.dispose();
       renderer.dispose();
       releaseWorldWeapons();

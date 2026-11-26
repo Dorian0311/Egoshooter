@@ -8,6 +8,7 @@
 // Set BATTLE_FRAME_PHASES=1 to attribute long CPU frames to work inside the game callback.
 // BATTLE_SNAPSHOT_PROFILE=1 times client snapshot merge, HUD/event dispatch, scene sync and the test observer.
 // BATTLE_GL_STALLS=1 records existing WebGL calls taking over 2 ms and shadow/composer CPU time.
+// BATTLE_STARTUP_SHADER=1 verifies shader readiness before play; timeout blocks the asset to test fallback.
 // HARBOUR_NEAR_SPAWN=1 starts the tester behind the Diner on the isolated server.
 // BATTLE_SEED sets the isolated server's starting random sequence for comparable runs.
 // Bots, difficulty, damage and movement retain their normal game rules.
@@ -62,10 +63,21 @@ try {
   const traceGl=process.env.BATTLE_GL_STALLS==='1';
   let glPatched=false;
   const tracePhases=process.env.BATTLE_FRAME_PHASES==='1';
+  const traceStartup=['1','timeout'].includes(process.env.BATTLE_STARTUP_SHADER);
+  let startupPatched=false;
   await build({root, mode:'production', logLevel:'warn', build:{outDir:dist}, plugins:[{
     name:'local-battle-observation', enforce:'pre',
     transform(source, id) {
       const path=id.replaceAll('\\','/');
+      if(traceStartup&&path.endsWith('/client/scene.ts')){
+        const anchor='graphics.warmupWorldDraw([],true,probe);';
+        assert.equal(source.split(anchor).length,2,'Civilian warmup hook changed');
+        source=source.replace(anchor,anchor+'window.battleCivilianShaderReady=performance.now();');
+        const deadline='const deadline=setTimeout(finish,18_000);';
+        assert.equal(source.split(deadline).length,2,'Civilian deadline hook changed');
+        source=source.replace(deadline,'window.battleCivilianShaderWaiting=performance.now();'+deadline);
+        startupPatched=true;
+      }
       if(traceGl&&path.endsWith('/client/graphics.ts')){
         const instrument=(anchor,replacement)=>{
           assert.equal(source.split(anchor).length,2,'GL stall hook changed: '+anchor);
@@ -94,7 +106,7 @@ try {
         return source.replace(sampling,'timingEnabled&&adaptive&&currentTimingFrame%17===0')
           .replace(capture,capture+'frameState.gpuQueryCount=gpuTiming.state.samples;frameState.gpuQueryMs=gpuTiming.state.latestSample;');
       }
-      if(path.endsWith('/client/scene.ts')&&(traceDraws||tracePhases)) {
+      if(path.endsWith('/client/scene.ts')&&(traceDraws||tracePhases||traceStartup)) {
         if(traceDraws){
           const marker=/^  const renderer = new T\.WebGLRenderer\([^\n]+;$/gm;
           assert.equal([...source.matchAll(marker)].length,1,'Scene renderer hook changed');
@@ -125,6 +137,7 @@ try {
       assert.equal(source.split(anchor).length, 2, 'App snapshot hook changed');
       patched = true;
       let observe="window.observeHarbourBattle?.(own,s,scene.current,()=>battleInteriorWorld(getWorld(s.mapId),s.interiors).boxes,harbourBotRules[s.operation.config.difficulty].vision);";
+      if(traceStartup)observe+="\nif(s.phase==='playing')window.battlePlayingAt??=performance.now();";
       if(process.env.BATTLE_SNAPSHOT_PROFILE==='1'){
         const merge='const s = mergeSnapshot(last.current, packet);';
         assert.equal(source.split(merge).length,2,'Snapshot merge timing hook changed');
@@ -148,6 +161,7 @@ try {
   assert.equal(phasePatched,tracePhases,'Missing CPU phase hooks');
   assert.equal(gpuHooks,traceGpu?2:0,'Missing GPU profile hook');
   assert.equal(glPatched,traceGl,'Missing GL stall hooks');
+  assert.equal(startupPatched,traceStartup,'Missing civilian startup hook');
   await child(process.execPath, [join(root,'scripts/compress-client.mjs')], {cwd:scratch}).done;
 
   const reservation = createServer();

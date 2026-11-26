@@ -66,6 +66,7 @@ export default function App({
   const [access, setAccess] = useState<Access | null>(null),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
+    [preparingGraphics, setPreparingGraphics] = useState(false),
     [selectedMap,setSelectedMap]=useState<MapId>("storm"),
     [preferredUniform,setPreferredUniform]=useState<UniformId | "">(()=>{try{const saved=localStorage.getItem('altstadt-character');return saved&&Object.hasOwn(uniforms,saved)?saved as UniformId:"";}catch{return "";}}),
     [snapshot, setSnapshot] = useState<Snapshot | null>(null),
@@ -105,6 +106,7 @@ export default function App({
   },[snapshot?.phase]);
   const feedbackTimer=useRef<ReturnType<typeof setTimeout>|null>(null);
   const room = useRef<Room | null>(null),
+    pendingTrainingReady = useRef<Room | null>(null),
     canvas = useRef<HTMLCanvasElement>(null),
     scene = useRef<ReturnType<typeof createScene> | null>(null),
     sceneFactory = useRef<typeof createScene | null>(null),
@@ -149,10 +151,23 @@ export default function App({
   }, [accessToken,account?.id]);
   useEffect(() => {
     if (snapshot && canvas.current && !scene.current && sceneFactory.current) {
-      scene.current = sceneFactory.current(canvas.current, (i) => room.current?.send("input", i),snapshot.mapId,graphicsQuality,settings,id=>room.current?.send("interact",id));
-      scene.current.setEnabled(!settingsOpen&&!connection);
+      const currentRoom = room.current;
+      const gameScene = scene.current = sceneFactory.current(canvas.current, (i) => room.current?.send("input", i),snapshot.mapId,graphicsQuality,settings,id=>room.current?.send("interact",id));
+      gameScene.setEnabled(!settingsOpen&&!connection);
       if (accessRef.current && last.current)
-        scene.current.update(last.current, accessRef.current.playerId);
+        gameScene.update(last.current, accessRef.current.playerId);
+      const sendTrainingReady = () => {
+        if (!currentRoom || room.current !== currentRoom || pendingTrainingReady.current !== currentRoom) return;
+        pendingTrainingReady.current = null;
+        currentRoom.send("ready",true);
+      };
+      setPreparingGraphics(!!gameScene.civilianShaderReady);
+      if (gameScene.civilianShaderReady) void gameScene.civilianShaderReady.then(() => {
+        if (scene.current !== gameScene) return;
+        setPreparingGraphics(false);
+        sendTrainingReady();
+      });
+      else sendTrainingReady();
     }
     return ()=>{scene.current?.dispose();scene.current=null;};
   }, [!!snapshot,snapshot?.mapId]);
@@ -162,6 +177,10 @@ export default function App({
   },[graphicsQuality]);
   useEffect(()=>{scene.current?.setSettings(settings);try{localStorage.setItem(settingsKey,JSON.stringify(settings));}catch{/* Session only. */}},[settings]);
   useEffect(()=>{scene.current?.setEnabled(!settingsOpen&&!connection&&!highlight);},[settingsOpen,connection,!!snapshot,!!highlight]);
+  useEffect(()=>{
+    if(selectedMap==='alpine'||selectedMap==='cologne')
+      void import('./civilianCharacter').then(module=>module.loadCivilianCharacter()).catch(()=>{});
+  },[selectedMap]);
   useEffect(()=>{try{localStorage.setItem('altstadt-character',preferredUniform);}catch{/* Session only. */}},[preferredUniform]);
   useEffect(()=>{if(!snapshot&&preferredUniform&&!uniformOptions('de',selectedMap).includes(preferredUniform))setPreferredUniform('');},[selectedMap,preferredUniform,!!snapshot]);
   function message(e: unknown) {
@@ -208,8 +227,9 @@ export default function App({
         r = await client.joinById(info.roomId, { ticket: access.ticket,uniform:chosenUniform,loadout });
       }
       r.reconnection.minUptime = 0;
-      room.current = r;recorder.current=new HighlightRecorder();savedMatch.current='';uiEvents.current.clear();setClips([]);setKillfeed([]);setHits([]);setDeathReason('');setConnection('');
+      room.current = r;pendingTrainingReady.current=training?r:null;recorder.current=new HighlightRecorder();savedMatch.current='';uiEvents.current.clear();setClips([]);setKillfeed([]);setHits([]);setDeathReason('');setConnection('');
       r.onMessage("snapshot", (packet: SnapshotPacket) => {
+        if(room.current!==r)return;
         const s = mergeSnapshot(last.current, packet);
         if (!s) return;
         if(s.version!==VERSION){setError('Spielversion geändert. Bitte die Seite neu laden.');void r.leave();return;}
@@ -249,14 +269,13 @@ export default function App({
       });
       setStartIntent(null);setChoosingWeapons(false);
       r.send("sync");
-      if(training)r.send("ready",true);
-      r.onError((_code: number, msg?: string) =>
-        setError(msg ?? "Netzwerkfehler"),
-      );
-      r.onDrop(() =>
-        setConnection("Verbindung wird wiederhergestellt … (10 s)"),
-      );
-      r.onReconnect(() => setConnection(""));
+      r.onError((_code: number, msg?: string) => {
+        if(room.current===r)setError(msg ?? "Netzwerkfehler");
+      });
+      r.onDrop(() => {
+        if(room.current===r)setConnection("Verbindung wird wiederhergestellt … (10 s)");
+      });
+      r.onReconnect(() => {if(room.current===r)setConnection("");});
       r.onLeave(() => {
         if(room.current!==r)return;
         setConnection("Verbindung beendet. Bitte Raum erneut öffnen.");
@@ -408,7 +427,7 @@ export default function App({
                     : `${snapshot.winner === "de" ? getWorld(snapshot.mapId).ally??"Deutschland" : getWorld(snapshot.mapId).opponent} gewinnt`
                   : snapshot.phase === "countdown"
                     ? `Start in ${Math.max(0, Math.ceil((snapshot.startsAt - snapshot.now) / 1000))}`
-                    : "Dein Team wartet."}
+                    : preparingGraphics ? "Grafik wird vorbereitet …" : "Dein Team wartet."}
               </h2>
               {snapshot.phase==='finished'&&<HistoricalAwards snapshot={snapshot} player={me}/>}
               <div className="city-teams">
@@ -443,7 +462,7 @@ export default function App({
               {snapshot.phase === "waiting" && (
                 <button
                   className="city-primary"
-                  disabled={!me || !preferredUniform || preferredUniform!==me.uniform}
+                  disabled={!me || !preferredUniform || preferredUniform!==me.uniform || preparingGraphics&&!me.ready}
                   onClick={() => room.current?.send("ready", !me?.ready)}
                 >
                   {me?.ready

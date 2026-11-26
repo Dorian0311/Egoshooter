@@ -153,7 +153,7 @@ export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
   const warmedShadowSources=new Set<string>();
   const woundOwner=acquireWoundMaterial();
   let woundUploaded=false;
-  function warmupWorldDraw(actorRoots:readonly T.Group[]=[],actorsOnly=false){
+  function warmupWorldDraw(actorRoots:readonly T.Group[]=[],actorsOnly=false,shaderProbe?:T.Mesh){
     // compileAsync links colour programs. A tiny off-screen draw also
     // initializes vertex buffers, texture bindings and shadow depth programs.
     const target=composer.readBuffer,previous=renderer.getRenderTarget();
@@ -174,6 +174,7 @@ export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
       }
       target.scissor.set(0,0,1,1);target.scissorTest=true;
       renderer.setRenderTarget(target);
+      if(shaderProbe){shaderProbe.layers.mask=cameraLayers;scene.add(shaderProbe);}
       if(wound){
         wound.name='tissue-armR-warmup';wound.castShadow=wound.receiveShadow=true;
         wound.frustumCulled=false;wound.layers.mask=cameraLayers;
@@ -216,6 +217,7 @@ export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
         if(wound)wound.geometry.setDrawRange(0,Infinity);
         if(actorsOnly){
           if(wound)enableUpload(wound);
+          if(shaderProbe)enableUpload(shaderProbe);
           for(const actor of actorRoots)actor.traverseVisible(enableUpload);
           scene.traverseVisible(object=>{if(object instanceof T.Light)enableUpload(object);});
           camera.layers.set(uploadLayer);
@@ -228,6 +230,7 @@ export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
         if(wound)woundUploaded=true;
       });
     }finally{
+      shaderProbe?.removeFromParent();
       if(wound){wound.removeFromParent();wound.geometry.dispose();}
       camera.layers.mask=cameraLayers;
       for(const object of extraLayer)object.layers.disable(uploadLayer);

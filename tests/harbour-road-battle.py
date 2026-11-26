@@ -420,6 +420,10 @@ with sync_playwright() as pw:
             turn.count++;
         },true);""")
     page.add_init_script(f"localStorage.setItem('altstadt.graphics.v3',{json.dumps(quality)})")
+    startup_mode=os.getenv('BATTLE_STARTUP_SHADER')
+    held_models=[]
+    if startup_mode=='timeout':
+        page.route('**/shooter/characters/civilian/civilian-male.glb*',lambda route: held_models.append(route))
     page.add_init_script("""if(PerformanceObserver.supportedEntryTypes.includes('long-animation-frame')){
         window.harbourLongFrames=[];
         new PerformanceObserver(list=>{for(const f of list.getEntries()){
@@ -535,10 +539,23 @@ with sync_playwright() as pw:
     start.click()
     print(map_id,'loadout submitted',flush=True)
     try:
-        page.wait_for_function("window.harbourQA?.state.phase==='playing' && harbourQA.scene?.worldPrepared",timeout=90000)
+        page.wait_for_function("() => Boolean(window.harbourQA?.state.phase==='playing' && harbourQA.scene)",timeout=90000)
     except Exception:
         print('Startdiagnose:',page.locator('body').inner_text()[-1000:],flush=True)
         raise
+    startup_shader=None
+    if startup_mode=='timeout':
+        assert map_id in ('alpine','cologne') and held_models, 'Expected a blocked civilian model request'
+        fallback=page.evaluate('({wait:window.battleCivilianShaderWaiting,prepared:window.battleCivilianShaderReady,playing:window.battlePlayingAt})')
+        assert fallback.get('prepared') is None and 17_900 <= fallback['playing']-fallback['wait'] < 35_000,fallback
+        print('Battle started with civilian model request held',fallback,flush=True)
+        for route in held_models:
+            route.abort()
+        raise SystemExit(0)
+    if startup_mode=='1' and map_id in ('alpine','cologne'):
+        startup_shader=page.evaluate('({wait:window.battleCivilianShaderWaiting,prepared:window.battleCivilianShaderReady,playing:window.battlePlayingAt})')
+        assert startup_shader.get('prepared') is not None and startup_shader['prepared']<=startup_shader['playing'],startup_shader
+        print('Civilian shader prepared before start',startup_shader,flush=True)
     page.evaluate('''Promise.race([harbourQA.scene.worldPrepared,new Promise((_,reject)=>setTimeout(()=>reject(Error("Scene warmup timeout")),90000))])''')
     renderer_info=page.evaluate("""()=>{
         const gl=document.querySelector('.city-canvas').getContext('webgl2');
@@ -551,6 +568,7 @@ with sync_playwright() as pw:
     renderer_info['presentation']='window' if headed else 'headless'
     renderer_info['browserChannel']=channel
     renderer_info['lobbyFrameMs']=distribution(baseline_frames) if baseline_frames else None
+    if startup_shader is not None:renderer_info['civilianShaderStartup']=startup_shader
     assert renderer_info['quality']==quality,(renderer_info,quality)
     print(renderer_info,flush=True)
     bots = page.evaluate("harbourQA.state.players.filter(p=>p.kind==='bot').length")

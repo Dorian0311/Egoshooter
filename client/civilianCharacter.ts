@@ -15,6 +15,33 @@ export async function loadCivilianCharacter():Promise<CivilianCharacterData>{
  return {civilian:true,entry:await source};
 }
 
+function styleSkinMaterial(material:T.MeshStandardMaterial,head:boolean){
+ material.vertexColors=true;
+ if(!head)material.map=null;
+ material.needsUpdate=true;
+}
+
+/** Match the unskinned vertex-colour variant used by detached clothing. */
+export function createCivilianBodyShaderProbe(data:CivilianCharacterData){
+ let source:T.MeshStandardMaterial|undefined;
+ data.entry.root.traverse(object=>{
+  if(source||!(object instanceof T.SkinnedMesh))return;
+  const materials=Array.isArray(object.material)?object.material:[object.material];
+  source=materials.find((material):material is T.MeshStandardMaterial=>
+   material instanceof T.MeshStandardMaterial&&material.name==='m004_body');
+ });
+ if(!source)return;
+ const material=source.clone();
+ styleSkinMaterial(material,false);
+ const geometry=new T.PlaneGeometry(.01,.01);
+ geometry.setAttribute('color',new T.Float32BufferAttribute(new Float32Array(12).fill(1),3));
+ geometry.setDrawRange(0,0);
+ const probe=new T.Mesh(geometry,material);
+ probe.name='civilian-body-shader-warmup';
+ probe.frustumCulled=false;
+ return probe;
+}
+
 /** Native Rocketbox skin: no rigid cuts or replacement mannequin. */
 export function createCivilianCharacter(data:CivilianCharacterData,residentId='resident-0',purpose:'actor'|'remains'='actor'){
  const group=new T.Group(),body=clone(data.entry.root);body.rotation.y+=Math.PI;group.add(body);data.entry.refs++;
@@ -103,7 +130,7 @@ export function createCivilianCharacter(data:CivilianCharacterData,residentId='r
    for(let k=0;k<4;k++){const name=o.skeleton.bones[indices.getComponent(i,k)]?.name??'',weight=influences.getComponent(i,k);if(/^Bip01_[LR]_(Hand|Finger)/.test(name))weights[i]+=weight;if(/(Thigh|Calf|Foot|Toe)/.test(name))legs+=weight;if(/(Foot|Toe)/.test(name))feet+=weight;}
    clothes[i]=feet>.5?2:legs>.5?1:0;
   }
-  for(const material of meshMaterials)if(material instanceof T.MeshStandardMaterial){material.vertexColors=true;if(!head)material.map=null;material.needsUpdate=true;}
+  for(const material of meshMaterials)if(material instanceof T.MeshStandardMaterial)styleSkinMaterial(material,head);
   o.geometry.setAttribute('color',new T.Float32BufferAttribute(new Float32Array(weights.length*3).fill(1),3));skinMeshes.push({mesh:o,weights,clothes,head});
  });
  const skinColor=new T.Color(),handColor=new T.Color(),vertexColor=new T.Color(),baseSkin=new T.Color('#e2c2aa'),clothColors=[appearance.jacket,appearance.trousers,appearance.boots];let appearanceId='';
