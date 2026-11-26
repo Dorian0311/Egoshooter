@@ -1,5 +1,5 @@
 import {makePlayer,move,neutral,hitPlayer,rayBox,STEP,type Input,type Game,type Player,type Team,type GameEvent} from './game';
-import {getWorld,ground,withinPlayArea,type World} from './world';
+import {getWorld,ground,withinPlayArea,type Box,type World} from './world';
 import {wandererPose} from './wanderers';
 import {residentCast,residentName} from './residentProfiles';
 import {rockBlocks,rayRock} from './rocks';
@@ -9,6 +9,7 @@ import {Remains} from './remains';
 import {weapons,ROCKET_ID,REMOTE_CAR_ID} from './weapons';
 import {islandCourseRadius} from './islandRoute';
 import {CAR_WARNING_MS,createCarCourse,driveCar,parkedCars,parkTrainingCar,type RemoteCar} from './remoteCars';
+import {nearbyBoxes} from './boxIndex';
 
 export type Point={x:number;y:number;z:number};
 type BotNoise={point:Point;team:Team;range:number;decoy:boolean};
@@ -325,7 +326,19 @@ export class Operation {
   if(t.kind==='revive'&&target){target.hp=30;target.downedUntil=0;target.injuries.bleeding=0;target.protectedUntil=s.now+1000;this.game.emit({type:'revive',id:p.id,target:target.id,point:[target.x,target.y,target.z]});}
   if(t.kind==='sabotage'&&s.operation.objective.stage==='target'){s.operation.objective.progress=5000;s.operation.objective.stage='extract';}
  }
- obstacleDistance(o:number[],d:number[],radius=0){let distance=150;for(const b of this.game.world().boxes)distance=Math.min(distance,b.kind==='rock'?rayRock(b,o,d):rayBox(o,d,[b.x-b.w/2-radius,b.y-b.h/2-radius,b.z-b.d/2-radius],[b.x+b.w/2+radius,b.y+b.h/2+radius,b.z+b.d/2+radius]));return distance;}
+ obstacleDistance(o:number[],d:number[],radius=0,limit=150){
+  let distance=Math.min(150,limit);
+  if(distance<=0)return distance;
+  let candidates:readonly Box[]=this.game.world().boxes;
+  if(distance<150&&radius===0){
+   // Narrow the ray to the segment used by bot sight and cover checks.
+   const endX=o[0]+d[0]*distance,endZ=o[2]+d[2]*distance;
+   candidates=nearbyBoxes(candidates,Math.min(o[0],endX),Math.min(o[2],endZ),Math.max(o[0],endX),Math.max(o[2],endZ));
+  }
+  for(const b of candidates)distance=Math.min(distance,b.kind==='rock'?rayRock(b,o,d):rayBox(o,d,
+   [b.x-b.w/2-radius,b.y-b.h/2-radius,b.z-b.d/2-radius],[b.x+b.w/2+radius,b.y+b.h/2+radius,b.z+b.d/2+radius]));
+  return distance;
+ }
  private throwStar(p:Player){
   const s=this.game.state;if(!p.stars||armCount(p)<1||p.carriedCorpse&&armCount(p)<2||s.now<p.throwAt||p.treatment)return false;
   p.stars--;p.throwAt=s.now+750;p.protectedUntil=0;

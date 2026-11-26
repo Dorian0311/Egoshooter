@@ -81,12 +81,14 @@ test('resolution stays within the GPU pixel budget on high-DPI and 4K screens', 
 
 test('automatic graphics makes room for 60 FPS and recovers resolution when there is headroom',()=>{
  const busy=new ResolutionGovernor(),stable=new ResolutionGovernor(),recovering=new ResolutionGovernor();
- for(let i=0;i<57*6;i++)busy.update(1/57);
+ for(let i=0;i<57*6;i++)busy.update(1/57,true,undefined,undefined,false);
  assert.ok(busy.scale<1&&busy.scale>=.8);
  for(let i=0;i<60*8;i++)stable.update(1/60);
  assert.equal(stable.scale,1);
  recovering.reset(.8);
- for(let i=0;i<60*24;i++)recovering.update(1/60,true,9,6);
+ for(let i=0;i<60*24;i++)recovering.update(1/60,true,9,6,false);
+ assert.equal(recovering.scale,.8);
+ for(let i=0;i<60*3;i++)recovering.update(1/60,true,9,6,true);
  assert.ok(recovering.scale>.8&&recovering.scale<=1);
 });
 

@@ -5,6 +5,31 @@ import type {Point} from '../shared/operations';
 import {difficultyRules} from '../shared/operationConfig';
 import {Bots} from '../server/bots';
 import type {Navigation} from '../server/navigation';
+import {interiorFixtures} from '../shared/interiors';
+import {getWorld} from '../shared/world';
+
+test('limited bot rays agree with the full obstacle scan after doors and glass change',()=>{
+ let seed=297;
+ const random=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};
+ for(const map of ['storm','frontline','cologne','alpine'] as const){
+  const game=new Game('BOTRAYS',600000,map,()=>.5,{kind:'solo',mode:'battle'});
+  const interiors=game.state.interiors;
+  assert.ok(interiors);
+  for(const changed of [false,true]){
+   if(changed)for(const fixture of interiorFixtures(getWorld(map))){
+    if(fixture.type==='door')interiors.doors[fixture.id]=false;
+    if(fixture.type==='glass')interiors.broken.push(fixture.id);
+   }
+   for(let i=0;i<240;i++){
+    const origin=[random()*200-100,random()*5,random()*180-90];
+    const vector=[random()-.5,random()*.12-.06,random()-.5];
+    const direction=vector.map(value=>value/Math.hypot(...vector)),limit=1+random()*59;
+    const full=game.operation.obstacleDistance(origin,direction);
+    assert.equal(game.operation.obstacleDistance(origin,direction,0,limit),Math.min(full,limit));
+   }
+  }
+ }
+});
 
 test('bot pathfinding spreads replans across simulation ticks without starving other bots',()=>{
  const game=new Game('BUDGET',600000,'storm',()=>.5,{kind:'solo',mode:'battle'});game.add('human','Player');game.operation.configureBots();for(const player of game.state.players)game.ready(player.id,true,1000);game.tick(4000);

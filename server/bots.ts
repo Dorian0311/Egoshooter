@@ -44,7 +44,7 @@ export class Bots {
    let visible:Player|undefined,nearest=Infinity;
    const vision=Math.min(rules.vision,s.operation.condition==='fog'?25:s.operation.condition==='night'?rules.vision*.6:rules.vision);
    for(const q of opponents){const dx=q.x-p.x,dz=q.z-p.z,distance=Math.hypot(dx,dz);if(distance>vision)continue;const angle=Math.atan2(-dx,-dz),difference=Math.atan2(Math.sin(angle-p.yaw),Math.cos(angle-p.yaw));if(Math.abs(difference)>Math.PI/3&&distance>5)continue;
-    const delta=[dx,q.y+eyeHeight(q)-p.y-eyeHeight(p),dz],length=Math.hypot(...delta);if(g.operation.obstacleDistance([p.x,p.y+eyeHeight(p),p.z],delta.map(v=>v/length))<length-.2)continue;if(distance<nearest){visible=q;nearest=distance;}
+    const delta=[dx,q.y+eyeHeight(q)-p.y-eyeHeight(p),dz],length=Math.hypot(...delta),limit=length-.2;if(g.operation.obstacleDistance([p.x,p.y+eyeHeight(p),p.z],delta.map(v=>v/length),0,limit)<limit)continue;if(distance<nearest){visible=q;nearest=distance;}
    }
    if(b.investigation&&now>=b.investigation.until){b.investigation=undefined;b.replanAt=0;}
    if(visible){
@@ -76,7 +76,7 @@ export class Bots {
    if(training){const human=g.operation.humans[0],offsets=[[14,0],[10,6],[17,7],[12,-6]],offset=offsets[b.patrol%4];goal=safeNear(world,(human?.x??-45)+offset[0],(human?.z??0)+offset[1]);if(Math.hypot(goal.x-p.x,goal.z-p.z)<1)b.patrol++;}
    else if(b.investigation)goal=b.investigation.point;
    else if(b.memory&&now-b.seenAt<6000){goal=b.memory;
-    if(p.hp<40){const cover=points.filter(q=>Math.hypot(q.x-p.x,q.z-p.z)<12&&Math.hypot(q.x-goal.x,q.z-goal.z)>8).find(q=>{const v=[goal.x-q.x,goal.y+1.5-q.y,goal.z-q.z],length=Math.hypot(...v);return g.operation.obstacleDistance([q.x,q.y+1.5,q.z],v.map(n=>n/length))<length-1;});if(cover)goal=cover;}
+    if(p.hp<40){const cover=points.filter(q=>Math.hypot(q.x-p.x,q.z-p.z)<12&&Math.hypot(q.x-goal.x,q.z-goal.z)>8).find(q=>{const v=[goal.x-q.x,goal.y+1.5-q.y,goal.z-q.z],length=Math.hypot(...v),limit=length-1;return g.operation.obstacleDistance([q.x,q.y+1.5,q.z],v.map(n=>n/length),0,limit)<limit;});if(cover)goal=cover;}
     else if(visible&&Math.abs(p.y-goal.y)<1&&b.patrol%2&&nearest>12)goal=safeNear(world,goal.x+Math.cos(p.yaw)*7,goal.z-Math.sin(p.yaw)*7);
    }else{
     if(config.mode==='mission'){

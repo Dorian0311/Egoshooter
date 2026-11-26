@@ -89,6 +89,8 @@ export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
   const inverseRotation = lightRotation.clone().invert();
   const shadowCenter = new T.Vector3();
   const governor=new ResolutionGovernor();
+  const previousViewPosition=new T.Vector3(),previousViewRotation=new T.Quaternion();
+  let quietViewSeconds=0;
   const gpuTiming=createGpuTiming(renderer.getContext() as WebGL2RenderingContext);
   const shadowCadence=new ShadowCadence();let timingFrame=0,timingEnabled=true;
   const receiverFrustum=createReceiverShadowFrustum(),lightFrustum=sun.shadow.getFrustum;
@@ -237,9 +239,19 @@ export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
       const adaptiveQuality=quality==='auto'||quality==='performance';
       const baseRatio=renderPixelRatio(quality,window.devicePixelRatio,w,h);
       if(resetScale||w!==width||h!==height){
-        governor.reset(initialResolutionScale(quality,baseRatio,w,h));resetScale=false;
+        governor.reset(initialResolutionScale(quality,baseRatio,w,h));resetScale=false;quietViewSeconds=0;
       }
-      const scale=adaptiveQuality&&resolutionScaling?governor.update(frameSeconds,!document.hidden&&adaptive,gpuTiming.state.ms,cpuMs):1;
+      let scale=1;
+      if(adaptiveQuality&&resolutionScaling){
+        // A buffer allocation can stall presentation. Raise detail after the view settles.
+        const sampleTime=Number.isFinite(frameSeconds)?Math.min(.05,Math.max(0,frameSeconds)):0;
+        const moved=previousViewPosition.distanceToSquared(camera.position)>(.8*sampleTime)**2 ||
+          Math.abs(previousViewRotation.dot(camera.quaternion))<Math.cos(.275*sampleTime);
+        quietViewSeconds=moved?0:Math.min(.3,quietViewSeconds+sampleTime);
+        previousViewPosition.copy(camera.position);
+        previousViewRotation.copy(camera.quaternion);
+        scale=governor.update(frameSeconds,!document.hidden&&adaptive,gpuTiming.state.ms,cpuMs,quietViewSeconds>=.3);
+      }
       // Keep the image legible without cancelling adaptive scaling in
       // smaller windows. The HUD is still drawn at native resolution.
       const nextRatio = Math.max(Math.min(baseRatio*.8,540/h),baseRatio*scale);

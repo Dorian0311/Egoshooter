@@ -26,7 +26,7 @@ export class ResolutionGovernor {
   private cpuFrames=0;
   private recoveryDelay=0;
   private clearWindow(){this.elapsed=0;this.frames=0;this.gpuTotal=0;this.gpuFrames=0;this.cpuTotal=0;this.cpuFrames=0;}
-  update(dt:number,visible=true,gpuMs?:number,cpuMs?:number){
+  update(dt:number,visible=true,gpuMs?:number,cpuMs?:number,allowRecovery=true){
     if(!visible||!Number.isFinite(dt)||dt<=0||dt>.15){this.clearWindow();this.stable=0;return this.scale;}
     if(this.warmup>0){this.warmup-=dt;return this.scale;}
     this.recoveryDelay=Math.max(0,this.recoveryDelay-dt);
@@ -44,7 +44,8 @@ export class ResolutionGovernor {
       this.stable=0;
     }
     else if(mean<1/59&&this.recoveryDelay===0&&(gpu===undefined||gpu<11.5)&&(cpu===undefined||cpu<12)){
-      this.stable+=this.elapsed;if(this.stable>=8){this.scale=Math.min(1,Math.round((this.scale+.05)*100)/100);this.stable=0;}
+      this.stable=Math.min(8,this.stable+this.elapsed);
+      if(this.stable>=8&&allowRecovery){this.scale=Math.min(1,Math.round((this.scale+.05)*100)/100);this.stable=0;}
     }
     else this.stable=0;
     this.clearWindow();return this.scale;
