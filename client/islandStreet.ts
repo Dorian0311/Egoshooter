@@ -1,5 +1,6 @@
 import * as T from 'three';
 import {RoundedBoxGeometry} from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
+import {mergeGeometries} from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import {islandShops,shopParts,streetPoles} from '../shared/islandStreet';
 import {createHarbourPosters} from './harbourPosters';
 import {batchStaticMeshes} from './scenery';
@@ -48,7 +49,8 @@ export function addIslandStreet(scene:T.Group){
   // The adjoining route shares these textures at unit repeat.
   const roadUv=road.geometry.getAttribute('uv');
   for(let i=0;i<roadUv.count;i++)roadUv.setXY(i,14*roadUv.getX(i),2*roadUv.getY(i));
-  road.rotation.x=-Math.PI/2;road.position.set(63,.056,-23);road.receiveShadow=true;street.add(road);
+  const roadZ=-23,kerbOffset=4.62,pavementEdge=3.45,pavementHeight=.139;
+  road.rotation.x=-Math.PI/2;road.position.set(63,.056,roadZ);road.receiveShadow=true;street.add(road);
   const concrete=paint('#b6ac99'),trim=paint('#e6cf98'),iron=paint('#555c58');
   const paving=loader.load(base+'concrete.webp');
   paving.colorSpace=T.SRGBColorSpace;paving.wrapS=paving.wrapT=T.RepeatWrapping;
@@ -56,10 +58,10 @@ export function addIslandStreet(scene:T.Group){
   const pavingMaterial=new T.MeshStandardMaterial({map:paving,roughness:.98,alphaTest:.30});
   const crossingX=68.95;
   for(const side of [-1,1]){
-    const kerb=-23+side*4.62;
+    const kerb=roadZ+side*kerbOffset;
     // Fold the curb, its bevel and the apron into the same strip. Kerb joints
     // continue up the riser and the drainage course always faces the carriageway.
-    const profile=[[-.12,.053,0],[-.12,.115,20],[-.09,.144,26],[.12,.144,66],[1.30,.142,286],[3.45,.139,688],[3.45,.016,665]];
+    const profile=[[-.12,.053,0],[-.12,.115,20],[-.09,.144,26],[.12,.144,66],[1.30,.142,286],[pavementEdge,pavementHeight,688],[pavementEdge,.016,665]];
     const points:number[]=[],texcoords:number[]=[],indices:number[]=[];
     // Drop the stone lip at each end of the crossing. The sloping apron returns
     // to the full pavement height before the shop thresholds.
@@ -148,7 +150,8 @@ export function addIslandStreet(scene:T.Group){
     const sideWidth=parts.find(part=>part.role==='side')!.w;
     const furniture=parts.filter(p=>['rack','bench','table','counter','bin'].includes(p.role));
     // Bake broad contact shadows into the floor vertices. They remain visible on low shadow settings.
-    const floor=new T.PlaneGeometry(s.w-.42,s.d-.42,Math.ceil(s.w*2),Math.ceil(s.d*2));
+    const floorDepth=s.d-.42,floorHeight=.051;
+    const floor=new T.PlaneGeometry(s.w-.42,floorDepth,Math.ceil(s.w*2),Math.ceil(s.d*2));
     floor.rotateX(-Math.PI/2);
     const positions=floor.getAttribute('position'),uv=floor.getAttribute('uv'),colors=[];
     for(let i=0;i<positions.count;i++){
@@ -165,7 +168,23 @@ export function addIslandStreet(scene:T.Group){
       uv.setXY(i,uv.getX(i)*s.w/repeatMetres,uv.getY(i)*s.d/repeatMetres);
     }
     floor.setAttribute('color',new T.Float32BufferAttribute(colors,3));
-    solid(floor,s.x,.051,s.z,index===0?linoleum:timberFloor);
+    let floorSurface:T.BufferGeometry=floor;
+    if(s.front===-1){
+      // On the north pavement both timber floors stop short of the kerb return.
+      // The diner's linoleum on the opposite side already runs under the pavement.
+      const jambs=parts.filter(part=>part.role==='post');
+      const width=Math.abs(jambs[1].x-jambs[0].x)-jambWidth;
+      const floorEdge=-floorDepth/2,walkEdge=roadZ+kerbOffset+pavementEdge-s.z;
+      const depth=floorEdge-walkEdge,rise=pavementHeight-floorHeight;
+      const board=new T.PlaneGeometry(width,Math.hypot(depth,rise));
+      board.rotateX(-Math.atan2(depth,rise)).translate(0,rise/2,(floorEdge+walkEdge)/2);
+      const boardUv=board.getAttribute('uv');
+      for(let i=0;i<boardUv.count;i++)boardUv.setY(i,.30+.04*boardUv.getY(i));
+      board.setAttribute('color',new T.Float32BufferAttribute(new Float32Array(12).fill(.90),3));
+      floorSurface=mergeGeometries([floor,board])!;
+      floor.dispose();board.dispose();
+    }
+    solid(floorSurface,s.x,floorHeight,s.z,index===0?linoleum:timberFloor);
     for(const part of parts){
       const {role,x,y,z,w,h,d}=part;
       if(role==='side'||role==='back'||role==='sign'||role==='sill'){

@@ -315,7 +315,13 @@ def measure_turns(page, name):
     return result
 
 
-def read_profile(page, name, during_turn=False):
+def start_route_profile(page):
+    page.evaluate('window.turnStarted=performance.now();harbourQA.scene.profileFrames(3000)')
+    if DRAW_PROFILE:
+        page.evaluate('battleDrawProbe.start(harbourQA.scene.frameProfile(),true)')
+
+
+def read_profile(page, name, during_turn=False, route_profile=False):
     frames = page.evaluate('harbourQA.scene.frameProfile()')
     window_end = page.evaluate('performance.now()') if GL_STALLS else None
     ms = sorted(f['frameMs'] for f in frames)
@@ -345,6 +351,8 @@ def read_profile(page, name, during_turn=False):
         result['activeTurn'] = moving_frames(frames, page.evaluate('turnRanges'))
         if DRAW_PROFILE:
             result['drawProfile'] = page.evaluate('battleDrawProbe.finish(turnRanges)')
+    elif DRAW_PROFILE and route_profile:
+        result['drawProfile'] = page.evaluate('end=>battleDrawProbe.finish([[0,end]])',len(frames))
     print({k:v for k,v in result.items() if k!='drawProfile'}, flush=True)
     for i in sorted(range(1,len(frames)),key=lambda i:frames[i]['frameMs'],reverse=True)[:3]:
         if frames[i]['frameMs']>45:
@@ -734,13 +742,9 @@ with sync_playwright() as pw:
         if map_id=='storm' and COMBAT_MOVEMENT:
             approach()
         sx,sz = page.evaluate('[harbourQA.player.x,harbourQA.player.z]')
-        page.evaluate('window.turnStarted=performance.now();harbourQA.scene.profileFrames(3000)')
-        if DRAW_PROFILE:
-            page.evaluate('battleDrawProbe.start(harbourQA.scene.frameProfile(),true)')
+        start_route_profile(page)
         walk(page,sx+4,sz)
-        entry=read_profile(page,map_id+' approach')
-        if DRAW_PROFILE:
-            entry['drawProfile']=page.evaluate('battleDrawProbe.finish([[0,harbourQA.scene.frameProfile().length]])')
+        entry=read_profile(page,map_id+' approach',route_profile=True)
         profiler=None
         if os.environ.get('BATTLE_CPU_PROFILE')=='1':
             profiler=page.context.new_cdp_session(page)
@@ -838,22 +842,22 @@ with sync_playwright() as pw:
             try:
                 life=page.evaluate('harbourQA.player.life')
                 walk(page,x,-23,life=life,settle_ms=0)
-                page.evaluate('window.turnStarted=performance.now();harbourQA.scene.profileFrames(3000)')
+                start_route_profile(page)
                 walk(page,x,door,life=life,settle_ms=0)
                 walk(page,x,inside,life=life)
-                entry=read_profile(page,name+' entrance')
+                entry=read_profile(page,name+' entrance',route_profile=True)
                 print('Entered',name,flush=True)
                 if os.environ.get('HARBOUR_SCREENSHOTS')=='1':
                     page.screenshot(path=str(OUT/f'{width}x{height}-{condition or "standard"}-{name}.jpg'),type='jpeg',quality=90)
                     # Screenshots can synchronously read back the GPU. Discard that frame from the turn.
                     page.evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))')
                 result=measure(page,name)
-                page.evaluate('window.turnStarted=performance.now();harbourQA.scene.profileFrames(3000)')
+                start_route_profile(page)
                 walk(page,x,door,life=life,settle_ms=0)
                 walk(page,x,-23,life=life,settle_ms=0)
                 hp,current_life=page.evaluate('[harbourQA.player.hp,harbourQA.player.life]')
                 verify_life(hp,current_life,life,name)
-                results.append(dict(entry=entry,turn=result,exit=read_profile(page,name+' exit'),attempt=attempt+1))
+                results.append(dict(entry=entry,turn=result,exit=read_profile(page,name+' exit',route_profile=True),attempt=attempt+1))
                 write_report(checkpoint,report)
                 break
             except (AssertionError,PlaywrightTimeout) as event:
