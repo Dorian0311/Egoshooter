@@ -188,6 +188,14 @@ export function addIslandStreet(scene:T.Group){
           handle.rotation.y=.16;
         }
         cuboid(x,1.18,z,.13,.20,.27,chrome);cuboid(x,1.287,z,.015,.02,.23,cream);
+        // A small enamel cruet tray gathers the squeeze bottles by the napkin holder.
+        cuboid(x+.20,1.095,z,.18,.023,.30,porcelain);
+        for(const [i,colour] of [accent,trim].entries()){
+          const bottleZ=z-.074+i*.14;
+          cylinder(x+.20,1.185,bottleZ,.046,.051,.164,colour);
+          cylinder(x+.20,1.282,bottleZ,.022,.046,.035,colour);
+          cylinder(x+.20,1.320,bottleZ,.009,.022,.041,cream);
+        }
       }else{
         cuboid(x,y,z,w,h,d,role==='counter'?wood:iron);
         if(role==='counter'){
@@ -231,15 +239,24 @@ export function addIslandStreet(scene:T.Group){
       }
       detail(2.40,1.95,wall+.22,.044,.39,.046,trim).rotation.z=.22;
       detail(2.06,2.00,wall+.19,.048,.28,.043,trim).rotation.z=-.17;
+    }else if(s.id==='diner'){
+      texture=loader.load(base+'diner-menu.webp');texture.anisotropy=4;
+      const wall=-s.d/2+.265;
+      for(const side of [-1,1]){
+        // Formed metal edge and inset coloured pinstripe on the enamel menu case.
+        detail(side*1.697,2.29,wall,.054,1.76,.115,chrome).castShadow=false;
+        detail(0,2.29+side*.862,wall,3.45,.052,.115,chrome);
+        detail(0,2.29+side*.888,wall-.009,3.36,.014,.073,accent);
+      }
     }else{
-      const diner=s.id==='diner',poster=document.createElement('canvas');poster.width=640;poster.height=320;
+      const poster=document.createElement('canvas');poster.width=640;poster.height=320;
       const ctx=poster.getContext('2d')!;
-      ctx.fillStyle=diner?'#304b42':'#583735';ctx.fillRect(0,0,640,320);
+      ctx.fillStyle='#583735';ctx.fillRect(0,0,640,320);
       ctx.strokeStyle='#cfaf72';ctx.lineWidth=6;ctx.strokeRect(12,12,616,296);
       ctx.textAlign='center';ctx.fillStyle='#f4e6bc';ctx.font='bold 45px Georgia';
-      ctx.fillText(diner?'TODAY AT THE DINER':'COAST RECORDS',320,73);
+      ctx.fillText('COAST RECORDS',320,73);
       ctx.font='30px Georgia';
-      const lines=diner?['House breakfast ........ 4.95','Grilled cheese ........ 3.25','Fresh coffee ........ 1.00']:['NEW ARRIVALS','Jazz   /   Soul   /   Rock','Listening desk open daily'];
+      const lines=['NEW ARRIVALS','Jazz   /   Soul   /   Rock','Listening desk open daily'];
       lines.forEach((line,n)=>ctx.fillText(line,320,140+n*55));
       texture=new T.CanvasTexture(poster);
     }

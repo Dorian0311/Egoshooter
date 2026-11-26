@@ -58,6 +58,11 @@ test('a fast turn reopens the shop view even when the old far plane stops before
  camera.rotateY(Math.PI);camera.updateMatrixWorld();
  frustum.setFromProjectionMatrix(projection.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse));
  assert.equal(shopOpeningInView(frustum,opening),false);
+ camera.position.set(shop.x,1.65,shop.z+shop.front*3.2);
+ camera.lookAt(shop.x,1.65,shop.z);
+ camera.updateMatrixWorld();
+ frustum.setFromProjectionMatrix(projection.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse));
+ assert.equal(shopOpeningInView(frustum,opening),false);
 });
 
 test('automatic shadows never redraw on consecutive slow frames and retain a 30 Hz ceiling',()=>{

@@ -26,6 +26,13 @@ def observe(route):
     route.fulfill(response=response, body=source)
 
 
+def write_report(path, report):
+    # Publish only complete JSON, even if Chrome or the harness is interrupted.
+    temporary = path.with_suffix('.tmp')
+    temporary.write_text(json.dumps(report,indent=2),encoding='utf-8')
+    temporary.replace(path)
+
+
 def walk(page, x, z):
     deadline = time.monotonic() + 45
     previous = None
@@ -390,6 +397,15 @@ with sync_playwright() as pw:
         browser.close()
         raise SystemExit(0)
 
+    suffix=f'-{condition}' if condition else ''
+    report_path=OUT/f'report-{bots}-bots-{width}x{height}{suffix}{quality_suffix}.json'
+    run_id=time.time_ns()
+    checkpoint=report_path.with_name(f'{report_path.stem}-{run_id}.partial.json')
+    results = []
+    report=dict(bots=bots,width=width,height=height,quality=quality,renderer=renderer_info,
+                condition=condition or 'standard',runId=str(run_id),complete=False,results=results)
+    write_report(checkpoint,report)
+    print('Harbour Road checkpoint:',checkpoint,flush=True)
     approach()
     road_profiler=None
     if os.environ.get('BATTLE_CPU_PROFILE')=='1':
@@ -398,7 +414,6 @@ with sync_playwright() as pw:
         road_profiler.send('Profiler.setSamplingInterval',{'interval':1500})
         road_profiler.send('Profiler.start')
         profile_start=page.evaluate('performance.now()')
-    results = []
     for name,x,inside,door in [('Harbour Supply',51,-9,-18),('Diner',63,-36,-28),('Coast Records',75,-9,-18)]:
         for attempt in range(3):
             try:
@@ -417,6 +432,7 @@ with sync_playwright() as pw:
                 walk(page,x,door)
                 walk(page,x,-23)
                 results.append(dict(entry=entry,turn=result,exit=read_profile(page,name+' exit')))
+                write_report(checkpoint,report)
                 break
             except AssertionError:
                 if attempt==2 or page.evaluate('harbourQA.player.hp>0'):
@@ -443,7 +459,7 @@ with sync_playwright() as pw:
         (OUT/'storm-shops.cpuprofile').write_text(json.dumps(profile))
         (OUT/'storm-shops-profile-timing.json').write_text(json.dumps(dict(start=profile_start)))
         road_profiler.detach()
-    suffix=f'-{condition}' if condition else ''
-    report=dict(bots=bots,width=width,height=height,quality=quality,renderer=renderer_info,condition=condition or 'standard',results=results)
-    (OUT/f'report-{bots}-bots-{width}x{height}{suffix}{quality_suffix}.json').write_text(json.dumps(report,indent=2))
+    report['complete']=True
+    write_report(checkpoint,report)
+    checkpoint.replace(report_path)
     browser.close()

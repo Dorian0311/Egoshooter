@@ -11,7 +11,8 @@ export const streetRooms=islandShops.map(shop=>{
 
 /** Visibility through the facade depends on the view angles, not on last frame's far plane. */
 export function shopOpeningInView(frustum:Frustum,opening:Box3){
- for(let side=0;side<4;side++){
+ for(let side=0;side<6;side++){
+  if(side===4)continue; // Three stores the far plane before the near plane.
   const {normal,constant}=frustum.planes[side];
   const x=normal.x>=0?opening.max.x:opening.min.x;
   const y=normal.y>=0?opening.max.y:opening.min.y;

@@ -11,6 +11,7 @@ import {createWeaponScene} from './weaponScene';
 import {createGpuTiming} from './gpuTiming';
 import {withBodyDistanceUpload} from './actorDetails';
 import {ShadowCadence} from './shadowCadence';
+import {createReceiverShadowFrustum} from './receiverShadowFrustum';
 
 // Keep the environment's lighting while preventing its sky from covering the
 // world during the second, depth-cleared first-person render.
@@ -69,6 +70,15 @@ export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
   const governor=new ResolutionGovernor();
   const gpuTiming=createGpuTiming(renderer.getContext() as WebGL2RenderingContext);
   const shadowCadence=new ShadowCadence();let timingFrame=0,timingEnabled=true;
+  const receiverFrustum=createReceiverShadowFrustum(),lightFrustum=sun.shadow.getFrustum;
+  let clipReceivers=false,includeWeapon=false;
+  sun.shadow.getFrustum=()=>{
+    const full=lightFrustum.call(sun.shadow);
+    if(!clipReceivers)return full;
+    // Account for biased receiver positions and the outer PCFSoft taps.
+    const padding=Math.abs(sun.shadow.normalBias)+3*shadowExtent*2/sun.shadow.mapSize.x;
+    return receiverFrustum(full,camera,includeWeapon?weaponCamera:undefined,padding);
+  };
   let frameCpuAverage=0;
   const frameState={shadowUpdated:false,resized:false,pixelRatio:0,gpuMs:undefined as number|undefined};
   scene.add(sun.target);
@@ -265,9 +275,13 @@ export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
         viewmodel.sync();
       }
       if(timingEnabled&&adaptiveQuality&&adaptive&&currentTimingFrame%17===0)gpuTiming.begin();
-      try{composer.render(dt);}finally{gpuTiming.end();}
+      // These presets refresh the map on every frame, including the first view back outside.
+      clipReceivers=(quality==='high'||quality==='ultra')&&camera.far<shadowExtent;
+      includeWeapon=weaponVisible;
+      try{composer.render(dt);}finally{clipReceivers=false;gpuTiming.end();}
     },
     dispose() {
+      sun.shadow.getFrustum=lightFrustum;
       for (const pass of pipeline) pass.dispose();
       // r170's SSAOPass.dispose omits these owned GPU resources.
       ao.noiseTexture.dispose();
