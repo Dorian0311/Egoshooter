@@ -41,6 +41,7 @@ import {createGraphics} from './graphics.ts';
 import type {GraphicsQuality} from './graphicsSettings.ts';
 import {createRiver,addFacadeDetails,addAlpineBackdrop,batchStaticMeshes} from './scenery.ts';
 import {createCologneCathedral} from './cologneCathedral';
+import {alpinePassGround} from './alpinePassGround';
 import {createCologneBridgeSteel} from './cologneBridge';
 import {createMaterials,projectBoxUVs} from './materials.ts';
 import {addArchitecture,facadeColor} from './architecture.ts';
@@ -145,7 +146,8 @@ export function createScene(
     for(let x=-30;x<=30;x+=1)for(const z of [-4.25,4.25])cube(x,.025,z,.2,.05,3.3,'#594b37');
     scene.add(createCologneCathedral(mat('#827866').map!));
   }else if(mapId==='alpine'){
-    renderer.setClearColor('#bac9d2');scene.fog=new T.Fog('#bac9d2',85,310);cube(0,-.2,0,177,.4,177,'#deded4');cube(0,-.01,0,140,.05,14,'#8b8a7d');
+    renderer.setClearColor('#bac9d2');scene.fog=new T.Fog('#bac9d2',85,310);
+    scene.add(alpinePassGround(world,mat('#deded4'),mat('#8b8a7d'),mat('#818783')));
     addAlpineBackdrop(scene,mat('#818783').map!,mat('#deded4').map!);
   }else if(mapId==='frontline'){
     scene.fog=new T.Fog('#b6a391',90,310);

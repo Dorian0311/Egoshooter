@@ -4,6 +4,7 @@ import {createCharacterMotion,loadMotionLibrary,type MotionLibrary} from './char
 import {isBonusId,loadBonusCharacter,createBonusCharacter,type BonusCharacterData} from './bonusCharacters';
 import {defaultUniform,uniforms,type UniformId} from '../shared/uniforms.ts';
 import * as T from 'three';
+import {matchingBodyDistance,type BodyDistanceAsset} from './bodyDistance';
 import type {Player} from '../shared/game.ts';
 import type {MapId} from '../shared/world.ts';
 import {createActorEquipment,rigArm} from './actorEquipment';
@@ -43,7 +44,7 @@ function releaseSurface(image:HTMLImageElement|undefined){
  if(entry&&--entry.users===0){entry.texture.dispose();surfaceTextures.delete(image);}
 }
 
-type HumanData={coat?:CoatPiece[];positions:number[];uv:number[];indices:number[];skinIndex:number[];skinWeight:number[];categories:number[];bones:Joint[];skinImage?:HTMLImageElement;clothImage?:HTMLImageElement;motion?:MotionLibrary};
+type HumanData={bodyDistance?:BodyDistanceAsset;coat?:CoatPiece[];positions:number[];uv:number[];indices:number[];skinIndex:number[];skinWeight:number[];categories:number[];bones:Joint[];skinImage?:HTMLImageElement;clothImage?:HTMLImageElement;motion?:MotionLibrary};
 const fieldFit=new WeakMap<number[],number[]>();
 function fitFieldUniform(data:HumanData){
  const existing=fieldFit.get(data.positions);
@@ -129,7 +130,18 @@ function createBodyMesh(data:HumanData,civilian:boolean,materials:T.Material[]){
 }
 
 let source:Promise<HumanData>|null=null;
-function loadBaseHuman(){return source??=fetch('/shooter/characters/humanoid.json').then(r=>{if(!r.ok)throw Error('Human model unavailable');return r.json() as Promise<HumanData>;}).then(async data=>{data.motion=await loadMotionLibrary();return data;}).catch(e=>{source=null;throw e;});}
+function loadBaseHuman(){
+ return source??=Promise.all([
+  fetch('/shooter/characters/humanoid.json').then(r=>{if(!r.ok)throw Error('Human model unavailable');return r.arrayBuffer();}),
+  loadMotionLibrary(),
+  fetch('/shooter/characters/humanoid-distance.bin').then(r=>r.ok?r.arrayBuffer():undefined).catch(()=>undefined),
+ ]).then(async ([bytes,motion,lod])=>{
+  const data=JSON.parse(new TextDecoder().decode(bytes)) as HumanData;
+  data.motion=motion;
+  if(lod)data.bodyDistance=await matchingBodyDistance(bytes,lod).catch(()=>undefined);
+  return data;
+ }).catch(error=>{source=null;throw error;});
+}
 export async function loadHuman(uniformId?:UniformId,civilian=false){
  if(civilian)return loadCivilianCharacter();
  if(uniformId&&isBonusId(uniformId))return loadBonusCharacter(uniformId);
@@ -156,6 +168,7 @@ export function createHuman(data:HumanData|BonusCharacterData|CivilianCharacterD
  if(cloth){uniform.map=cloth;uniform.roughness=.94;}
  const materials=[uniform,new T.MeshStandardMaterial({color:'#ffffff',map:skin??null,roughness:.82,envMapIntensity:.35}),civilianLook?.boots??new T.MeshStandardMaterial({color:'#272723',roughness:.85}),...(civilianLook?[civilianLook.cloth]:[])];
  const mesh=createBodyMesh(data,civilian,materials);
+ if(purpose==='actor'&&!civilian&&!data.coat&&data.bodyDistance)mesh.userData.bodyDistance=data.bodyDistance;
  civilianLook?.tintGeometry(mesh.geometry);
  const bones=data.bones.map(j=>{const b=new T.Bone();b.name=j.name;return b;});
  for(let i=0;i<bones.length;i++){const j=data.bones[i],parent=j.parent>=0?data.bones[j.parent].head:[0,0,0];bones[i].position.set(j.head[0]-parent[0],j.head[1]-parent[1],j.head[2]-parent[2]);if(j.parent>=0)bones[j.parent].add(bones[i]);else group.add(bones[i]);}

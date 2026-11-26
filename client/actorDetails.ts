@@ -1,4 +1,5 @@
 import * as T from 'three';
+import {createDistanceBody} from './bodyDistance';
 
 /** Keep full silhouettes/skinning; omit only subpixel rigid accessories. Uses
  * layer 0 so animation/injury visibility remains owned by the character rig. */
@@ -22,9 +23,15 @@ export function createActorDetails(root:T.Group){
   if(radius<=0||radius>.12)return;
   details.push({mesh:object,radius,hidden:false,shadow:object.castShadow});
  });
+ const bodies=skins.flatMap(({mesh})=>{
+  if(!mesh.userData.bodyDistance)return [];
+  const body=createDistanceBody(mesh,mesh.userData.bodyDistance);
+  return body?[body]:[];
+ });
  return {
   update(distance:number,height:number,fov:number){
    const pixelsPerMetre=height/(2*Math.tan(T.MathUtils.degToRad(fov/2))*Math.max(.1,distance));
+   for(const body of bodies)body.update(pixelsPerMetre,fov<45);
    let hidden=0;
    for(const detail of details){
     const pixels=detail.radius*2*pixelsPerMetre;
@@ -34,6 +41,6 @@ export function createActorDetails(root:T.Group){
    }
    return hidden;
   },
-  dispose(){for(const detail of details){if(detail.hidden)detail.mesh.layers.enable(0);detail.mesh.castShadow=detail.shadow;}for(const skin of skins){skin.mesh.frustumCulled=skin.culled;skin.mesh.boundingSphere=skin.sphere;}details.length=skins.length=0;},
+  dispose(){for(const body of bodies)body.dispose();for(const detail of details){if(detail.hidden)detail.mesh.layers.enable(0);detail.mesh.castShadow=detail.shadow;}for(const skin of skins){skin.mesh.frustumCulled=skin.culled;skin.mesh.boundingSphere=skin.sphere;}details.length=skins.length=0;},
  };
 }

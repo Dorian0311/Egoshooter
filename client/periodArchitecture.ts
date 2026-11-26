@@ -33,6 +33,25 @@ export function createPeriodArchitecture(world:World){
     function box(x:number,y:number,z:number,w:number,h:number,d:number,c:string,rx=0,rz=0,near=false){
       add(new T.BoxGeometry(w,h,d),x,y,z,c,rx,rz,near);
     }
+    if(alpine){
+      const run=wallX+.5;
+      for(const slope of [-1,1]){
+        const snow=new T.PlaneGeometry(1,1,5,18).rotateX(-Math.PI/2);
+        const positions=snow.getAttribute('position');
+        for(let index=0;index<positions.count;index++){
+          const span=positions.getZ(index)+.5,u=positions.getX(index)+.5;
+          const down=slope>0?u:1-u;
+          const z=(span-.5)*(b.d+.98);
+          // Uneven buildup under the ridge allows the windward slates to show.
+          const boundary=.65+slope*.13+.09*Math.sin(span*12+number)+.042*Math.cos(span*36-number);
+          const x=slope*run*down*boundary;
+          const surface=upper+.30+2.4*(1-Math.abs(x)/run);
+          positions.setXYZ(index,x,surface+.025+.067*(1-down)**.6,z);
+        }
+        snow.computeVertexNormals();
+        add(snow,0,0,0,slope>0?'#e7edf0':'#dce5e9');
+      }
+    }
     for(const side of [-1,1]){
       const face=side*gableZ;
       // The pitched roof is already part of the map. Bargeboards follow its actual 2.4 m rise.
