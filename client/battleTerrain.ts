@@ -82,5 +82,10 @@ diffuseColor.rgb*=mix(.88,1.05,battleN);
   shader.fragmentShader=shader.fragmentShader.replace('#include <normal_fragment_maps>',`vec3 battleNormal=mix(texture2D(normalMap,vNormalMapUv${terrainScale}).xyz,texture2D(battleSoilNormal,vNormalMapUv).xyz,battleMask)*2.0-1.0;battleNormal.xy*=normalScale;normal=normalize(tbn*battleNormal);`);
  };
  material.customProgramCacheKey=()=>`battle-terrain-v3-${world.id}`;
- const mesh=new T.Mesh(createTerrainGeometry(world),material);mesh.name='shared-heightfield-'+world.id;mesh.receiveShadow=true;return {mesh,dispose(){control?.dispose();material.dispose();}};
+ const mesh=new T.Mesh(createTerrainGeometry(world),material);
+ mesh.name='shared-heightfield-'+world.id;
+ mesh.receiveShadow=true;
+ // Let opaque buildings fill depth before shading the terrain behind them.
+ if(world.id==='storm')mesh.renderOrder=1;
+ return {mesh,dispose(){control?.dispose();material.dispose();}};
 }

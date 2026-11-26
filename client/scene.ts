@@ -43,6 +43,7 @@ import type {GraphicsQuality} from './graphicsSettings.ts';
 import {createRiver,addFacadeDetails,addAlpineBackdrop,batchStaticMeshes} from './scenery.ts';
 import {createCologneCathedral} from './cologneCathedral';
 import {alpinePassGround} from './alpinePassGround';
+import {createAlpineFlurries} from './alpineBackdrop';
 import {createCologneBridgeSteel} from './cologneBridge';
 import {cologneBridgeTracks} from './freightStreet';
 import {createMaterials,projectBoxUVs} from './materials.ts';
@@ -96,6 +97,7 @@ export function createScene(
   scene.fog = new T.FogExp2("#bbc5cc",.0028);
   scene.environment=environment.texture;scene.environmentIntensity=.35;
   const camera = new T.PerspectiveCamera(72, 1, 0.08, 350);
+  const alpineFlurries=mapId==='alpine'?createAlpineFlurries(scene):undefined;
   const cameraMotion=new CameraMotion();let eyeHeight=1.6,sprintToggled=false;
   const chaseTarget=new T.Vector3(),chaseCamera=new T.Vector3(),chaseRay=new T.Vector3();
   const controlledCar=()=>snapshot?.phase==='playing'&&local?.hp&&!local.downedUntil
@@ -1021,6 +1023,7 @@ export function createScene(
     skyLight.intensity+=(ambient*skyAccess-skyLight.intensity)*adapt;
     scene.environmentIntensity+=(reflection*skyAccess-scene.environmentIntensity)*adapt;
     river?.update(t/1000);
+    alpineFlurries?.update(eye,t/1000,dt,covered,condition,renderer.getPixelRatio());
     mapDetails.update(t/1000);
     environmentUpgrade.update(camera.position,quality);
     sceneAssets.updateCrates(camera,aimBlend>.04);
@@ -1057,6 +1060,7 @@ export function createScene(
     dispose() {
       stopped = true;
       contactShadows.dispose();
+      alpineFlurries?.dispose();
       residentVoice.dispose();
       hudResize.disconnect();wanderers.dispose();interiors.dispose();interactionHint.remove();
       ammoReadout.remove();scope.remove();

@@ -399,7 +399,7 @@ with sync_playwright() as pw:
     assert page.evaluate('harbourQA.state.operation.config.difficulty') == difficulty
     print(map_id,'battle started with',bots,'bots',flush=True)
     exposed_cells=set()
-    def approach(on_failure=None):
+    def approach(on_failure=None, goal=(51,-23)):
         # Plan around the actual map colliders, including closed doors at this spawn.
         # All movement still goes through the mouse and keyboard.
         def find_route():
@@ -424,7 +424,6 @@ with sync_playwright() as pw:
                     for iz in range(math.ceil(bz-bd/2-1),math.floor(bz+bd/2+1)+1):
                         occupied.add((ix,iz))
             origin=tuple(round(v) for v in start)
-            goal=(51,-23)
             opened=[(0,0,origin)]
             parent={origin:None}
             cost={origin:0}
@@ -545,7 +544,13 @@ with sync_playwright() as pw:
         browser.close()
         raise SystemExit(0)
 
-    suffix=f'-{condition}' if condition else ''
+    shops=[('harbour-supply','Harbour Supply',51,-9,-18),('diner','Diner',63,-36,-28),
+           ('coast-records','Coast Records',75,-9,-18)]
+    only_shop=os.environ.get('HARBOUR_SHOP')
+    if only_shop:
+        shops=[shop for shop in shops if shop[0]==only_shop]
+        assert shops, ('Unknown HARBOUR_SHOP',only_shop)
+    suffix=(f'-{condition}' if condition else '')+(f'-{only_shop}' if only_shop else '')
     report_path=OUT/f'report-{bots}-bots-{width}x{height}{suffix}{quality_suffix}.json'
     run_id=time.time_ns()
     checkpoint=report_path.with_name(f'{report_path.stem}-{run_id}.partial.json')
@@ -559,7 +564,7 @@ with sync_playwright() as pw:
         write_report(checkpoint,report)
     write_report(checkpoint,report)
     print('Harbour Road checkpoint:',checkpoint,flush=True)
-    approach(record_failure)
+    approach(record_failure,(shops[0][2],-23))
     road_profiler=None
     if os.environ.get('BATTLE_CPU_PROFILE')=='1':
         road_profiler=page.context.new_cdp_session(page)
@@ -567,7 +572,7 @@ with sync_playwright() as pw:
         road_profiler.send('Profiler.setSamplingInterval',{'interval':1500})
         road_profiler.send('Profiler.start')
         profile_start=page.evaluate('performance.now()')
-    for name,x,inside,door in [('Harbour Supply',51,-9,-18),('Diner',63,-36,-28),('Coast Records',75,-9,-18)]:
+    for _,name,x,inside,door in shops:
         for attempt in range(3):
             try:
                 life=page.evaluate('harbourQA.player.life')
@@ -596,7 +601,7 @@ with sync_playwright() as pw:
                     raise
                 print(name,'nach Gefechtstod erneut gestartet:',event,flush=True)
                 recover_life(page)
-                approach(record_failure)
+                approach(record_failure,(x,-23))
         print('Exited',name,flush=True)
     page.screenshot(path=str(OUT/f'island-live-{width}x{height}.jpg'),type='jpeg',quality=88)
     if os.environ.get('HARBOUR_CLAIMS')=='1':

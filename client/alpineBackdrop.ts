@@ -1,6 +1,67 @@
 import * as T from 'three';
 
 const tau=Math.PI*2;
+
+export function createAlpineFlurries(scene:T.Scene){
+  const positions=new Float32Array(320*3);
+  let seed=34851;
+  for(let i=0;i<positions.length;i++){
+    seed=(Math.imul(seed,1664525)+1013904223)>>>0;
+    positions[i]=seed/4294967296;
+  }
+  const geometry=new T.BufferGeometry();
+  geometry.setAttribute('position',new T.BufferAttribute(positions,3));
+  const uniforms={
+    eye:{value:new T.Vector3()},seconds:{value:0},opacity:{value:0},
+    tint:{value:new T.Color('#eceff3')},pixelRatio:{value:1}
+  };
+  const material=new T.ShaderMaterial({
+    uniforms,transparent:true,depthWrite:false,
+    vertexShader:`
+      uniform vec3 eye;
+      uniform float seconds, pixelRatio;
+      varying float vFade;
+      void main(){
+        vec3 span=vec3(38.0,12.0,38.0);
+        vec3 drift=vec3(seconds*.72,-seconds*(.50+position.y*.52),seconds*.26);
+        drift.x+=sin(seconds*1.26+position.z*24.0)*.31;
+        vec3 offset=mod(position*span+drift-eye+span*.5,span)-span*.5;
+        vec4 point=viewMatrix*vec4(eye+offset,1.0);
+        float distanceToEye=length(offset);
+        vFade=smoothstep(1.2,3.8,distanceToEye)*(1.0-smoothstep(10.0,18.0,distanceToEye));
+        vFade*=1.0-smoothstep(4.6,6.0,abs(offset.y));
+        gl_PointSize=clamp(13.0/max(1.0,-point.z),1.15,3.1)*pixelRatio;
+        gl_Position=projectionMatrix*point;
+      }`,
+    fragmentShader:`
+      uniform vec3 tint;
+      uniform float opacity;
+      varying float vFade;
+      void main(){
+        vec2 p=(gl_PointCoord-.5)*2.0;
+        float feather=1.0-smoothstep(.14,1.0,dot(p,p));
+        gl_FragColor=vec4(tint,opacity*vFade*feather);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+      }`
+  });
+  const snow=new T.Points(geometry,material);
+  snow.name='Windblown Alpine flurries';snow.frustumCulled=false;snow.visible=false;
+  scene.add(snow);
+  return {
+    update(eye:T.Vector3,time:number,dt:number,covered:boolean,condition:string|undefined,pixelRatio:number){
+      const target=covered?0:condition==='fog'?.58:condition==='night'?.31:.39;
+      uniforms.opacity.value+=(target-uniforms.opacity.value)*Math.min(1,dt*6);
+      snow.visible=uniforms.opacity.value>.008;
+      uniforms.eye.value.copy(eye);
+      uniforms.seconds.value=time;
+      uniforms.tint.value.set(condition==='night'?'#b0c6eb':'#f4f7fd');
+      uniforms.pixelRatio.value=pixelRatio;
+    },
+    dispose(){snow.removeFromParent();geometry.dispose();material.dispose();}
+  };
+}
+
 const primary=[68,40,44,27,49,43,56,31,26,43,38,65,48,33,50,46,32,57,72,51,29,44,33,52];
 const outer=[67,91,59,76,52,62,86,68,88,58,73,53,84,57,67,83,72,55,66,88,57,75,48,80];
 function crest(angle:number,samples:number[]){

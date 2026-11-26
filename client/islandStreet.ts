@@ -47,18 +47,28 @@ export function addIslandStreet(scene:T.Group){
   const paving=loader.load(base+'concrete.webp');
   paving.colorSpace=T.SRGBColorSpace;paving.wrapS=paving.wrapT=T.RepeatWrapping;
   paving.anisotropy=4;
-  const pavingMaterial=new T.MeshStandardMaterial({map:paving,roughness:.98});
+  const pavingMaterial=new T.MeshStandardMaterial({map:paving,roughness:.98,alphaTest:.30});
+  const crossingX=68.95;
   for(const side of [-1,1]){
     const kerb=-23+side*4.62;
-    cuboid(63,.068,kerb+side*1.75,64,.135,3.4,concrete);
     // Fold the curb, its bevel and the apron into the same strip. Kerb joints
     // continue up the riser and the drainage course always faces the carriageway.
-    const profile=[[-.12,.053,0],[-.12,.115,20],[-.09,.144,26],[.12,.144,66],[3.45,.139,688]];
+    const profile=[[-.12,.053,0],[-.12,.115,20],[-.09,.144,26],[.12,.144,66],[1.30,.142,286],[3.45,.139,688],[3.45,.016,665]];
     const points:number[]=[],texcoords:number[]=[],indices:number[]=[];
-    for(let i=0;i<profile.length-1;i++){
+    // Drop the stone lip at each end of the crossing. The sloping apron returns
+    // to the full pavement height before the shop thresholds.
+    const cx=crossingX-63,cuts=[-32,cx-1.86,cx-1.16,cx+1.16,cx+1.86,32];
+    function ramp(x:number,offset:number,level:number){
+      const along=T.MathUtils.clamp((1.86-Math.abs(x-cx))/.70,0,1);
+      const across=T.MathUtils.clamp((1.30-offset)/1.18,0,1);
+      return level-Math.max(0,level-.062)*along*across;
+    }
+    for(let span=0;span<cuts.length-1;span++)for(let i=0;i<profile.length-1;i++){
       const [start,low,v0]=profile[i],[end,high,v1]=profile[i+1],n=points.length/3;
-      points.push(-32,low,side*start,-32,high,side*end,32,high,side*end,32,low,side*start);
-      texcoords.push(0,1-v0/960,0,1-v1/960,8,1-v1/960,8,1-v0/960);
+      const a=cuts[span],b=cuts[span+1],u0=(a+32)/8,u1=(b+32)/8;
+      points.push(a,ramp(a,start,low),side*start,a,ramp(a,end,high),side*end,
+        b,ramp(b,end,high),side*end,b,ramp(b,start,low),side*start);
+      texcoords.push(u0,1-v0/960,u0,1-v1/960,u1,1-v1/960,u1,1-v0/960);
       if(side===1)indices.push(n,n+1,n+2,n,n+2,n+3);
       else indices.push(n,n+2,n+1,n,n+3,n+2);
     }
@@ -70,8 +80,7 @@ export function addIslandStreet(scene:T.Group){
   }
   // Recesses and uneven paint make the carriageway read as a working street.
   // All road details sit below step height and share the existing street batches.
-  const gutter=paint('#383b37'),grate=paint('#696861'),roadPaint=paint('#c4bba1');
-  const wear=paint('#a49c85');
+  const gutter=paint('#383b37'),grate=paint('#696861');
   for(const side of [-1,1]){
     const z=-23+side*4.32;
     cuboid(63,.058,z,63.5,.004,.14,gutter);
@@ -80,13 +89,18 @@ export function addIslandStreet(scene:T.Group){
       for(let i=0;i<8;i++)cuboid(x+(i-3.5)*.087,.067,z,.033,.007,.38,grate);
     }
   }
-  for(let x=33;x<94;x+=6)if(x!==69)cuboid(x,.064,-23,2.9,.012,.12,trim);
-  // The crossing sits between shop entrances, clear of the center dashes.
+  // Missing flakes reveal the actual road aggregate through the paint.
+  function stripe(x:number,z:number,w:number,d:number,tile:number){
+    const geometry=new T.PlaneGeometry(w,d),uv=geometry.getAttribute('uv');
+    const left=983+tile%2*272,top=706+Math.floor(tile/2)*60;
+    for(let i=0;i<uv.count;i++)uv.setXY(i,(left+1+264*uv.getX(i))/1536,1-(top+54-53*uv.getY(i))/960);
+    // Share the centre and culling bounds of the continuous street apron.
+    geometry.rotateX(-Math.PI/2).translate(x-63,0,z+23);
+    solid(geometry,63,.0595,-23,pavingMaterial);
+  }
+  for(let x=33;x<94;x+=6)if(x!==69)stripe(x,-23,2.9,.135,6+(x-33)/6%2);
   for(let i=0;i<9;i++){
-    const z=-23+(i-4)*.84;
-    const x=68.95+.04*Math.sin(i*4);
-    cuboid(x,.063,z,1.64,.004,.37,roadPaint);
-    cuboid(x+.49*Math.cos(i*3),.066,z+.085,.40,.003,.17,wear);
+    stripe(crossingX+.025*Math.sin(i*4),-23+(i-4)*.84,2.20,.42,i%6);
   }
   const manhole=new T.Mesh(new T.CylinderGeometry(.39,.39,.018,20),gutter);
   manhole.position.set(57.2,.061,-24.85);manhole.receiveShadow=true;street.add(manhole);

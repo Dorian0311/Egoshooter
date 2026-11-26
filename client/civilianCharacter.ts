@@ -41,10 +41,20 @@ export function createCivilianCharacter(data:CivilianCharacterData,residentId='r
  const feet=['Bip01_L_Foot','Bip01_R_Foot'].map(name=>group.getObjectByName(name)).filter((foot):foot is T.Object3D=>!!foot),footGround=Math.min(...feet.map(foot=>group.worldToLocal(foot.getWorldPosition(new T.Vector3())).y));
  const arms={armL:rigArm(group,['Bip01_L_UpperArm','Bip01_L_Forearm','Bip01_L_Hand']),armR:rigArm(group,['Bip01_R_UpperArm','Bip01_R_Forearm','Bip01_R_Hand'])};
  const held=createActorEquipment(group,arms,true,false,purpose==='actor');
- const fingers:{bone:T.Object3D;rest:T.Quaternion;axis:T.Vector3;side:'armL'|'armR';digit:number;joint:number}[]=[];
+ const fingers:{bone:T.Object3D;relaxed:T.Quaternion;gesture:T.Quaternion;side:'armL'|'armR'}[]=[];
  for(const side of ['L','R'] as const){const index=group.getObjectByName(`Bip01_${side}_Finger1`),pinky=group.getObjectByName(`Bip01_${side}_Finger4`);if(!index||!pinky)continue;
   const across=index.getWorldPosition(new T.Vector3()).sub(pinky.getWorldPosition(new T.Vector3())).normalize();
-  group.traverse(bone=>{const match=bone.name.match(new RegExp(`^Bip01_${side}_Finger([0-4])([12]?)$`));if(!match)return;fingers.push({bone,rest:bone.quaternion.clone(),axis:across.clone().applyQuaternion(bone.getWorldQuaternion(q).invert()).normalize(),side:side==='L'?'armL':'armR',digit:Number(match[1]),joint:Number(match[2]||0)});});
+  const fingerName=new RegExp(`^Bip01_${side}_Finger([0-4])([12]?)$`);
+  group.traverse(bone=>{
+   const match=bone.name.match(fingerName);if(!match)return;
+   const digit=Number(match[1]),joint=Number(match[2]||0);
+   const axis=across.clone().applyQuaternion(bone.getWorldQuaternion(q).invert()).normalize();
+   const relaxedAngle=digit===0?.08:joint===0?.12:.18;
+   const gestureAngle=digit===2?0:digit===0?.65:joint===1?1.3:.9;
+   fingers.push({bone,side:side==='L'?'armL':'armR',
+    relaxed:bone.quaternion.clone().multiply(rotation.setFromAxisAngle(axis,relaxedAngle)),
+    gesture:bone.quaternion.clone().multiply(rotation.setFromAxisAngle(axis,gestureAngle))});
+  });
  }
  function handJoints(suffix:'L'|'R'){
   const finger=(index:string)=>group.getObjectByName(`Bip01_${suffix}_Finger${index}`);
@@ -103,7 +113,7 @@ export function createCivilianCharacter(data:CivilianCharacterData,residentId='r
     body.position.y+=footGround-lowest;group.updateWorldMatrix(true,true);
    }
    const gesturing=player.hp>0&&player.gestureUntil>now&&!isCrawling(player),gestureSide=hasLost(player,'armL')?'armR':'armL';
-   for(const finger of fingers){const active=gesturing&&finger.side===gestureSide,angle=active?(finger.digit===2?0:finger.digit===0?.65:finger.joint===0?.9:finger.joint===1?1.3:.9):finger.digit===0?.08:finger.joint===0?.12:.18;finger.bone.quaternion.copy(finger.rest).multiply(rotation.setFromAxisAngle(finger.axis,angle));}
+   for(const finger of fingers)finger.bone.quaternion.copy(gesturing&&finger.side===gestureSide?finger.gesture:finger.relaxed);
    held.update(player,time,now);for(const side of ['armL','armR'] as const)if(!hasLost(player,side)&&(!gesturing||side!==gestureSide))relaxedHand(side);if(gesturing&&!hasLost(player,gestureSide))gesture(gestureSide);
   },
   setHeadVisible(visible:boolean){if(head&&headScale)head.scale.copy(headScale).multiplyScalar(visible?1:.001);},
