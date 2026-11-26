@@ -25,6 +25,12 @@ export function createActorDetails(root:T.Group){
  const details:{mesh:T.Mesh;radius:number;hidden:boolean;shadow:boolean}[]=[];
  const skins:{mesh:T.SkinnedMesh;culled:boolean;sphere:T.SkinnedMesh['boundingSphere']}[]=[];
  root.updateWorldMatrix(true,true);
+ const updateMatrixWorld=root.updateMatrixWorld;
+ // Three's render traversal still walks the bones of invisible actors. Explicit
+ // pose reads use updateWorldMatrix and can still request the current transform.
+ root.updateMatrixWorld=function(force){
+  if(this.visible)updateMatrixWorld.call(this,force);
+ };
  // Same conservative envelope as the actor-level visibility test. Convert it
  // to each mesh's local coordinates so all animation poses remain enclosed.
  const envelope=new T.Sphere(new T.Vector3().setFromMatrixPosition(root.matrixWorld).add(new T.Vector3(0,1,0)),3.5);
@@ -60,6 +66,6 @@ export function createActorDetails(root:T.Group){
    }
    return hidden;
   },
-  dispose(){distanceBodies.delete(root);for(const body of bodies)body.dispose();for(const detail of details){if(detail.hidden)detail.mesh.layers.enable(0);detail.mesh.castShadow=detail.shadow;}for(const skin of skins){skin.mesh.frustumCulled=skin.culled;skin.mesh.boundingSphere=skin.sphere;}details.length=skins.length=0;},
+  dispose(){root.updateMatrixWorld=updateMatrixWorld;distanceBodies.delete(root);for(const body of bodies)body.dispose();for(const detail of details){if(detail.hidden)detail.mesh.layers.enable(0);detail.mesh.castShadow=detail.shadow;}for(const skin of skins){skin.mesh.frustumCulled=skin.culled;skin.mesh.boundingSphere=skin.sphere;}details.length=skins.length=0;},
  };
 }

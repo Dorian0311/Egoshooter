@@ -6,7 +6,6 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js';
 import {ShaderPass} from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import {fxaaOutputShader} from './fxaaOutput';
-import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { graphicsPresets, renderPixelRatio, ResolutionGovernor, type GraphicsQuality } from './graphicsSettings.ts';
 import {createWeaponScene} from './weaponScene';
 import {createGpuTiming} from './gpuTiming';
@@ -43,11 +42,16 @@ export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
   const smaa = new SMAAPass(1, 1);
   // SMAA reads only red and green edge flags. RG16F preserves their filtered values.
   smaa.edgesRT.texture.format = T.RGFormat;
+  const blendOutput='gl_FragColor = SMAANeighborhoodBlendingPS( vUv, vOffset, tColor, tDiffuse );';
+  // Keep the old half-float write precision before converting HDR to display color.
+  smaa.materialBlend.fragmentShader=smaa.materialBlend.fragmentShader.replace(blendOutput,`${blendOutput}
+   gl_FragColor = vec4(unpackHalf2x16(packHalf2x16(gl_FragColor.rg)), unpackHalf2x16(packHalf2x16(gl_FragColor.ba)));
+   #include <tonemapping_fragment>
+   #include <colorspace_fragment>`);
+  smaa.materialBlend.toneMapped=true;
   const fxaa=new ShaderPass(fxaaOutputShader);fxaa.material.toneMapped=true;
   fxaa.setSize=(w:number,h:number)=>{fxaa.uniforms.resolution.value.set(1/Math.max(1,w),1/Math.max(1,h));};
-  const output = new OutputPass();
-  // Stay in linear HDR until OutputPass performs the single tone/color conversion.
-  const pipeline=[render,ao,weaponPass,bloom,fxaa,smaa,output];
+  const pipeline=[render,ao,weaponPass,bloom,fxaa,smaa];
   // The composer receives physical pixels; changing viewport and DPR together must resize its targets only once.
   composer.setPixelRatio(1);
   let quality = initialQuality, width = 0, height = 0, ratio = 0;
@@ -96,7 +100,6 @@ export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
     ao.enabled = preset.ao;
     bloom.enabled = preset.bloom;
     fxaa.enabled=preset.antialias==='fxaa';smaa.enabled=preset.antialias==='smaa';
-    output.enabled=!fxaa.enabled;
     // EffectComposer.setSize also touches disabled passes. Only the active preset owns full-size buffers.
     for(const pass of composer.passes){
       if(pass!==weaponPass&&!pass.enabled)pass.setSize(1,1);
@@ -262,7 +265,7 @@ export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
       try{composer.render(dt);}finally{gpuTiming.end();}
     },
     dispose() {
-      for (const pass of [render, ao, weaponPass, bloom, fxaa, smaa, output]) pass.dispose();
+      for (const pass of pipeline) pass.dispose();
       // r170's SSAOPass.dispose omits these owned GPU resources.
       ao.noiseTexture.dispose();
       ao.ssaoMaterial.dispose();

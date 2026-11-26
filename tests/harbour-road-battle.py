@@ -9,8 +9,9 @@ from pathlib import Path
 from playwright.sync_api import TimeoutError as PlaywrightTimeout, sync_playwright
 
 
-BASE = 'http://127.0.0.1:5173'
-OUT = Path('artifacts/harbour-battle')
+PRODUCTION = os.environ.get('BATTLE_PRODUCTION') == '1'
+BASE = os.environ.get('BATTLE_BASE_URL', 'http://127.0.0.1:5173')
+OUT = Path('artifacts/harbour-battle') / ('production' if PRODUCTION else '')
 OUT.mkdir(parents=True, exist_ok=True)
 COMBAT_MOVEMENT = os.environ.get('BATTLE_COMBAT_MOVEMENT') == '1'
 
@@ -19,25 +20,8 @@ def observe(route):
     # Add read-only probes to the local Vite response, leaving gameplay and frame scheduling intact.
     response = route.fetch()
     source, count = re.subn(r'(scene\.current\?\.update\(s, (\w+)\.playerId\);)',
-        r'\1 window.harbourQA={player:own,state:s,scene:scene.current};', response.text())
+        r'\1 window.observeHarbourBattle(own,s,scene.current);', response.text())
     assert count == 1, 'Snapshot observation point changed'
-    if COMBAT_MOVEMENT:
-        source=source.replace('window.harbourQA={player:own,state:s,scene:scene.current};',
-            '''window.harbourQA={player:own,state:s,scene:scene.current};
-            const probe=window.combatMotionProbe;
-            if(probe && own && own.life===probe.life){
-              probe.distance+=Math.hypot(own.x-probe.x,own.z-probe.z);
-              probe.x=own.x;probe.z=own.z;
-              for(const e of s.events){
-                if(!probe.seen.has(e.eventId) && e.eventId){
-                  probe.seen.add(e.eventId);
-                  if(e.type==='shot' && e.id===own.id) probe.shots++;
-                  if(e.type==='shot' && s.players.some(p=>p.id===e.id && p.kind==='bot')) probe.botShots++;
-                  if(e.type==='hit' && e.id===own.id) probe.hits++;
-                  if(e.type==='glass') probe.glass++;
-                }
-              }
-            }''')
     route.fulfill(response=response, body=source)
 
 
@@ -159,6 +143,7 @@ with sync_playwright() as pw:
     width,height = map(int,os.environ.get('HARBOUR_VIEWPORT','1280x720').split('x'))
     quality=os.environ.get('BATTLE_GRAPHICS','performance')
     assert quality in ('auto','performance','high','ultra'),quality
+    quality_suffix='' if quality=='performance' else '-'+quality
     page = browser.new_page(viewport=dict(width=width,height=height), device_scale_factor=1)
     page.add_init_script(f"localStorage.setItem('altstadt.graphics.v3',{json.dumps(quality)})")
     page.add_init_script("""if(PerformanceObserver.supportedEntryTypes.includes('long-animation-frame')){
@@ -208,11 +193,28 @@ with sync_playwright() as pw:
             }
             return log;
           }""".replace("split('\n')","split('\\n')"))
-    page.route(re.compile(r'/client/App\.tsx(\?|$)'), observe)
-    # Keep the measured game on the version it opened with, including during local Vite edits.
-    page.add_init_script("""window.WebSocket=class extends WebSocket {
-      constructor(url, protocols){super(url,protocols);if(protocols==='vite-hmr')this.addEventListener('message',event=>event.stopImmediatePropagation());}
-    }""")
+    page.add_init_script("""window.observeHarbourBattle=(own,s,scene,worldBoxes)=>{
+        window.harbourQA={player:own,state:s,scene,worldBoxes};
+        """ + ("""            const probe=window.combatMotionProbe;
+            if(probe && own && own.life===probe.life){
+              probe.distance+=Math.hypot(own.x-probe.x,own.z-probe.z);
+              probe.x=own.x;probe.z=own.z;
+              for(const e of s.events){
+                if(!probe.seen.has(e.eventId) && e.eventId){
+                  probe.seen.add(e.eventId);
+                  if(e.type==='shot' && e.id===own.id) probe.shots++;
+                  if(e.type==='shot' && s.players.some(p=>p.id===e.id && p.kind==='bot')) probe.botShots++;
+                  if(e.type==='hit' && e.id===own.id) probe.hits++;
+                  if(e.type==='glass') probe.glass++;
+                }
+              }
+            }""" if COMBAT_MOVEMENT else '') + "};")
+    if not PRODUCTION:
+        page.route(re.compile(r'/client/App\.tsx(\?|$)'), observe)
+        # Keep the measured game on the version it opened with, including during local Vite edits.
+        page.add_init_script("""window.WebSocket=class extends WebSocket {
+          constructor(url, protocols){super(url,protocols);if(protocols==='vite-hmr')this.addEventListener('message',event=>event.stopImmediatePropagation());}
+        }""")
     page.goto(BASE,wait_until='domcontentloaded')
     button = lambda name: page.get_by_role('button',name=name,exact=True)
     button('Verstanden · zur App').click()
@@ -264,10 +266,15 @@ with sync_playwright() as pw:
         # All movement still goes through the mouse and keyboard.
         def find_route():
             start, boxes = page.evaluate("""async()=>{
-              const {getWorld}=await import('/shared/world.ts');
-              const {interiorWorld}=await import('/shared/interiors.ts');
-              const w=interiorWorld(getWorld('storm'),harbourQA.state.interiors);
-              return [[harbourQA.player.x,harbourQA.player.z],w.boxes
+              const qa=harbourQA;
+              let boxes;
+              if(qa.worldBoxes) boxes=qa.worldBoxes();
+              else {
+                const {getWorld}=await import('/shared/world.ts');
+                const {interiorWorld}=await import('/shared/interiors.ts');
+                boxes=interiorWorld(getWorld('storm'),qa.state.interiors).boxes;
+              }
+              return [[qa.player.x,qa.player.z],boxes
                 .filter(b=>b.y-b.h/2<1.75 && b.y+b.h/2>.29)
                 .map(b=>[b.x,b.z,b.w,b.d])];
             }""")
@@ -343,7 +350,6 @@ with sync_playwright() as pw:
             profiler.detach()
         result=dict(bots=bots,width=width,height=height,quality=quality,entry=entry,turn=turn)
         suffix='-combat' if COMBAT_MOVEMENT else ''
-        quality_suffix='' if quality=='performance' else '-'+quality
         report=OUT/f'{map_id}-{bots}-bots-{width}x{height}{suffix}{quality_suffix}.json'
         report.write_text(json.dumps(result,indent=2))
         try:
@@ -419,6 +425,6 @@ with sync_playwright() as pw:
         (OUT/'storm-shops-profile-timing.json').write_text(json.dumps(dict(start=profile_start)))
         road_profiler.detach()
     suffix=f'-{condition}' if condition else ''
-    report=dict(bots=bots,width=width,height=height,condition=condition or 'standard',results=results)
-    (OUT/f'report-{bots}-bots-{width}x{height}{suffix}.json').write_text(json.dumps(report,indent=2))
+    report=dict(bots=bots,width=width,height=height,quality=quality,condition=condition or 'standard',results=results)
+    (OUT/f'report-{bots}-bots-{width}x{height}{suffix}{quality_suffix}.json').write_text(json.dumps(report,indent=2))
     browser.close()

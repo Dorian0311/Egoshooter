@@ -14,6 +14,20 @@ test('cached static transforms preserve world placement and still follow a movin
  mesh.geometry.dispose();(mesh.material as T.Material).dispose();
 });
 
+test('hidden render rigs skip matrix propagation and immediately catch up when visible',()=>{
+ const scene=new T.Scene(),parent=new T.Group(),root=new T.Group(),bone=new T.Bone();
+ scene.add(parent);parent.add(root);root.add(bone);
+ const details=createActorDetails(root);
+ const worldPosition=new T.Vector3();
+ root.visible=false;parent.position.x=10;scene.updateMatrixWorld(true);
+ assert.equal(bone.matrixWorld.elements[12],0);
+ assert.equal(bone.getWorldPosition(worldPosition).x,10);
+ parent.position.x=20;root.visible=true;scene.updateMatrixWorld(true);
+ assert.equal(bone.matrixWorld.elements[12],20);
+ details.dispose();root.visible=false;parent.position.x=30;scene.updateMatrixWorld(true);
+ assert.equal(bone.matrixWorld.elements[12],30);
+});
+
 test('automatic shadows never redraw on consecutive slow frames and retain a 30 Hz ceiling',()=>{
  for(const rate of [20,30,40,60,120,144]){
   const cadence=new ShadowCadence();let updates=0,last=-2;

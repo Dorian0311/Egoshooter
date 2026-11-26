@@ -12,9 +12,9 @@ export function freightYard(world:World){
   // Original cargo tiles occupy the lower left quarter; the tower panels wrap once around each drum.
   const cargoTiles=[[.765,.025,.20,.10],[.006,.515,.238,.472],[.256,.515,.238,.472],
     [.506,.515,.488,.472],[.006,.135,.238,.347],[.256,.135,.238,.347],[.506,.135,.238,.347]];
-  const surfaceTiles=[[3,3,1530,506],[1027,515,1018,238],[1539,3,506,250],[1539,259,506,250],[1027,759,250,260]];
+  const surfaceTiles=[[3,3,1530,506],[1027,515,1018,238],[1539,3,506,250],[1539,259,506,250],[1027,759,250,260],[1281,757,766,266]];
   const uvRect=[...cargoTiles.map(tile=>tile.map(n=>n*.5)),...surfaceTiles.map(([x,y,w,h])=>[x/2048,1-(y+h)/1024,w/2048,h/1024])];
-  const masonry=7,ironPlate=8,stonework=9,slate=10,boardDoor=11;
+  const masonry=7,ironPlate=8,stonework=9,slate=10,boardDoor=11,postalBrick=12;
   let ox=0,oz=0;
   function add(g:T.BufferGeometry,x:number,y:number,z:number,c:string,tile=0,rx=0,ry=0,rz=0){
     g.rotateX(rx);g.rotateY(ry);g.rotateZ(rz);g.translate(ox+x,y,oz+z);
@@ -113,6 +113,36 @@ export function freightYard(world:World){
     box(hx,3.13,hz,.16,.35,.16,metal);cylinder(hx,2.93,hz,.21,.21,.14,rim,Math.PI/2);
     for(let i=0;i<8;i++)add(new T.TorusGeometry(.035,.012,4,8),hx-.08,2.74-i*.049,hz,metal,0,0,i%2*.98);
     add(new T.TorusGeometry(.067,.020,5,10,Math.PI*1.55),hx-.065,2.30,hz,rim);
+  }
+  const postOffice=world.buildings.find(b=>b.name==='FELDPOST');
+  if(postOffice){
+    ox=postOffice.x+postOffice.w/2;oz=postOffice.z;
+    const depth=postOffice.d/2,face=.244;
+    // One continuous hand-lettered elevation, clipped to the actual masonry around
+    // the sorting-room windows. Its open bays remain sightlines into both storeys.
+    function panel(low:number,high:number,near:number,far:number){
+      const geometry=new T.PlaneGeometry(far-near,high-low);
+      const uv=geometry.getAttribute('uv');
+      for(let i=0;i<uv.count;i++){
+        uv.setXY(i,(depth-far+uv.getX(i)*(far-near))/(2*depth),(low+uv.getY(i)*(high-low))/8);
+      }
+      add(geometry,face,(low+high)/2,(near+far)/2,'#fff9ee',postalBrick,0,Math.PI/2);
+    }
+    for(const [low,high] of [[.62,1.20],[2.50,5.20],[6.50,8]])panel(low,high,-depth,depth);
+    for(const low of [1.20,5.20])for(const [near,far] of [[-depth,-5],[-1.5,1.5],[5,depth]])panel(low,low+1.30,near,far);
+    for(const z of [-7.74,-.65,.65,7.74]){
+      // The middle pilasters terminate at the painted parcel office fascia.
+      for(const [base,cap] of Math.abs(z)<1?[[.63,3.04],[4.90,7.85]]:[[.63,7.85]]){
+        box(face+.041,(base+cap)/2,z,.092,cap-base,.18,'#956e58');
+        box(face+.064,cap-.08,z,.142,.15,.27,'#b2a08a');
+      }
+    }
+    for(const low of [1.20,5.20])for(const z of [-3.25,3.25]){
+      box(face+.048,low-.045,z,.19,.095,3.66,'#b1a18a');
+      box(face-.12,low+.67,z,.047,1.30,.045,'#626861');
+      box(face-.12,low+.85,z,.047,.038,3.50,'#626861');
+    }
+    box(face+.064,7.87,0,.18,.105,2*depth,'#a9947b');
   }
   // Steam-service water tower and crane beyond the eastern limit of the playable yard.
   // The existing two track centres continue into this bank instead of ending in open ground.
