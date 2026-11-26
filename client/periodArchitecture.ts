@@ -28,10 +28,11 @@ export function createPeriodArchitecture(world:World){
     const alpine=world.id==='alpine',cinema=b.name==='UNION-LICHTSPIELE';
     const fortress=alpine&&b.name==='ROCHE-LA-CROIX';
     const domhof=world.id==='cologne'&&b.name==='AM DOMHOF';
+    const bridgeWatch=world.id==='cologne'&&b.name==='BRÜCKENWACHE';
     const station=/BAHNHOF|KÖLN-DEUTZ/.test(b.name);
     const deutz=world.id==='cologne'&&b.name==='DEUTZER BAHNHOF';
     const illuminated=deutz||cinema;
-    const trim=illuminated||fortress||domhof?material.clone():material;
+    const trim=illuminated||fortress||domhof||bridgeWatch?material.clone():material;
     if(fortress||domhof){
       trim.map=new T.TextureLoader().load('/shooter/environment/'+(fortress?'alpine-fort-casement':'domhof-bookshop')+'.webp');
       trim.map.colorSpace=T.SRGBColorSpace;trim.map.anisotropy=4;
@@ -51,7 +52,7 @@ export function createPeriodArchitecture(world:World){
       quaternion.setFromEuler(angles.set(rx,0,rz));
       g.applyMatrix4(matrix.compose(translation.set(x,y,z),quaternion,scale));
       const p=g.getAttribute('position'),n=g.getAttribute('normal'),rgb=new Float32Array(p.count*3);
-      if(fortress||domhof){
+      if(fortress||domhof||bridgeWatch){
         // All unprinted trim shares the atlas's white margin and retains its vertex paint.
         const uv=g.getAttribute('uv');
         for(let i=0;i<uv.count;i++)uv.setXY(i,1020/1024,.5);
@@ -66,6 +67,65 @@ export function createPeriodArchitecture(world:World){
     }
     function box(x:number,y:number,z:number,w:number,h:number,d:number,c:string,rx=0,rz=0,near=false){
       add(new T.BoxGeometry(w,h,d),x,y,z,c,rx,rz,near);
+    }
+    if(bridgeWatch){
+      // The railway elevation faces west. Details stay on the existing masonry
+      // strips so both rows of side openings remain usable.
+      const wall=-wallX-.249,marl='#b9ae95',green='#3c524c';
+      const canvas=document.createElement('canvas');canvas.width=512;canvas.height=256;
+      const ctx=canvas.getContext('2d')!;
+      ctx.fillStyle='white';ctx.fillRect(0,0,512,256);
+      ctx.fillStyle='#203b3d';ctx.fillRect(0,0,500,84);
+      ctx.strokeStyle='#c9bc99';ctx.lineWidth=2;ctx.strokeRect(8,8,484,68);
+      ctx.fillStyle='#ece2c5';ctx.font='bold 39px Arial Narrow, Arial, sans-serif';
+      ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('BRÜCKENWACHE',250,43,448);
+      ctx.save();ctx.beginPath();ctx.rect(0,88,500,168);ctx.clip();
+      ctx.fillStyle='#887566';ctx.fillRect(0,88,500,168);
+      const masonry=['#985c49','#a06c54','#87604c','#9f6350','#a66d55'];
+      for(let row=0;row<28;row++)for(let col=-1;col<4;col++){
+        const cx=125*col+(row%2)*62,cy=88+row*6;
+        ctx.fillStyle=masonry[((row*13+col*7)%masonry.length+masonry.length)%masonry.length];
+        ctx.fillRect(cx,cy,123,5);
+        ctx.fillStyle='rgba(222,178,144,.20)';ctx.fillRect(cx,cy,123,1);
+      }
+      ctx.restore();
+      trim.map=new T.CanvasTexture(canvas);trim.map.colorSpace=T.SRGBColorSpace;trim.map.anisotropy=4;
+      box(wall,.54,0,.08,1.02,b.d-.07,'#706b61');
+      for(const [y,h,w] of [[1.1,.16,.22],[4.15,.21,.33],[5.12,.14,.25],[7.83,.25,.37]]){
+        box(wall-.095,y,0,w,h,b.d+.24,marl);
+      }
+      for(const z of [-6.72,0,6.72]){
+        const width=z===0?1.02:.91,pier=new T.BoxGeometry(.09,5.60,width);
+        add(pier,wall,4.66,z,'#fff8f0');
+        const normals=pier.getAttribute('normal'),positions=pier.getAttribute('position'),uv=pier.getAttribute('uv');
+        for(let i=0;i<uv.count;i++)if(Math.abs(normals.getX(i))>.5){
+          const u=(positions.getZ(i)-z)/width+.5,v=(positions.getY(i)-4.66)/5.60+.5;
+          uv.setXY(i,(.5+499*u)/512,(.5+167*v)/256);
+        }
+        for(const y of [1.85,3.11,4.53,5.09,6.95,7.54])
+          box(wall-.072,y,z,.15,.11,1.09,marl,0,0,true);
+      }
+      for(const z of [-3.25,3.25]){
+        for(const y of [1.18,5.18]){
+          box(wall-.13,y,z,.36,.13,3.71,marl);
+          box(wall-.09,y+.08,z,.25,.039,3.62,green,0,0,true);
+        }
+        const zLamp=z+Math.sign(z)*1.16;
+        box(wall-.13,3.53,zLamp,.20,.38,.225,green);
+        box(wall-.29,3.64,zLamp,.29,.10,.31,green);
+        add(new T.CylinderGeometry(.13,.10,.26,8),wall-.39,3.49,zLamp,'#b49d72');
+        add(new T.CylinderGeometry(.17,.17,.078,8),wall-.39,3.65,zLamp,green);
+      }
+      const xSign=wall-.095;
+      box(xSign,3.68,0,.15,.63,3.84,green);
+      box(xSign-.055,3.36,0,.20,.071,3.90,marl);
+      const enamel=new T.PlaneGeometry(3.69,.56);enamel.rotateY(-Math.PI/2);
+      add(enamel,xSign-.077,3.68,0,'#fffdf1');
+      const pos=enamel.getAttribute('position'),uv=enamel.getAttribute('uv');
+      for(let i=0;i<uv.count;i++){
+        const u=pos.getZ(i)/3.69+.5,v=(pos.getY(i)-3.68)/.56+.5;
+        uv.setXY(i,(.5+499*u)/512,(172.5+83*v)/256);
+      }
     }
     if(domhof){
       // The street elevation stands against the solid upper wall. On the river

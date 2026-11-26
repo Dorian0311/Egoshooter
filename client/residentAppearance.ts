@@ -3,7 +3,7 @@ import {residentProfile,type ResidentLook} from '../shared/residentProfiles';
 
 const looks:Record<ResidentLook,{build:[number,number,number];face:[number,number,number];jacket:string;trousers:string;boots:string}>={
  bruiser:{build:[1.23,1.04,1.17],face:[1.12,.95,1.06],jacket:'#bf6929',trousers:'#263643',boots:'#29241e'},
- veteran:{build:[1.02,.94,1.05],face:[.94,1.03,.99],jacket:'#879254',trousers:'#514433',boots:'#332b25'},
+ veteran:{build:[1.02,.94,1.05],face:[.94,1.03,.99],jacket:'#717960',trousers:'#514433',boots:'#332b25'},
  officer:{build:[.89,1.10,.95],face:[.95,1.08,.97],jacket:'#445d70',trousers:'#233244',boots:'#202126'},
  showman:{build:[1.14,.98,1.13],face:[1.05,.96,1.08],jacket:'#a74576',trousers:'#62304c',boots:'#e2d4b2'},
 };
@@ -23,12 +23,22 @@ export function createResidentAppearance(root:T.Group,body:T.Object3D,id:string)
  const box=(mat:T.Material,x:number,y:number,z:number,sx:number,sy:number,sz:number,part:'head'|'body'|'armL'|'armR'='body')=>mesh(new T.BoxGeometry(sx*w,sy*h,sz),mat,x,y,z,part);
  function ring(mat:T.Material,x:number,y:number,z:number,radius:number,tube:number,part:'head'|'body'='head'){return mesh(new T.TorusGeometry(radius,tube,8,24),mat,x,y,z,part);}
  function glasses(aviator=false){
-  for(const side of [-1,1]){
-   ring(aviator?gold:dark,side*.049,1.696,-.123,.038,aviator?.006:.0035);
-   if(aviator)ball(material('#171c24',.18),side*.049,1.696,-.124,.034,.027,.009);
-   box(aviator?gold:dark,side*.093,1.695,-.057,.006,.006,.13,'head');
+  if(!aviator){
+   for(const side of [-1,1]){
+    const rim=ring(dark,side*.032/w,1.554/h,-.100,.026,.0021);
+    rim.name='resident-veteran-spectacle';rim.scale.y=.88;rim.rotation.y=-side*.37;
+    const temple=box(dark,side*.067/w,1.553/h,-.031,.0038,.004,.118,'head');
+    temple.rotation.y=side*.15;
+   }
+   box(dark,0,1.557/h,-.110,.020,.0035,.004,'head');
+   return;
   }
-  box(aviator?gold:dark,0,1.698,-.124,.028,.004,.006,'head');
+  for(const side of [-1,1]){
+   ring(gold,side*.049,1.696,-.123,.038,.006);
+   ball(material('#171c24',.18),side*.049,1.696,-.124,.034,.027,.009);
+   box(gold,side*.093,1.695,-.057,.006,.006,.13,'head');
+  }
+  box(gold,0,1.698,-.124,.028,.004,.006,'head');
  }
  if(profile.look==='officer'){
   // Shape the visible shirt into the jacket opening, with folded collar tips
@@ -67,11 +77,62 @@ export function createResidentAppearance(root:T.Group,body:T.Object3D,id:string)
   box(silver,.105,1.325,-.157,.055,.08,.01);box(dark,.105,1.337,-.166,.006,.055,.005);
  }else if(profile.look==='veteran'){
   const grey=material('#b8b1a1'),scarf=material('#d9b862');
-  ball(grey,0,1.59,-.084,.08,.056,.063).name='resident-veteran-beard';
+  // Bind-pose depths in millimetres sampled from the veteran's chin and cheek.
+  // Each column runs from below the jaw to the short hairline beneath the lips.
+  const skinDepth=[
+   [-65,-98,-105,-104,-103],[-69,-98,-104,-103,-103],[-87,-97,-99,-98,-100],
+   [-86,-93,-92,-93,-93],[-78,-83,-87,-90,-90],[-77,-81,-84,-86,-87],
+   [-69,-72,-74,-77,-80],[-55,-59,-63,-68,-73],[-45,-48,-49,-50,-52],
+  ];
+  const beardPosition:number[]=[],beardColor:number[]=[],beardIndex:number[]=[];
+  for(let col=-8;col<=8;col++){
+   const u=Math.abs(col)/8,lower=1.443+.072*u**1.45,upper=1.481+.054*u**1.65;
+   for(let row=0;row<5;row++){
+    const fraction=row/4,thickness=.0032+.007*Math.sin(fraction*Math.PI)*(1-u*.65);
+    beardPosition.push(.066*col/8,lower+(upper-lower)*fraction-1.495,skinDepth[Math.abs(col)][row]/1000-thickness+.085);
+    const shade=.78+.18*Math.cos(col*2.3+row*.75)-.16*fraction;
+    beardColor.push(shade,shade,shade);
+    if(col<8&&row<4){
+     const a=(col+8)*5+row;beardIndex.push(a,a+1,a+6,a,a+6,a+5);
+    }
+   }
+  }
+  const beard=new T.BufferGeometry();beard.setAttribute('position',new T.Float32BufferAttribute(beardPosition,3));
+  beard.setAttribute('color',new T.Float32BufferAttribute(beardColor,3));beard.setIndex(beardIndex);beard.computeVertexNormals();
+  const whiskers=material('#8c8579');whiskers.vertexColors=true;whiskers.roughness=1;
+  mesh(beard,whiskers,0,1.495/h,-.085).name='resident-veteran-beard';
   ball(grey,0,1.75,.025,.096,.039,.085);
   glasses();
   const skirt=mesh(new T.CylinderGeometry(.23,.285,.43,24,1,true),cloth,0,.855,.009,'body');skirt.scale.x=w;skirt.scale.z=.65;
-  box(scarf,0,1.47,-.075,.26,.12,.16);box(scarf,.071,1.24,-.179,.11,.42,.035);
+  // A diagonal wrap catches the light along its rolled edge. Its tucked end
+  // drapes over the chest with a central fold and a slanted hem.
+  const scarfPositions:number[]=[],scarfColors:number[]=[],scarfIndices:number[]=[];
+  function scarfVertex(x:number,y:number,z:number,shade:number){
+   scarfPositions.push(x*w,y*h,z);scarfColors.push(shade,shade,shade);
+  }
+  const bands=[[.121,.094,1.416,.66],[.132,.101,1.448,.95],[.135,.104,1.473,.78],[.125,.096,1.504,1.03]];
+  for(let s=0;s<20;s++){
+   const angle=s*Math.PI/10,side=Math.sin(angle),front=Math.cos(angle);
+   for(const [rx,rz,y,shade] of bands)scarfVertex(side*rx,y+.021*side,-.026-front*rz,shade);
+   for(let row=0;row<bands.length-1;row++){
+    const a=s*bands.length+row,b=((s+1)%20)*bands.length+row;
+    scarfIndices.push(a,a+1,b+1,a,b+1,b);
+   }
+  }
+  const tail=scarfPositions.length/3;
+  const folds=[[.048,1.456,-.115,.055],[.074,1.408,-.151,.049],[.064,1.305,-.174,.049],[.085,1.17,-.166,.041],[.075,1.045,-.180,.047]];
+  for(const [row,[x,y,z,width]] of folds.entries()){
+   scarfVertex(x-width,y,z,.72);scarfVertex(x,y-.006,z-.010,1.05);
+   scarfVertex(x+width,y-(row===folds.length-1?.029:0),z+.002,.86);
+   if(row)for(let col=0;col<2;col++){
+    const a=tail+(row-1)*3+col;
+    scarfIndices.push(a,a+1,a+3,a+1,a+4,a+3);
+   }
+  }
+  const drape=new T.BufferGeometry();drape.setAttribute('position',new T.Float32BufferAttribute(scarfPositions,3));
+  drape.setAttribute('color',new T.Float32BufferAttribute(scarfColors,3));drape.setIndex(scarfIndices);drape.computeVertexNormals();
+  scarf.vertexColors=true;scarf.roughness=.96;
+  mesh(drape,scarf,0,0,0,'body').name='resident-veteran-scarf';
   for(let i=0;i<3;i++){
    box(material(['#99453e','#416077','#a08440'][i]),-.105+i*.054,1.345,-.163,.033,.067,.013);
    const medal=mesh(new T.CylinderGeometry(.027,.027,.01,16),i===1?silver:gold,-.105+i*.054,1.294,-.172,'body');medal.rotation.x=Math.PI/2;

@@ -30,7 +30,7 @@ export function addIslandStreet(scene:T.Group){
   function label(x:number,y:number,z:number,width:number,height:number,yaw:number,cell:number){
     const quad=new T.PlaneGeometry(width,height),uv=quad.getAttribute('uv');
     for(let i=0;i<uv.count;i++)
-      uv.setXY(i,(cell%4+.012+.976*uv.getX(i))/4,(1-Math.floor(cell/4)+.012+.976*uv.getY(i))/2);
+      uv.setXY(i,(cell%4+.012+.976*uv.getX(i))/4,(2-Math.floor(cell/4)+.012+.976*uv.getY(i))/3);
     const mesh=solid(quad,x,y,z,labelMaterial);mesh.rotation.y=yaw;
     return mesh;
   }
@@ -188,6 +188,41 @@ export function addIslandStreet(scene:T.Group){
         for(const end of [-1,1])for(const flank of [-1,1])
           cuboid(x+flank*(w/2-.04),y,z+end*(d/2-.04),.055,h,.055,iron);
         const inward=x<s.x?1:-1;
+        const boardX=s.x-inward*(s.w/2-.29),boardZ=z,rigging=inward<0;
+        cuboid(boardX,3.08,boardZ,.09,1.68,3.76,wood);
+        const plate=new T.PlaneGeometry(3.64,1.59),plateUV=plate.getAttribute('uv');
+        for(let i=0;i<plateUV.count;i++)plateUV.setXY(i,((rigging?1:0)+.004+.992*plateUV.getX(i))/2,(.006+.988*plateUV.getY(i))/3);
+        const sampleX=boardX+inward*.092;
+        solid(plate,boardX+inward*.051,3.08,boardZ,labelMaterial).rotation.y=inward*Math.PI/2;
+        // Full-sized shop samples stand proud of their painted mounting boards.
+        // The printed scale and captions sit under the corresponding fitting.
+        for(let col=0;col<3;col++){
+          const sampleZ=boardZ-inward*(col-1)*1.165,sampleY=3.045;
+          if(!rigging){
+            cuboid(sampleX,sampleY-.09,sampleZ,.115,.073,.55,iron);
+            if(col===0){
+              for(const side of [-1,1]){
+                cuboid(sampleX+inward*.033,sampleY+.015,sampleZ+side*.20,.085,.19,.062,chrome).rotation.x=side*.33;
+              }
+            }else if(col===1){
+              cuboid(sampleX+inward*.040,sampleY,sampleZ,.12,.17,.14,iron);
+              cuboid(sampleX+inward*.045,sampleY+.080,sampleZ,.093,.070,.56,chrome);
+            }else for(const side of [-1,1]){
+              cylinder(sampleX+inward*.055,sampleY+.016,sampleZ+side*.135,.081,.078,.224,iron);
+              cylinder(sampleX+inward*.055,sampleY+.134,sampleZ+side*.135,.10,.10,.04,chrome);
+            }
+          }else{
+            const radius=col===1?.165:col===0?.115:.075;
+            const ferrule=solid(new T.TorusGeometry(radius,.029,5,16),sampleX,sampleY+.042,sampleZ,col===1?trim:chrome);
+            ferrule.rotation.y=inward*Math.PI/2;
+            if(col===0)cuboid(sampleX,sampleY-.084,sampleZ,.078,.054,.28,iron);
+            else if(col===1){
+              const spindle=solid(new T.CylinderGeometry(.038,.038,.102,12),sampleX,sampleY+.042,sampleZ,iron);
+              spindle.rotation.z=Math.PI/2;
+              for(let spoke=0;spoke<3;spoke++)cuboid(sampleX,sampleY+.042,sampleZ,.035,.30,.03,trim).rotation.x=spoke*Math.PI/3;
+            }else cuboid(sampleX,sampleY-.119,sampleZ,.046,.20,.046,iron);
+          }
+        }
         for(let shelf=0;shelf<4;shelf++){
           const level=.21+shelf*.57;
           cuboid(x,level,z,w,.09,d,wood);

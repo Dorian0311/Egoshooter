@@ -86,7 +86,7 @@ def activate_controls(page):
         return
 
 
-def walk(page, x, z, *, life=None):
+def walk(page, x, z, *, life=None, settle_ms=220):
     deadline = time.monotonic() + 45
     previous = None
     last_turn = 0
@@ -119,7 +119,7 @@ def walk(page, x, z, *, life=None):
     finally:
         page.keyboard.up('Shift')
         page.keyboard.up('w')
-        page.wait_for_timeout(220)
+        page.wait_for_timeout(settle_ms)
 
 
 def mouse(page, dx):
@@ -403,7 +403,7 @@ with sync_playwright() as pw:
         # Plan around the actual map colliders, including closed doors at this spawn.
         # All movement still goes through the mouse and keyboard.
         def find_route():
-            start, boxes = page.evaluate("""async()=>{
+            start, boxes, opponents = page.evaluate("""async()=>{
               const qa=harbourQA;
               let boxes;
               if(qa.worldBoxes) boxes=qa.worldBoxes();
@@ -414,7 +414,9 @@ with sync_playwright() as pw:
               }
               return [[qa.player.x,qa.player.z],boxes
                 .filter(b=>b.y-b.h/2<1.75 && b.y+b.h/2>.29)
-                .map(b=>[b.x,b.z,b.w,b.d])];
+                .map(b=>[b.x,b.z,b.w,b.d]),qa.state.players
+                .filter(p=>p.kind==='bot'&&p.team!==qa.player.team&&p.connected&&p.hp>0)
+                .map(p=>[p.x,p.z])];
             }""")
             occupied=set()
             for bx,bz,bw,bd in boxes:
@@ -426,6 +428,12 @@ with sync_playwright() as pw:
             opened=[(0,0,origin)]
             parent={origin:None}
             cost={origin:0}
+            threat={}
+            def danger(point):
+                if point not in threat:
+                    distance=min((math.hypot(point[0]-x,point[1]-z) for x,z in opponents),default=32)
+                    threat[point]=max(0,(32-distance)/8)+(4 if point in exposed_cells else 0)
+                return threat[point]
             while opened:
                 _,steps,point=heapq.heappop(opened)
                 if point==goal:
@@ -435,8 +443,10 @@ with sync_playwright() as pw:
                 px,pz=point
                 for dx,dz in ((1,0),(-1,0),(0,-1),(0,1)):
                     dest=(px+dx,pz+dz)
-                    next_cost=steps+1+(4 if dest in exposed_cells else 0)
-                    if dest in occupied or math.hypot(*dest)>119 or cost.get(dest,math.inf)<=next_cost:
+                    if dest in occupied or math.hypot(*dest)>119:
+                        continue
+                    next_cost=steps+1+danger(dest)
+                    if cost.get(dest,math.inf)<=next_cost:
                         continue
                     cost[dest]=next_cost
                     parent[dest]=point
@@ -447,15 +457,32 @@ with sync_playwright() as pw:
             while path[-1]!=origin:
                 path.append(parent[path[-1]])
             path.reverse()
-            # Follow straight corridors as a single continuous key press.
-            return [b for a,b,c in zip(path,path[1:],path[2:]) if a[0]!=c[0] and a[1]!=c[1]]+[goal]
+            # Merge staircase turns into straight walks without cutting through
+            # padded wall cells or getting appreciably closer to opponents.
+            route=[]
+            start=0
+            while start+1<len(path):
+                xa,za=path[start]
+                best=start+1
+                for end in range(len(path)-1,start+1,-1):
+                    xb,zb=path[end]
+                    stride=math.ceil(2*math.hypot(xb-xa,zb-za))
+                    limit=max(map(danger,path[start:end+1]))+.25
+                    segment=((round(xa+(xb-xa)*i/stride),round(za+(zb-za)*i/stride))
+                             for i in range(1,stride+1))
+                    if all(cell not in occupied and danger(cell)<=limit for cell in segment):
+                        best=end
+                        break
+                route.append(path[best])
+                start=best
+            return route
         for attempt in range(4):
             try:
                 life=page.evaluate('harbourQA.player.life')
                 route=find_route()
                 print('Street approach',route,flush=True)
-                for x,z in route:
-                    walk(page,x,z,life=life)
+                for i,(x,z) in enumerate(route):
+                    walk(page,x,z,life=life,settle_ms=220 if i==len(route)-1 else 70)
                 return
             except (AssertionError,PlaywrightTimeout) as event:
                 if on_failure:
