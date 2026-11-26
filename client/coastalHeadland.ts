@@ -8,6 +8,28 @@ export const islandHeadlands=[
 ] as const;
 const sectors=40;
 
+/** Paint the intertidal band on both the terrain shell and the fitted scans. */
+export function shoreRockFinish(material:T.MeshStandardMaterial){
+ material.onBeforeCompile=shader=>{
+  shader.vertexShader=shader.vertexShader.replace('#include <common>','#include <common>\nvarying vec3 vCliffWorld;')
+   .replace('#include <begin_vertex>','#include <begin_vertex>\nvCliffWorld=(modelMatrix*vec4(transformed,1.0)).xyz;');
+  shader.fragmentShader=shader.fragmentShader.replace('#include <common>','#include <common>\nvarying vec3 vCliffWorld;')
+   .replace('#include <color_fragment>',`#include <color_fragment>
+    float aboveSea=vCliffWorld.y+3.4;
+    float rockGrain=.5+.5*sin(dot(vCliffWorld.xz,vec2(.66,.49))+vCliffWorld.y*1.3);
+    float spray=1.0-smoothstep(.12,1.72,aboveSea+rockGrain*.34);
+    float algae=(1.0-smoothstep(.09,.83,abs(aboveSea-.25)))*(.26+.74*rockGrain);
+    float stratum=.5+.5*sin(vCliffWorld.y*.48+vCliffWorld.z*.17+vCliffWorld.x*.11);
+    diffuseColor.rgb*=mix(vec3(.89+.18*stratum),vec3(.55,.63,.55),spray);
+    diffuseColor.rgb=mix(diffuseColor.rgb,diffuseColor.rgb*vec3(.71,1.17,.76),algae*.56);
+   `).replace('#include <roughnessmap_fragment>',`#include <roughnessmap_fragment>
+    roughnessFactor=mix(roughnessFactor,roughnessFactor*.65,spray);
+   `);
+ };
+ material.customProgramCacheKey=()=>'coastal-cliff-intertidal-v1';
+ return material;
+}
+
 // A closed, terraced sea cliff. Its crown, exposed rock and wet base share a
 // silhouette so the colour bands follow the folds of the headland.
 export function coastalHeadland(seed:number){

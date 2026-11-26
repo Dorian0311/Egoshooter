@@ -6,7 +6,7 @@ import os
 import re
 import time
 from pathlib import Path
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import TimeoutError as PlaywrightTimeout, sync_playwright
 
 
 BASE = 'http://127.0.0.1:5173'
@@ -61,9 +61,13 @@ def mouse(page, dx):
     page.evaluate("dx=>document.dispatchEvent(new MouseEvent('mousemove',{movementX:dx,bubbles:true}))", dx)
 
 
+class TurnLifeInterrupted(AssertionError):
+    pass
+
+
 def measure(page, name):
     page.evaluate('window.turnStarted=performance.now();harbourQA.scene.profileFrames(3000)')
-    start = page.evaluate('harbourQA.player.yaw')
+    life,start = page.evaluate('[harbourQA.player.life,harbourQA.player.yaw]')
     turns=int(os.environ.get('BATTLE_TURNS','12'))
     assert 1<=turns<=80
     for n in range(turns):
@@ -71,9 +75,18 @@ def measure(page, name):
             mouse(page, (1 if n%2==0 else -1)*262)
             page.wait_for_timeout(15)
         page.wait_for_timeout(180)
-        actual = page.evaluate('harbourQA.player.yaw')
         expected = start if n%2 else start+math.pi
-        assert abs(math.remainder(actual-expected, math.tau)) < .25, (actual, expected)
+        try:
+            page.wait_for_function("""([life,yaw])=>{
+                const p=harbourQA.player, delta=p.yaw-yaw;
+                return !p.hp || p.life!==life || Math.abs(Math.atan2(Math.sin(delta),Math.cos(delta)))<.25;
+            }""",arg=[life,expected],timeout=1500)
+        except PlaywrightTimeout as error:
+            state=page.evaluate('()=>{const p=harbourQA.player;return {life:p.life,hp:p.hp,yaw:p.yaw,seq:p.seq,locked:!!document.pointerLockElement,phase:harbourQA.state.phase}}')
+            raise AssertionError((name,n+1,expected,state)) from error
+        hp,current_life=page.evaluate('[harbourQA.player.hp,harbourQA.player.life]')
+        if not hp or current_life!=life:
+            raise TurnLifeInterrupted((name,n+1,life,current_life,hp))
     return dict(read_profile(page, name),turns=turns)
 
 
@@ -281,7 +294,15 @@ with sync_playwright() as pw:
                 profile_start=profile['startTime']/1000-navigation*1000
             (OUT/f'{map_id}-profile-timing.json').write_text(json.dumps(dict(start=profile_start,tasks=turn['longTasks'])))
             profiler.detach()
-        warm=measure(page,map_id+' repeat')
+        try:
+            warm=measure(page,map_id+' repeat')
+        except TurnLifeInterrupted as event:
+            print('Drehserie durch Gefechtstod unterbrochen:',event,flush=True)
+            page.wait_for_function('harbourQA.player.hp>0',timeout=20000)
+            if not page.evaluate('!!document.pointerLockElement'):
+                page.locator('.city-canvas').click(force=True)
+            walk(page,sx+4,sz)
+            warm=measure(page,map_id+' repeat')
         result=dict(bots=bots,width=width,height=height,entry=entry,turn=turn,warm=warm)
         page.screenshot(path=str(OUT/f'{map_id}-live-{width}x{height}.jpg'),type='jpeg',quality=88)
         if os.environ.get('BATTLE_SHADER_PROFILE')=='1':

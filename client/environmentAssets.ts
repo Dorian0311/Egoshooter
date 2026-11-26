@@ -6,7 +6,7 @@ import {inIslandStreet} from '../shared/islandStreet';
 import {terrainHeight} from '../shared/terrain';
 import {instanceStaticModel} from './scenery';
 import type {GraphicsQuality} from './graphicsSettings';
-import {scannedCliffFaces} from './coastalHeadland';
+import {scannedCliffFaces,shoreRockFinish} from './coastalHeadland';
 import {createPeriodQuarter} from './periodQuarter';
 import {createPeriodArchitecture} from './periodArchitecture';
 import {createCoastalArchitecture} from './coastalArchitecture';
@@ -49,6 +49,7 @@ export function loadEnvironmentUpgrade(scene:T.Scene,world:World,renderer:T.WebG
    if(!face){disposeSource(model);return;}
    sources.push(model);const scan=face.geometry;
    face.geometry=scannedCliffFaces(scan);scan.dispose();
+   if(face.material instanceof T.MeshStandardMaterial)shoreRockFinish(face.material);
    face.name='Photogrammetric coastal cliff faces';face.castShadow=false;face.receiveShadow=false;
    root.add(model);
   }).catch(error=>console.warn('Coastal cliff scan unavailable:',error)));

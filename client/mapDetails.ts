@@ -9,7 +9,7 @@ import {projectBoxUVs} from './materials';
 import {islandCourseRadius,islandRoute,islandUnderpass,nearIslandRoute} from '../shared/islandRoute';
 import {applySurfaceFinish} from './surfaceFinish';
 import {terrainHeight} from '../shared/terrain';
-import {texturedHeadland,islandHeadlands} from './coastalHeadland';
+import {shoreRockFinish,texturedHeadland,islandHeadlands} from './coastalHeadland';
 import {addIslandStreet} from './islandStreet';
 import {inIslandStreet} from '../shared/islandStreet';
 import {createBattleTerrain} from './battleTerrain';
@@ -286,7 +286,7 @@ export function createMapDetails(scene:T.Scene,world:World,get:(color:string)=>T
           }
       }
     }
-    const cliffMaterial=get('#858a79');
+    const cliffMaterial=shoreRockFinish(get('#858a79').clone());
     for(const [i,[x,z,width,height,depth]] of islandHeadlands.entries()){
       const cliff=new T.Mesh(texturedHeadland(i),cliffMaterial);
       cliff.position.set(x,-4,z);cliff.scale.set(width,height,depth);

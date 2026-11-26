@@ -55,9 +55,11 @@ export function createCharacterMotion(root:T.Group,bones:Map<string,T.Bone>,data
   // Calibrated on the retargeted boot's ground-contact phase in metres per clip second.
   const action=actions.get(current)!,nominal=current==='walk'?.95:current==='jog'?4.8:current==='sprint'?6.2:current==='crouchWalk'?1.6:0;
   const forwardSpeed=(dx*-Math.sin(player.yaw)+dz*-Math.cos(player.yaw))/step;
-  // Hysteresis avoids alternating forward/reverse clips while strafing. Use
-  // velocity rather than a per-frame displacement threshold on fast displays.
-  if(forwardSpeed<-.25)reverse=true;else if(forwardSpeed>.25)reverse=false;
+  // Keep the current foot lead when a mostly sideways step drifts slightly
+  // forward or back. A fixed speed threshold alone flips the hips at fast strafing speeds.
+  const reverseThreshold=Math.max(.25,.30*measured);
+  if(forwardSpeed < -reverseThreshold)reverse=true;
+  else if(forwardSpeed > reverseThreshold||!moving)reverse=false;
   const travelling=Math.hypot(dx,dz)/step>.12;
   let direction=travelling?Math.atan2(-dx,-dz)-player.yaw:0;
   direction=Math.atan2(Math.sin(direction),Math.cos(direction));

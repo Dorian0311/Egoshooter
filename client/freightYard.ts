@@ -109,6 +109,67 @@ export function freightYard(world:World){
     for(let i=0;i<8;i++)add(new T.TorusGeometry(.035,.012,4,8),hx-.08,2.74-i*.049,hz,metal,0,0,i%2*.98);
     add(new T.TorusGeometry(.067,.020,5,10,Math.PI*1.55),hx-.065,2.30,hz,rim);
   }
+  // Steam-service water tower and crane beyond the eastern limit of the playable yard.
+  // The existing two track centres continue into this bank instead of ending in open ground.
+  ox=125;oz=-3.4;
+  const brick=['#956850','#8d604a','#9e7159','#986d53'],tank='#5f7068',stone='#aaa08b';
+  function drum(y:number,top:number,bottom:number,h:number,tone:string,n=24){
+    add(new T.CylinderGeometry(top,bottom,h,n),0,y,0,tone);
+  }
+  drum(-.22,3.28,3.42,1.66,stone);
+  drum(4.77,2.84,3.01,8.33,'#796d60',32);
+  // The battered brick drum is laid in alternating courses with a darker recessed joint.
+  const courses=brick.map(()=>({points:[] as number[],uv:[] as number[]}));
+  for(let row=0;row<28;row++){
+    const low=.62+row*.298,high=low+.278,sides=26;
+    const rb=3.065-.17*(low-.62)/8.34,rt=rb-.17*.278/8.34;
+    for(let i=0;i<sides;i++){
+      const a=(i+(row%2)*.5)*Math.PI*2/sides+.004,b=a+Math.PI*2/sides-.009;
+      const patch=courses[(i*7+row*7+Math.floor(i/3))%4];
+      patch.points.push(
+        rb*Math.cos(a),low,rb*Math.sin(a), rt*Math.cos(a),high,rt*Math.sin(a), rb*Math.cos(b),low,rb*Math.sin(b),
+        rb*Math.cos(b),low,rb*Math.sin(b), rt*Math.cos(a),high,rt*Math.sin(a), rt*Math.cos(b),high,rt*Math.sin(b));
+      patch.uv.push(0,0,0,1,1,0,1,0,0,1,1,1);
+    }
+  }
+  for(const [i,patch] of courses.entries()){
+    const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(patch.points,3));
+    g.setAttribute('uv',new T.Float32BufferAttribute(patch.uv,2));g.computeVertexNormals();add(g,0,0,0,brick[i]);
+  }
+  // Corbelled stone drum supports the riveted iron reservoir, with horizontal compression rings.
+  for(let i=0;i<4;i++)drum(9.00+i*.18,3.12+i*.22,2.99+i*.22,.20,stone);
+  drum(10.20,4.35,3.83,1.05,'#52615a');
+  drum(12.04,4.35,4.35,2.66,tank);
+  for(const y of [10.74,12.05,13.36])drum(y,4.40,4.40,.11,'#47554e');
+  for(let i=0;i<18;i++){
+    const a=i*Math.PI/9;
+    add(new T.BoxGeometry(.058,2.56,.068),Math.cos(a)*4.34,12.04,Math.sin(a)*4.34,'#77837a',0,0,-a);
+  }
+  drum(14.48,.74,4.59,2.06,'#676960');
+  drum(15.74,.63,.63,.48,'#474f49',12);drum(16.22,.035,.85,.52,'#64675c',12);
+  // Door, high ventilators and the exterior level gauge are on the town-facing side.
+  box(-3.06,1.54,0,.11,2.48,1.44,wood,1);box(-3.14,2.84,0,.22,.19,1.77,stone);
+  for(const y of [4.60,7.43]){
+    box(-2.97,y,0,.15,1.17,.72,stone);box(-3.06,y,0,.07,.98,.55,'#4a504a');
+    for(const dy of [-.29,0,.29])box(-3.11,y+dy,0,.05,.045,.56,metal);
+  }
+  box(-4.30,11.87,.94,.12,2.00,.27,'#d7cbb0');
+  for(let n=0;n<9;n++)box(-4.37,11.0+n*.21,.95,.05,.033,n%2?.10:.19,rim);
+  for(const z of [-12,12]){
+    ox=0;oz=z;
+    box(130.2,-.56,0,26.5,1.05,3.0,'#6e6b61');
+    for(let x=117.6;x<143;x+=1.4)box(x,.002,0,.21,.054,2.50,wood,1);
+    for(const dz of [-.8,.8]){
+      box(130.2,.061,dz,26.50,.083,.088,metal);
+      box(141.5,.55,dz,2.30,.12,.16,metal,0,.52);
+    }
+    box(142.36,1.08,0,.22,.27,2.42,'#8d5745');
+  }
+  // Water column between the tower and the southern track; the hose clears the last sleeper.
+  ox=121.5;oz=-9.25;
+  cylinder(0,-.26,0,.53,.57,1.46,stone);cylinder(0,2.20,0,.19,.28,3.58,tank);
+  cylinder(0,3.90,0,.30,.30,.24,metal);box(0,3.98,-1.03,.24,.23,2.29,tank);
+  cylinder(0,3.63,-2.11,.18,.17,.61,metal);cylinder(0,3.16,-2.11,.161,.135,.40,'#514d43');
   const geometry=mergeGeometries(pieces)!;pieces.forEach(g=>g.dispose());
   const atlas=new T.TextureLoader().load('/shooter/environment/freight-yard.webp');atlas.colorSpace=T.SRGBColorSpace;atlas.anisotropy=4;
   const mesh=new T.Mesh(geometry,new T.MeshStandardMaterial({map:atlas,vertexColors:true,roughness:.88,metalness:.035}));

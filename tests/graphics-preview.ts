@@ -54,6 +54,9 @@ function show() {
   if(view.value==='frontline'&&params.get('focus')==='freight-yard'){
     Object.assign(player,{x:28.4,y:0,z:3,yaw:-.16,pitch:-.09});
   }
+  if(view.value==='frontline'&&params.get('focus')==='water-tower'){
+    Object.assign(player,{x:105,y:0,z:2,yaw:-1.30,pitch:.32});
+  }
   if(view.value==='interior')Object.assign(player,{x:-48,y:0,z:5,yaw:0,pitch:-.08});
   if(view.value==='upstairs')Object.assign(player,{x:-48,y:4.125,z:-29,yaw:0,pitch:-.08});
   if(view.value==='station')Object.assign(player,{x:48,y:0,z:-29,yaw:0,pitch:-.08});

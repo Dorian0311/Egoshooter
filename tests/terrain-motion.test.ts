@@ -1,3 +1,4 @@
+import {createCharacterMotion} from '../client/characterMotion';
 import {RemoteMotion} from '../client/remoteMotion';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
@@ -78,5 +79,29 @@ test('20 Hz remote movement keeps actual support soles at ground level across an
   assert.ok(contacts>40&&lowest>-.012&&lowest<.015,`${speed} m/s @ ${hz} Hz: minimum sole height ${lowest}, ${contacts} contacts`);
   assert.ok(slide*hz/contacts<(speed<2?.59:2.2),`support sole drift ${slide*hz/contacts} m/s`);
   human.dispose();
+ }
+});
+
+
+test('slight forward/back drift during a networked strafe keeps the planted foot lead, and a true diagonal changes it',()=>{
+ const library=JSON.parse(readFileSync('public/shooter/animations/locomotion.json','utf8'));
+ for(const hz of [30,60,120]){
+  const root=new T.Group(),hip=new T.Bone();hip.name='root';root.add(hip);
+  const motion=createCharacterMotion(root,new Map([['root',hip]]),library);
+  const p=makePlayer('strafe','S','fr');Object.assign(p,{x:0,y:0,z:0,yaw:0,grounded:true});
+  const history=new RemoteMotion(),strafe:number[]=[];
+  for(let i=0;i<120*6;i++){
+   const t=i*1000/120;
+   if(i<120*3){p.x+=3.6/120;p.z+=(i%120<60?-.38:.38)/120;}
+   else if(i<120*5){p.x+=2.8/120;p.z+=2.8/120;}
+   if(i%6===0)history.push(p,t,t);
+   if(i%(120/hz))continue;
+   motion.update(p,history.sample(t),1/hz);
+   if(i>=120&&i<120*3)strafe.push(motion.groundYaw());
+   if(i===120*4)assert.ok(Math.abs(motion.groundYaw()-Math.PI/4)<.01,'distinct backward diagonal');
+  }
+  assert.ok(Math.max(...strafe)<-1.2&&Math.max(...strafe)-Math.min(...strafe)<.01,`foot lead oscillation at ${hz} Hz`);
+  assert.ok(Math.abs(motion.groundYaw())<.001,'stance settles after braking');
+  motion.dispose();
  }
 });
