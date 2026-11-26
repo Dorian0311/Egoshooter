@@ -118,9 +118,9 @@ export function freightStreet(world:World,granite:T.Texture|null){
 /** Two continuous rail beds and the loading spur share a single material per half-yard.
  * The nearly flush timbers receive building shadows, with their fastenings baked into the grain. */
 export function freightTracks(loadingSpur:boolean){
-  const lines=[{z:-12,first:-117,last:117,gauge:.8},{z:12,first:-117,last:117,gauge:.8}];
+  const lines=[{z:-12,first:-117,last:143,gauge:.8},{z:12,first:-117,last:143,gauge:.8}];
   if(loadingSpur)lines.push({z:-22,first:46,last:76,gauge:.72});
-  return trackwork('Freight yard trackwork',lines,[[-117,0],[0,117]]);
+  return trackwork('Freight yard trackwork',lines,[[-117,0],[0,143]],true);
 }
 
 export function cologneBridgeTracks(){
@@ -128,7 +128,7 @@ export function cologneBridgeTracks(){
   return trackwork('Cologne bridge trackwork',lines,[[-31,31]]);
 }
 
-function trackwork(name:string,lines:{z:number;first:number;last:number;gauge:number}[],sections:[number,number][]){
+function trackwork(name:string,lines:{z:number;first:number;last:number;gauge:number}[],sections:[number,number][],eastBank=false){
   const root=new T.Group();
   root.name=name;
   const atlas=new T.TextureLoader().load('/shooter/environment/freight-track.webp');
@@ -148,6 +148,20 @@ function trackwork(name:string,lines:{z:number;first:number;last:number;gauge:nu
     for(const {z,first,last,gauge} of lines){
       const left=Math.max(first,sectionStart),right=Math.min(last,sectionEnd);
       if(left>=right)continue;
+      if(eastBank&&right>117){
+        // The original sleeper strip spans the first 512 atlas pixels. Gravel
+        // occupies the appended tile and wraps at physical, metre-scale intervals.
+        const gravel=[1.002,.003,1.002,.997,1.498,.997,1.498,.003];
+        const profile=[[-2.6,-1.08],[-1.43,-.008],[1.43,-.008],[2.6,-1.08]];
+        for(let x=117;x<right;x+=2){
+          const end=Math.min(x+2,right);
+          for(let band=0;band<3;band++){
+            const [a,h]=profile[band],[b,k]=profile[band+1];
+            quad([x,h,z+a],[x,k,z+b],[end,k,z+b],[end,h,z+a],'#ffffff',gravel);
+          }
+        }
+        quad([right,-1.08,z+2.6],[right,-1.08,z-2.6],[right,-.008,z-1.43],[right,-.008,z+1.43],'#d5cfc4',gravel);
+      }
       const span=gauge/.615;
       const tones=['#e4d9cb','#fff4e4','#d3cbbe','#eee6db'];
       for(let i=0;first+.40+i*.82<last-.1;i++){
@@ -171,6 +185,7 @@ function trackwork(name:string,lines:{z:number;first:number;last:number;gauge:nu
     }
     const geometry=new T.BufferGeometry();geometry.setIndex(indices);
     geometry.setAttribute('position',new T.Float32BufferAttribute(positions,3));
+    for(let i=0;i<uv.length;i+=2)uv[i]*=512/768;
     geometry.setAttribute('uv',new T.Float32BufferAttribute(uv,2));
     geometry.setAttribute('color',new T.Float32BufferAttribute(colors,3));
     geometry.computeVertexNormals();geometry.computeBoundingSphere();

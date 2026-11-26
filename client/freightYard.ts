@@ -242,10 +242,8 @@ export function freightYard(world:World){
   for(let n=0;n<9;n++)box(-4.37,11.0+n*.21,.95,.05,.033,n%2?.10:.19,rim);
   for(const z of [-12,12]){
     ox=0;oz=z;
-    box(130.2,-.56,0,26.5,1.05,3.0,'#6e6b61');
-    for(let x=117.6;x<143;x+=1.4)box(x,.002,0,.21,.054,2.50,wood,1);
+    // Both continuous rail heads and their raised ballast bed are in freightTracks.
     for(const dz of [-.8,.8]){
-      box(130.2,.061,dz,26.50,.083,.088,metal);
       box(141.5,.55,dz,2.30,.12,.16,metal,0,.52);
     }
     box(142.36,1.08,0,.22,.27,2.42,'#8d5745');
