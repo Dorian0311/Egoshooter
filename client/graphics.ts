@@ -4,6 +4,7 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { WorldOcclusionPass } from './worldOcclusionPass';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js';
+import {skipRedundantSmaaClears} from './smaaClears';
 import {ShaderPass} from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import {fxaaOutputShader} from './fxaaOutput';
 import { graphicsPresets, renderPixelRatio, ResolutionGovernor, type GraphicsQuality } from './graphicsSettings.ts';
@@ -39,6 +40,7 @@ export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
   ao.kernelRadius = .65;
   const bloom = new UnrealBloomPass(new T.Vector2(1, 1), .075, .3, 1.65);
   const smaa = new SMAAPass(1, 1);
+  skipRedundantSmaaClears(smaa);
   // SMAA reads only red and green edge flags. RG16F preserves their filtered values.
   smaa.edgesRT.texture.format = T.RGFormat;
   const blendOutput='gl_FragColor = SMAANeighborhoodBlendingPS( vUv, vOffset, tColor, tDiffuse );';

@@ -97,6 +97,7 @@ export function addIslandStreet(scene:T.Group){
   const cover=solid(lid,57.2,.071,-24.85,pavingMaterial);cover.rotation.x=-Math.PI/2;
   const atlas=loader.load(base+'shops.webp');atlas.colorSpace=T.SRGBColorSpace;atlas.anisotropy=4;
   const facade=new T.MeshStandardMaterial({map:atlas,roughness:.93});
+  const facadeV=(originalV:number)=>(384+2048*originalV)/2432;
   const prints=loader.load(base+'interior-prints.webp');
   prints.colorSpace=T.SRGBColorSpace;prints.anisotropy=4;
   const printMaterial=new T.MeshStandardMaterial({map:prints,roughness:.9});
@@ -143,7 +144,12 @@ export function addIslandStreet(scene:T.Group){
         const wall=cuboid(x,y,z,w,h,d,facade),uv=wall.geometry.getAttribute('uv');
         for(let face=0;face<6;face++)for(let n=0;n<4;n++){
           const i=face*4+n,lettering=role==='sign'&&face===(s.front===1?4:5);
-          uv.setXY(i,.001+.998*uv.getX(i),lettering?(3-index+.70+.298*uv.getY(i))/4:(.003+.99*uv.getY(i))/4);
+          if(s.id==='diner'&&role==='side'&&x>s.x&&face===0){
+            // The east wall faces the open stretch of street toward the quay.
+            uv.setXY(i,(5+670*uv.getX(i))/1024,1-(2428-376*uv.getY(i))/2432);
+          }else{
+            uv.setXY(i,.001+.998*uv.getX(i),facadeV(lettering?(3-index+.70+.298*uv.getY(i))/4:(.003+.99*uv.getY(i))/4));
+          }
         }
       }else if(role==='roof'&&s.id==='diner'){
         cuboid(x,y,z,w,h,d,iron);
@@ -335,7 +341,7 @@ export function addIslandStreet(scene:T.Group){
           // Fired tile bulkhead and separate steel expansion joints under the enamel sign.
           // The original facade atlas also supplies the lettering, so both share its batch.
           const tiles=new T.PlaneGeometry(frameWidth/3,.59),uv=tiles.getAttribute('uv');
-          for(let i=0;i<uv.count;i++)uv.setXY(i,.002+.996*uv.getX(i),1-(494-316*uv.getY(i))/2048);
+          for(let i=0;i<uv.count;i++)uv.setXY(i,.002+.996*uv.getX(i),1-(494-316*uv.getY(i))/2432);
           solid(tiles,center,.525,frontZ+.085,facade).castShadow=true;
           cuboid(center-frameWidth/6+.011,.525,frontZ+.089,.023,.60,.033,chrome).castShadow=false;
           continue;
@@ -346,7 +352,7 @@ export function addIslandStreet(scene:T.Group){
           // of the shop's own atlas strip for each window, viewed from the street.
           const plaque=new T.PlaneGeometry(panelWidth-.055,.40),uv=plaque.getAttribute('uv');
           const u=direction<0?.502:.002;
-          for(let i=0;i<uv.count;i++)uv.setXY(i,u+.496*uv.getX(i),1-(index*512+432-200*uv.getY(i))/2048);
+          for(let i=0;i<uv.count;i++)uv.setXY(i,u+.496*uv.getX(i),1-(index*512+432-200*uv.getY(i))/2432);
           const face=solid(plaque,center,.477,frontZ+s.front*.093,facade);
           face.rotation.y=Math.PI;face.castShadow=true;
           continue;

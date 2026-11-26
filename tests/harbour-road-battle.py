@@ -36,14 +36,31 @@ def write_report(path, report):
     temporary.replace(path)
 
 
-def walk(page, x, z):
+class TurnLifeInterrupted(AssertionError):
+    pass
+
+
+def verify_life(hp, life, expected, site):
+    if hp<=0 or life!=expected:
+        raise TurnLifeInterrupted((site,expected,life,hp))
+
+
+def recover_life(page):
+    page.wait_for_function('harbourQA.player.hp>0',timeout=20000)
+    if not page.evaluate('!!document.pointerLockElement'):
+        page.locator('.city-canvas').click(force=True)
+
+
+def walk(page, x, z, *, life=None):
     deadline = time.monotonic() + 45
     previous = None
     last_turn = 0
     try:
         while time.monotonic() < deadline:
-            px, pz, yaw, hp = page.evaluate('()=>{const p=harbourQA.player;return [p.x,p.z,p.yaw,p.hp]}')
-            assert hp > 0, ('Player fell', px, pz)
+            px, pz, yaw, hp, current_life = page.evaluate('()=>{const p=harbourQA.player;return [p.x,p.z,p.yaw,p.hp,p.life]}')
+            if life is None:
+                life=current_life
+            verify_life(hp,current_life,life,(x,z))
             distance = math.hypot(px-x, pz-z)
             if distance < .60:
                 return
@@ -72,10 +89,6 @@ def walk(page, x, z):
 
 def mouse(page, dx):
     page.evaluate("dx=>document.dispatchEvent(new MouseEvent('mousemove',{movementX:dx,bubbles:true}))", dx)
-
-
-class TurnLifeInterrupted(AssertionError):
-    pass
 
 
 def measure(page, name):
@@ -378,16 +391,17 @@ with sync_playwright() as pw:
             return [b for a,b,c in zip(path,path[1:],path[2:]) if a[0]!=c[0] and a[1]!=c[1]]+[goal]
         for attempt in range(4):
             try:
+                life=page.evaluate('harbourQA.player.life')
                 route=find_route()
                 print('Street approach',route,flush=True)
                 for x,z in route:
-                    walk(page,x,z)
+                    walk(page,x,z,life=life)
                 return
-            except AssertionError:
-                if attempt==3 or page.evaluate('harbourQA.player.hp>0'):
+            except TurnLifeInterrupted as event:
+                if attempt==3:
                     raise
-                page.wait_for_function('harbourQA.player.hp>0',timeout=20000)
-                page.locator('.city-canvas').click(force=True)
+                print('Anmarsch nach Gefechtstod erneut geplant:',event,flush=True)
+                recover_life(page)
     if map_id != 'storm' or os.environ.get('BATTLE_SPAWN_TURNS')=='1' or COMBAT_MOVEMENT:
         # Short walk from the regular western team spawn, then look both ways in the street.
         if map_id=='storm' and COMBAT_MOVEMENT:
@@ -457,10 +471,11 @@ with sync_playwright() as pw:
     for name,x,inside,door in [('Harbour Supply',51,-9,-18),('Diner',63,-36,-28),('Coast Records',75,-9,-18)]:
         for attempt in range(3):
             try:
-                walk(page,x,-23)
+                life=page.evaluate('harbourQA.player.life')
+                walk(page,x,-23,life=life)
                 page.evaluate('window.turnStarted=performance.now();harbourQA.scene.profileFrames(3000)')
-                walk(page,x,door)
-                walk(page,x,inside)
+                walk(page,x,door,life=life)
+                walk(page,x,inside,life=life)
                 entry=read_profile(page,name+' entrance')
                 print('Entered',name,flush=True)
                 if os.environ.get('HARBOUR_SCREENSHOTS')=='1':
@@ -469,16 +484,18 @@ with sync_playwright() as pw:
                     page.evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))')
                 result=measure(page,name)
                 page.evaluate('window.turnStarted=performance.now();harbourQA.scene.profileFrames(3000)')
-                walk(page,x,door)
-                walk(page,x,-23)
-                results.append(dict(entry=entry,turn=result,exit=read_profile(page,name+' exit')))
+                walk(page,x,door,life=life)
+                walk(page,x,-23,life=life)
+                hp,current_life=page.evaluate('[harbourQA.player.hp,harbourQA.player.life]')
+                verify_life(hp,current_life,life,name)
+                results.append(dict(entry=entry,turn=result,exit=read_profile(page,name+' exit'),attempt=attempt+1))
                 write_report(checkpoint,report)
                 break
-            except AssertionError:
-                if attempt==2 or page.evaluate('harbourQA.player.hp>0'):
+            except TurnLifeInterrupted as event:
+                if attempt==2:
                     raise
-                page.wait_for_function('harbourQA.player.hp>0',timeout=20000)
-                page.locator('.city-canvas').click(force=True)
+                print(name,'nach Gefechtstod erneut gestartet:',event,flush=True)
+                recover_life(page)
                 approach()
         print('Exited',name,flush=True)
     page.screenshot(path=str(OUT/f'island-live-{width}x{height}.jpg'),type='jpeg',quality=88)
