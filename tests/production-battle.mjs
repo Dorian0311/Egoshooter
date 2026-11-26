@@ -4,7 +4,7 @@
 // The Python harness accepts the same BATTLE_* and HARBOUR_* options as in development.
 // Set BATTLE_FIXED_TURNS=1 for repeatable 100 ms sweeps from the same compass heading.
 // Set BATTLE_DRAW_PROFILE=1 to trace CPU draw submission and actual WebGL program binds.
-// Set BATTLE_GPU_PROFILE=1 to sample raw GPU frame times, including on High and Ultra.
+// Set BATTLE_GPU_PROFILE=1 to match raw GPU samples to their render frames, including on High and Ultra.
 // Set BATTLE_FRAME_PHASES=1 to attribute long CPU frames to work inside the game callback.
 // BATTLE_SNAPSHOT_PROFILE=1 times client snapshot merge, HUD/event dispatch, scene sync and the test observer.
 // BATTLE_GL_STALLS=1 records existing WebGL calls taking over 2 ms and shadow/composer CPU time.
@@ -106,19 +106,31 @@ try {
         if(!traceGpu)return source;
       }
       if(traceGpu&&path.endsWith('/client/gpuTiming.ts')){
-        const anchor='state.samples++;';
-        assert.equal(source.split(anchor).length,2,'GPU sample hook changed');
+        const hooks=[
+          ['let active:WebGLQuery|null=null,lost=false;', 'const issued=new WeakMap(),samples=[];'],
+          ['pending.length=free.length=0;active=null;state.ms=undefined;state.samples=0;', 'samples.length=0;'],
+          ['state.samples++;', 'samples.push({frame:issued.get(query),ms});'],
+          ['begin(){', 'takeSamples(){return samples.splice(0);},begin(frame){'],
+          ['if(active)gl.beginQuery(extension.TIME_ELAPSED_EXT,active);', 'if(active)issued.set(active,frame);']
+        ];
+        for(const [anchor,code] of hooks){
+          assert.equal(source.split(anchor).length,2,'GPU sample hook changed: '+anchor);
+          source=source.replace(anchor,anchor==='begin(){'?code:anchor+code);
+        }
         gpuHooks++;
-        return source.replace(anchor,anchor+'state.latestSample=ms;');
+        return source;
       }
       if(traceGpu&&path.endsWith('/client/graphics.ts')){
         const sampling='timingEnabled&&adaptiveQuality&&adaptive&&currentTimingFrame%17===0';
         const capture='frameState.gpuMs=gpuTiming.state.ms;';
+        const submit='gpuTiming.begin();';
         assert.equal(source.split(sampling).length,2,'GPU timing condition changed');
         assert.equal(source.split(capture).length,2,'GPU frame capture hook changed');
+        assert.equal(source.split(submit).length,2,'GPU submit hook changed');
         gpuHooks++;
-        return source.replace(sampling,'timingEnabled&&adaptive&&currentTimingFrame%17===0')
-          .replace(capture,capture+'frameState.gpuQueryCount=gpuTiming.state.samples;frameState.gpuQueryMs=gpuTiming.state.latestSample;');
+        return 'let gpuFrameSequence=0;\n'+source.replace(sampling,'timingEnabled&&adaptive&&currentTimingFrame%17===0')
+          .replace(capture,capture+'frameState.gpuFrameId=++gpuFrameSequence;frameState.gpuQueries=gpuTiming.takeSamples();')
+          .replace(submit,'gpuTiming.begin(frameState.gpuFrameId);');
       }
       if(path.endsWith('/client/scene.ts')&&(traceDraws||tracePhases||traceStartup)) {
         if(traceDraws){

@@ -333,11 +333,22 @@ def read_profile(page, name, during_turn=False, route_profile=False):
     if resized:
         result['resolutionChanges']=resized
     if GPU_PROFILE:
-        queries = [current['gpuQueryMs'] for previous, current in zip(frames, frames[1:])
-                   if current.get('gpuQueryCount', 0) > previous.get('gpuQueryCount', 0)]
-        result['gpuSamples'] = len(queries)
-        if queries:
-            result['gpuFrameMs'] = distribution(queries)
+        # Query results arrive asynchronously. Attribute them to the frame that
+        # issued them and the following RAF interval, not the frame that polls.
+        origins = {frame['gpuFrameId']: (frame, following['frameMs']) for frame, following in zip(frames, frames[1:])}
+        samples = []
+        for observed in frames:
+            for query in observed['gpuQueries']:
+                origin = origins.get(query['frame'])
+                if origin is None:
+                    continue
+                frame, interval = origin
+                samples.append(dict(gpuMs=query['ms'],cpuMs=round(frame['cpuMs'], 2),
+                                    nextFrameMs=round(interval, 2),calls=frame['calls']))
+        result['gpuSamples'] = len(samples)
+        if samples:
+            result['gpuFrameMs'] = distribution([sample['gpuMs'] for sample in samples])
+            result['gpuSamplesBeforeDelayedFrames'] = [sample for sample in samples if sample['nextFrameMs'] > 25]
     if FRAME_PHASES:
         result['cpuPhases'] = {phase: distribution(f['phases'][phase] for f in frames)
                                for phase in frames[0]['phases']}

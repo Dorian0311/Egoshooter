@@ -80,13 +80,29 @@ export function createMapDetails(scene:T.Scene,world:World,get:(color:string)=>T
     }
     trunk.rotation.z=(index%2?1:-1)*.015;
     for(let frond=0;frond<9;frond++){
-      const angle=frond*Math.PI*2/9+index*.3,positions:number[]=[],uv:number[]=[],indices:number[]=[];
+      const variation=Math.sin(index*2.7+frond*4.1);
+      const angle=frond*Math.PI*2/9+index*.3+.065*variation,length=3.65+.36*variation;
+      const arch=.84+.21*Math.cos(frond*2.4+index),droop=1.45+.26*variation;
+      const dx=Math.cos(angle),dz=Math.sin(angle),positions:number[]=[],uv:number[]=[],indices:number[]=[];
+      function point(t:number,lateral:number,lift=0){
+        const i=positions.length/3;
+        positions.push(dx*t*length+dz*lateral,b.h+arch*Math.sin(t*Math.PI)-droop*t*t+lift,dz*t*length-dx*lateral);
+        uv.push(t,.5+lateral);return i;
+      }
+      // A continuous rachis carries seven swept pairs. Their folded surfaces
+      // catch light independently and the gaps remain open in the shadow pass.
       for(let n=0;n<=8;n++){
-        const t=n/8,r=t*3.7,width=Math.sin(Math.PI*t)*.48;
-        for(const side of [-1,1]){
-          positions.push(Math.cos(angle)*r+Math.sin(angle)*width*side,b.h+.8*Math.sin(t*Math.PI)-t*t*1.5,Math.sin(angle)*r-Math.cos(angle)*width*side);uv.push(t,(side+1)/2);
-        }
-        if(n<8){const k=n*2;indices.push(k,k+1,k+2,k+1,k+3,k+2);}
+        const t=n/8,width=.012+.085*(1-t);
+        point(t,-width);point(t,width);
+        if(n<8){const k=n*2;indices.push(k,k+2,k+1,k+1,k+2,k+3);}
+      }
+      for(let pair=0;pair<7;pair++)for(const side of [-1,1]){
+        const t=.065+pair*.123+(side===1?.018:0);
+        const spread=(.16+.45*Math.sin(Math.PI*t))*(1+.09*Math.sin(pair*2.6+frond+side));
+        const a=point(t,0),b=point(t+.10,0),tip=point(t+.15,side*spread,-spread*.33);
+        const fold=point(t+.098,side*spread*.48,.022);
+        if(side===1)indices.push(a,b,fold,b,tip,fold,tip,a,fold);
+        else indices.push(a,fold,b,b,fold,tip,tip,fold,a);
       }
       const geometry=new T.BufferGeometry();geometry.setAttribute('position',new T.Float32BufferAttribute(positions,3));geometry.setAttribute('uv',new T.Float32BufferAttribute(uv,2));geometry.setIndex(indices);geometry.computeVertexNormals();
       const leaf=material(frond%3?'#427a3b':'#689d47');leaf.side=T.DoubleSide;
