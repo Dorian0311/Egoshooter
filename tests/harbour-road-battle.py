@@ -20,7 +20,7 @@ NATIVE_TURNS = os.environ.get('BATTLE_NATIVE_TURNS') == '1'
 DRAW_PROFILE = os.environ.get('BATTLE_DRAW_PROFILE') == '1'
 GPU_PROFILE = os.environ.get('BATTLE_GPU_PROFILE') == '1'
 FRAME_PHASES = os.environ.get('BATTLE_FRAME_PHASES') == '1'
-ALPINE_ENDURANCE_SECONDS = int(os.environ.get('BATTLE_ALPINE_ENDURANCE_SECONDS','0'))
+ENDURANCE_SECONDS = int(os.environ.get('BATTLE_ENDURANCE_SECONDS',os.environ.get('BATTLE_ALPINE_ENDURANCE_SECONDS','0')))
 SNAPSHOT_PROFILE = os.environ.get('BATTLE_SNAPSHOT_PROFILE') == '1'
 GL_STALLS = os.environ.get('BATTLE_GL_STALLS') == '1'
 WEAPON_SHADOW = os.environ.get('BATTLE_WEAPON_SHADOW') == '1'
@@ -327,54 +327,63 @@ def start_route_profile(page):
         page.evaluate('battleDrawProbe.start(harbourQA.scene.frameProfile(),true)')
 
 
-def alpine_endurance(page, renderer, bots, difficulty):
-    assert 60 <= ALPINE_ENDURANCE_SECONDS <= 600 and PRODUCTION and FIXED_TURNS and COMBAT_MOVEMENT
+def battle_endurance(page, map_id, renderer, bots, difficulty):
+    assert 60 <= ENDURANCE_SECONDS <= 600 and PRODUCTION and FIXED_TURNS and COMBAT_MOVEMENT
+    west, east = {'alpine': (-64,-42), 'frontline': (-65,-34)}[map_id]
     samples = {'sprint': [], 'turn': []}
     interrupted = 0
     cycles = 0
     start = time.monotonic()
-    while time.monotonic()-start < ALPINE_ENDURANCE_SECONDS:
+    def collect(kind, frames, ranges):
+        for first, end in ranges:
+            if first is None or end is None:
+                continue
+            samples[kind].extend((frames[i]['frameMs'],frames[i-1]) for i in range(max(first,1),end))
+
+    while time.monotonic()-start < ENDURANCE_SECONDS:
         life, x, hp = page.evaluate('[harbourQA.player.life,harbourQA.player.x,harbourQA.player.hp]')
         if not hp:
             recover_life(page)
             continue
         try:
             start_route_profile(page)
-            page.evaluate('window.alpineSprintRanges=[]')
-            walk(page, -42 if x < -53 else -64, 0, life=life)
-            frames, ranges = page.evaluate('[harbourQA.scene.frameProfile(),alpineSprintRanges]')
-            for (first, sprint), (end, _) in zip(ranges, ranges[1:]+[[len(frames), False]]):
-                if sprint:
-                    samples['sprint'].extend(frames[max(1,first):end])
-            page.evaluate('window.alpineSprintRanges=null')
-            measure_turns(page, 'alpine endurance turns')
-            frames, ranges = page.evaluate('[harbourQA.scene.frameProfile(),turnRanges]')
-            for first, end in ranges:
-                samples['turn'].extend(frames[max(first,1):end])
+            page.evaluate('window.enduranceSprintRanges=[]')
+            try:
+                walk(page, east if x < (west+east)/2 else west, 0, life=life)
+            finally:
+                frames, ranges = page.evaluate('[harbourQA.scene.frameProfile(),enduranceSprintRanges]')
+                collect('sprint',frames,[(first,end) for (first,sprint),(end,_) in zip(ranges,ranges[1:]+[[len(frames),False]]) if sprint])
+                page.evaluate('window.enduranceSprintRanges=null')
+            page.evaluate('window.turnRanges=[]')
+            try:
+                measure_turns(page, f'{map_id} endurance turns')
+            finally:
+                frames, ranges = page.evaluate('[harbourQA.scene.frameProfile(),turnRanges]')
+                collect('turn',frames,ranges)
             cycles += 1
         except TurnLifeInterrupted:
             interrupted += 1
             recover_life(page)
         finally:
             page.mouse.up()
-            page.evaluate('window.alpineSprintRanges=null')
 
     def summarize(frames):
-        ms = sorted(f['frameMs'] for f in frames)
+        ms = sorted(interval for interval,_ in frames)
         return dict(frames=len(ms), seconds=round(sum(ms)/1000,2), fps=round(1000*len(ms)/sum(ms),1),
                     p95=round(ms[math.ceil(len(ms)*.95)-1],2), p99=round(ms[math.ceil(len(ms)*.99)-1],2),
-                    worst=round(max(ms),2), over34=sum(t>34 for t in ms), over50=sum(t>50 for t in ms),
-                    slowFrames=sorted(frames,key=lambda f:f['frameMs'],reverse=True)[:5])
+                    worst=round(max(ms),2), over25=sum(t>25 for t in ms), over34=sum(t>34 for t in ms), over50=sum(t>50 for t in ms),
+                    slowFrames=[dict(ms=round(interval,2),previous=previous)
+                                for interval,previous in sorted(frames,key=lambda pair:pair[0],reverse=True)[:5]])
 
     assert cycles >= 3 and all(len(frames)>=100 for frames in samples.values()), (cycles,{k:len(v) for k,v in samples.items()})
-    activity = page.evaluate('''() => ({botShots:alpineBattleActivity.botShots, playerShots:alpineBattleActivity.playerShots,
-        peakCorpses:alpineBattleActivity.peakCorpses})''')
+    activity = page.evaluate('''() => ({botShots:enduranceActivity.botShots, playerShots:enduranceActivity.playerShots,
+        peakCorpses:enduranceActivity.peakCorpses})''')
     assert activity['botShots'] > 0 and activity['playerShots'] > 0, activity
     report = dict(bots=bots,difficulty=difficulty,seed=SEED,seconds=round(time.monotonic()-start,1),cycles=cycles,
                   interrupted=interrupted,renderer=renderer,activity=activity,**{k:summarize(v) for k,v in samples.items()})
-    path = OUT/f'alpine-endurance-{bots}-bots-{ALPINE_ENDURANCE_SECONDS}s-seed{SEED}.json'
+    path = OUT/f'{map_id}-endurance-{bots}-bots-{ENDURANCE_SECONDS}s-seed{SEED}.json'
     write_report(path,report)
-    print('Alpine endurance report:', path, {k:{m:v for m,v in report[k].items() if m!='slowFrames'} for k in samples},flush=True)
+    print('Battle endurance report:', path, {k:{m:v for m,v in report[k].items() if m!='slowFrames'} for k in samples},flush=True)
 
 
 def read_profile(page, name, during_turn=False, route_profile=False):
@@ -565,7 +574,7 @@ with sync_playwright() as pw:
                 }
               }
             }""" if COMBAT_MOVEMENT else '') + ("""
-            const activity=window.alpineBattleActivity;
+            const activity=window.enduranceActivity;
             if(activity&&own){
               activity.peakCorpses=Math.max(activity.peakCorpses,s.corpses.length);
               for(const e of s.events){
@@ -575,11 +584,11 @@ with sync_playwright() as pw:
                 else if(s.players.some(p=>p.id===e.id&&p.kind==='bot'))activity.botShots++;
               }
             }
-            const ranges=window.alpineSprintRanges;
+            const ranges=window.enduranceSprintRanges;
             if(ranges&&own&&scene){
               const sprint=own.hp>0&&own.sprinting;
               if(ranges.at(-1)?.[1]!==sprint)ranges.push([scene.frameProfile().length,sprint]);
-            }""" if ALPINE_ENDURANCE_SECONDS else '') + "};")
+            }""" if ENDURANCE_SECONDS else '') + "};")
     if not PRODUCTION:
         page.route(re.compile(r'/client/App\.tsx(\?|$)'), observe)
         # Keep the measured game on the version it opened with, including during local Vite edits.
@@ -660,6 +669,7 @@ with sync_playwright() as pw:
         return {renderer:gl.getParameter(ext?.UNMASKED_RENDERER_WEBGL??gl.RENDERER),
             drawingBuffer:[gl.drawingBufferWidth,gl.drawingBufferHeight],
             timerQuerySupported:!!gl.getExtension('EXT_disjoint_timer_query_webgl2'),
+            multiDrawSupported:!!gl.getExtension('WEBGL_multi_draw'),
             quality:harbourQA.scene.getRenderStats().quality};
     }""")
     renderer_info['presentation']='window' if headed else 'headless'
@@ -682,10 +692,10 @@ with sync_playwright() as pw:
     assert page.evaluate('harbourQA.state.mapId') == map_id
     assert page.evaluate('harbourQA.state.operation.config.difficulty') == difficulty
     print(map_id,'battle started with',bots,'bots',flush=True)
-    if ALPINE_ENDURANCE_SECONDS:
-        assert map_id=='alpine' and quality=='performance' and bots==7
-        page.evaluate('window.alpineBattleActivity={botShots:0,playerShots:0,peakCorpses:0,seen:new Set()}')
-        alpine_endurance(page,renderer_info,bots,difficulty)
+    if ENDURANCE_SECONDS:
+        assert map_id in ('alpine','frontline') and quality=='performance' and bots==7
+        page.evaluate('window.enduranceActivity={botShots:0,playerShots:0,peakCorpses:0,seen:new Set()}')
+        battle_endurance(page,map_id,renderer_info,bots,difficulty)
         raise SystemExit(0)
     exposed_cells=set()
     def approach(on_failure=None, goal=(51,-23)):

@@ -32,9 +32,10 @@ export function loadEnvironmentUpgrade(scene:T.Scene,world:World,renderer:T.WebG
  if(quarter)architecture.add(quarter);
  root.add(architecture);sources.push(architecture);
  const distantDetails:T.InstancedMesh[]=[],compactFacades=new Set<T.InstancedMesh>(),detailedFacades:T.BatchedMesh[]=[];
+ const frontlineFoliage:T.InstancedMesh[]=[];
  const bakedPlaster:T.Mesh[]=[];
  let visibilityDirty=true,appliedQuality:GraphicsQuality|undefined;
- const multiDraw=world.id==='storm'&&renderer.extensions.has('WEBGL_multi_draw');
+ const multiDraw=(world.id==='storm'||world.id==='frontline')&&renderer.extensions.has('WEBGL_multi_draw');
  const markDetails=(from:number)=>{
   if(world.id!=='storm')return;
   for(let i=from;i<root.children.length;i++){
@@ -109,6 +110,7 @@ export function loadEnvironmentUpgrade(scene:T.Scene,world:World,renderer:T.WebG
     const last=root.children.length;
     const {replaced,meshes}=createFacadeBatches(root,modules);
     detailedFacades.push(...meshes);
+    visibilityDirty=true;
     for(let i=first;i<last;i++){
      const part=root.children[i];
      if(part instanceof T.InstancedMesh&&!Array.isArray(part.material)&&replaced.has(part.material))compactFacades.add(part);
@@ -163,6 +165,10 @@ export function loadEnvironmentUpgrade(scene:T.Scene,world:World,renderer:T.WebG
     const first=root.children.length;
     instanceStaticModel(root,sample,placements,name==='rock_moss_set_01',48);
     markDetails(first);
+    if(world.id==='frontline'){
+     for(const plant of root.children.slice(first))if(plant instanceof T.InstancedMesh)frontlineFoliage.push(plant);
+     visibilityDirty=true;
+    }
    }
   }).catch(error=>console.warn('Natural detail unavailable:',name,error)));
  }
@@ -174,13 +180,19 @@ export function loadEnvironmentUpgrade(scene:T.Scene,world:World,renderer:T.WebG
    if(qualityChanged){quarter?.setQuality(quality);appliedQuality=quality;}
    const distanceLimited=quality==='auto'||quality==='performance';
    if(visibilityDirty||qualityChanged){
-    for(const facade of detailedFacades)facade.visible=!distanceLimited;
+    const useFacadeBatches=world.id==='frontline'?quality==='performance':!distanceLimited;
+    for(const facade of detailedFacades)facade.visible=useFacadeBatches;
+    if(world.id==='frontline')for(const facade of compactFacades)facade.visible=!useFacadeBatches;
    }else if(!distanceLimited){
     return;
    }
    for(const item of distantDetails){
     const bounds=item.boundingSphere;
     if(bounds)item.visible=distanceLimited?bounds.center.distanceToSquared(position)<(45+bounds.radius)**2:!compactFacades.has(item);
+   }
+   for(const plant of frontlineFoliage){
+    const bounds=plant.boundingSphere;
+    plant.visible=quality!=='performance'||!bounds||bounds.center.distanceToSquared(position)<(42+bounds.radius)**2;
    }
    visibilityDirty=false;
   },

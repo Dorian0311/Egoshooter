@@ -319,6 +319,7 @@ export function createScene(
   const environmentUpgrade=loadEnvironmentUpgrade(scene,world,renderer);
   const mapDetails=createMapDetails(scene,world,mat,camera);
   mapDetails.setWaterDetail(quality==='high'||quality==='ultra');
+  mapDetails.setPerformance(quality==='performance');
   const harbourStreet=island?scene.getObjectByName('Harbour Road'):undefined;
   const disposeShopLights=harbourStreet?bakeShopLights(harbourStreet):undefined;
   const claims=island?createHarbourClaims(scene):undefined;
@@ -748,7 +749,7 @@ export function createScene(
       if(e.type==='hit'&&e.id===id)battleAudio.effect('confirm',undefined,.11*settings.volume);
     }
   }
-  const graphics=createGraphics(renderer,scene,camera,sun,graphicsQuality,mapId==='alpine');
+  const graphics=createGraphics(renderer,scene,camera,sun,graphicsQuality,mapId);
   renderer.initTexture(muzzleEffects.texture);
   let civilianShaderMaterial:T.Material|undefined;
   let finishCivilianShaderWarmup:(()=>void)|undefined;
@@ -1091,7 +1092,7 @@ export function createScene(
   let receivedAt = performance.now();
   raf = requestAnimationFrame(frame);
   return {
-    setQuality(value:GraphicsQuality){quality=value;mapDetails.setWaterDetail(value==='high'||value==='ultra');sceneAssets.setQuality(value);alpineGround?.setPerformance(value==='performance');graphics.setQuality(value);},
+    setQuality(value:GraphicsQuality){quality=value;mapDetails.setWaterDetail(value==='high'||value==='ultra');mapDetails.setPerformance(value==='performance');sceneAssets.setQuality(value);alpineGround?.setPerformance(value==='performance');graphics.setQuality(value);},
     setSettings(value:GameSettings){settings=value;if(!value.volume)residentVoice.stop();if(audioOutput)audioOutput.gain.value=value.volume===0?0:1;release();},
     setEnabled(value:boolean){enabled=value;if(!value){residentVoice.stop();release();dragLook=false;if(document.pointerLockElement===canvas)document.exitPointerLock();}},
     startAudio,

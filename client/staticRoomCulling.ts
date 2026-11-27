@@ -16,7 +16,7 @@ export function registerFixedRoom(scene: Scene, object: Object3D, world?:World) 
   const bounds = new Box3().setFromObject(object);
   if (bounds.isEmpty()) return;
   const room:FixedRoom={object,bounds};
-  if(world?.id==='storm'){
+  if(world?.id==='storm'||world?.id==='frontline'){
     if(!wallSections.has(scene))wallSections.set(scene,islandWallSections(world.boxes));
     room.props=object.children.filter((child):child is Mesh=>child instanceof Mesh)
       .map(child=>({object:child,bounds:new Box3().setFromObject(child),revision:-1,blocked:false}));

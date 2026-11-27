@@ -13,6 +13,7 @@ import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js';
 import {skipRedundantSmaaClears} from './smaaClears';
 import {ShaderPass} from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import {fxaaOutputShader} from './fxaaOutput';
+import type {MapId} from '../shared/world';
 import { graphicsPresets, initialResolutionScale, renderPixelRatio, ResolutionGovernor, type GraphicsQuality } from './graphicsSettings.ts';
 import {createWeaponScene} from './weaponScene';
 import {createGpuTiming} from './gpuTiming';
@@ -33,7 +34,7 @@ class WeaponPass extends RenderPass {
 
 export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
   camera: T.PerspectiveCamera, sun: T.DirectionalLight, initialQuality: GraphicsQuality,
-  alpinePass = false) {
+  mapId: MapId) {
   installPointLightCutoff();
   installDirectionalShadowCutoff();
   const composer = new EffectComposer(renderer);
@@ -114,9 +115,9 @@ export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
   function setQuality(value: GraphicsQuality) {
     quality = value;
     resetScale=true;gpuTiming.reset();timingFrame=0;shadowCadence.reset();frameCpuAverage=0;
-    // Alpine's performance profile retains contact shadows, but omits the
-    // directional shadow pass that competes with the busy outdoor view.
-    if(alpinePass)sun.castShadow=quality!=='performance';
+    // Keep contact shadows in the performance profile on the two maps where
+    // directional shadow updates exceed the outdoor frame budget.
+    if(mapId==='alpine'||mapId==='frontline')sun.castShadow=quality!=='performance';
     const preset = graphicsPresets[quality];
     // Spend the automatic/performance shadow budget near the player. Spatial
     // world batches let the smaller light frustum actually reject distant work.
@@ -273,11 +274,10 @@ export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
       frameState.gpuMs=gpuTiming.state.ms;
       const adaptiveQuality=quality==='auto'||quality==='performance';
       const baseRatio=renderPixelRatio(quality,window.devicePixelRatio,w,h);
+      const performanceScale=mapId==='alpine'?.75:mapId==='frontline'?.8:1;
       if(resetScale||w!==width||h!==height){
         const initialScale=initialResolutionScale(quality,baseRatio,w,h);
-        // Start below the Alpine pass's worst outdoor load. Recovery can restore
-        // full resolution after a sustained stretch of fast, steady frames.
-        governor.reset(alpinePass&&quality==='performance'?Math.min(initialScale,.75):initialScale);
+        governor.reset(quality==='performance'?Math.min(initialScale,performanceScale):initialScale);
         resetScale=false;quietViewSeconds=0;
       }
       let scale=1;
@@ -290,6 +290,9 @@ export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
         previousViewPosition.copy(camera.position);
         previousViewRotation.copy(camera.quaternion);
         scale=governor.update(frameSeconds,!document.hidden&&adaptive,gpuTiming.state.ms,cpuMs,quietViewSeconds>=.3);
+        // A quiet view in the freight district can be followed by a much
+        // busier sprint down the open road. Keep headroom for that transition.
+        if(mapId==='frontline'&&quality==='performance')scale=Math.min(scale,performanceScale);
       }
       // Keep the image legible without cancelling adaptive scaling in
       // smaller windows. The HUD is still drawn at native resolution.
@@ -369,7 +372,9 @@ export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
       const sky=scene.background;
       if(skyOccluded)scene.background=null;
       try{
-        if(ao.enabled&&!renderer.xr.isPresenting)rooms.begin(camera,updateShadow?clippedShadow:undefined,quality==='high');
+        const compactFreight=mapId==='frontline'&&quality==='performance';
+        if((ao.enabled||compactFreight)&&!renderer.xr.isPresenting)
+          rooms.begin(camera,updateShadow?clippedShadow:undefined,quality==='high'||compactFreight);
         render.groupActorUpdates=true;
         composer.render(dt);
       }finally{

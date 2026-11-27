@@ -78,8 +78,15 @@ diffuseColor*=mix(battleBase,battleDirt,battleMask);
 diffuseColor.rgb*=mix(.88,1.05,battleN);
 `);
   const terrainScale=control?'':'*2.4';
-  shader.fragmentShader=shader.fragmentShader.replace('#include <roughnessmap_fragment>',`float roughnessFactor=roughness;roughnessFactor*=mix(texture2D(roughnessMap,vRoughnessMapUv${terrainScale}).g,texture2D(battleSoilRough,vRoughnessMapUv).g,battleMask);`);
-  shader.fragmentShader=shader.fragmentShader.replace('#include <normal_fragment_maps>',`vec3 battleNormal=mix(texture2D(normalMap,vNormalMapUv${terrainScale}).xyz,texture2D(battleSoilNormal,vNormalMapUv).xyz,battleMask)*2.0-1.0;battleNormal.xy*=normalScale;normal=normalize(tbn*battleNormal);`);
+  shader.fragmentShader=shader.fragmentShader.replace('#include <roughnessmap_fragment>',`float roughnessFactor=roughness;
+#ifdef USE_ROUGHNESSMAP
+roughnessFactor*=mix(texture2D(roughnessMap,vRoughnessMapUv${terrainScale}).g,texture2D(battleSoilRough,vRoughnessMapUv).g,battleMask);
+#endif`);
+  shader.fragmentShader=shader.fragmentShader.replace('#include <normal_fragment_maps>',`
+#ifdef USE_NORMALMAP
+vec3 battleNormal=mix(texture2D(normalMap,vNormalMapUv${terrainScale}).xyz,texture2D(battleSoilNormal,vNormalMapUv).xyz,battleMask)*2.0-1.0;
+battleNormal.xy*=normalScale;normal=normalize(tbn*battleNormal);
+#endif`);
  };
  material.customProgramCacheKey=()=>`battle-terrain-v3-${world.id}`;
  const mesh=new T.Mesh(createTerrainGeometry(world),material);
@@ -87,5 +94,10 @@ diffuseColor.rgb*=mix(.88,1.05,battleN);
  mesh.receiveShadow=true;
  // Let opaque buildings fill depth before shading the terrain behind them.
  if(world.id==='storm'||world.id==='frontline')mesh.renderOrder=1;
- return {mesh,dispose(){control?.dispose();material.dispose();}};
+ return {mesh,setPerformance(enabled:boolean){
+  if(world.id!=='frontline')return;
+  const normalMap=enabled?null:base.normalMap,roughnessMap=enabled?null:base.roughnessMap;
+  if(material.normalMap===normalMap&&material.roughnessMap===roughnessMap)return;
+  material.normalMap=normalMap;material.roughnessMap=roughnessMap;material.needsUpdate=true;
+ },dispose(){control?.dispose();material.dispose();}};
 }

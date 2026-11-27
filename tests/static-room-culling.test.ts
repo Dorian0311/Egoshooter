@@ -37,11 +37,11 @@ test('room culling preserves offscreen casters for the world pass and restores o
   geometry.dispose(); material.dispose();
 });
 
-test('Island wall coverage preserves the sun caster, doorway, near plane and restores furnishings', () => {
+for(const mapId of ['storm','frontline'] as const)test(`${mapId} wall coverage preserves the sun caster, doorway, near plane and restores furnishings`, () => {
   const scene=new Scene(), room=new Group(), camera=new PerspectiveCamera(70,1,.1,100);
   const material=new MeshBasicMaterial(), geometry=new BoxGeometry(.3,.3,.3);
   const wall={x:-1.5,y:1,z:-3,w:2,h:3,d:.45,kind:'wall'};
-  const world={id:'storm' as const,name:'test',subtitle:'',opponent:'test',opponentCode:'QA',boxes:[wall],buildings:[],spawns:{de:[],fr:[]}};
+  const world={id:mapId,name:'test',subtitle:'',opponent:'test',opponentCode:'QA',boxes:[wall],buildings:[],spawns:{de:[],fr:[]}};
   function prop(x:number,casts=false){
     const mesh=new Mesh(geometry,material);
     mesh.position.set(x,1,-6);mesh.castShadow=casts;room.add(mesh);return mesh;

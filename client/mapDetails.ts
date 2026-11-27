@@ -442,6 +442,7 @@ export function createMapDetails(scene:T.Scene,world:World,get:(color:string)=>T
     update(seconds:number){ocean?.update(seconds);if(radarRotor)radarRotor.rotation.y=seconds*.25;},
     setDampness(damp:boolean){wetGround?.(damp);street?.setDampness(damp);},
     setWaterDetail(enabled:boolean){waterDetail=enabled;ocean?.setDetail(waterDetail&&waterSunlight);},
+    setPerformance(enabled:boolean){terrain?.setPerformance(enabled);},
     setWaterSunlight(enabled:boolean){waterSunlight=enabled;ocean?.setDetail(waterDetail&&waterSunlight);},
     dispose(){
       if(roadSurface){roadSurface.map=roadSurface.normalMap=null;roadSurface.dispose();}
