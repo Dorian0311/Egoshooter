@@ -158,10 +158,9 @@ export function alpinePassGround(world:World,snow:T.MeshStandardMaterial,road:T.
       vec3 snowSample=texture2D(map,vMapUv).rgb;
       // With no road weights, both blends are zero even at the brightest snow texel.
       bool pureSnow=(layer.r==0.0 && layer.g==0.0);
-      vec2 settUV=vMapUv*1.48,gritUV=vMapUv*2.7,roadNormalUV=vNormalMapUv*1.48;
+      vec2 settUV=vMapUv*1.48,gritUV=vMapUv*2.7;
       vec2 settDx=dFdx(settUV),settDy=dFdy(settUV);
       vec2 gritDx=dFdx(gritUV),gritDy=dFdy(gritUV);
-      vec2 roadNormalDx=dFdx(roadNormalUV),roadNormalDy=dFdy(roadNormalUV);
       vec3 setts=vec3(0.0),grit=vec3(0.0);
       if(!pureSnow){
         setts=textureGrad(passSetts,settUV,settDx,settDy).rgb;
@@ -174,11 +173,15 @@ export function alpinePassGround(world:World,snow:T.MeshStandardMaterial,road:T.
       vec3 street=mix(setts*vec3(.79,.74,.66),setts*vec3(.58,.57,.53),packed*.68);
       diffuseColor.rgb*=mix(mix(ice,grit*.81+vec3(.065),gravel*.77),street,paving);`);
     shader.fragmentShader=shader.fragmentShader.replace('#include <normal_fragment_maps>',`
+      #ifdef USE_NORMALMAP
+      vec2 roadNormalUV=vNormalMapUv*1.48;
+      vec2 roadNormalDx=dFdx(roadNormalUV),roadNormalDy=dFdy(roadNormalUV);
       vec3 snowNormal=texture2D(normalMap,vNormalMapUv).xyz;
       vec3 micro=snowNormal;
       if(!pureSnow)micro=mix(snowNormal,textureGrad(passSettsNormal,roadNormalUV,roadNormalDx,roadNormalDy).xyz,paving);
       micro=micro*2.-1.;
-      micro.xy*=normalScale*mix(1.,.62,packed);normal=normalize(tbn*micro);`);
+      micro.xy*=normalScale*mix(1.,.62,packed);normal=normalize(tbn*micro);
+      #endif`);
     shader.fragmentShader=shader.fragmentShader.replace('#include <roughnessmap_fragment>','float roughnessFactor=roughness-packed*.23+gravel*.035;');
     if(lampGlass){
       shader.uniforms.fortLampNight=lampNight;
@@ -200,7 +203,12 @@ export function alpinePassGround(world:World,snow:T.MeshStandardMaterial,road:T.
   // and pavement retain priority over the ground drawn underneath them.
   mesh.renderOrder=1;
   if(lampGlass)mesh.add(lampGlass);
-  return Object.assign(mesh,{setNight(enabled:boolean){
+  return Object.assign(mesh,{setPerformance(enabled:boolean){
+    const normalMap=enabled?null:snow.normalMap;
+    if(material.normalMap===normalMap)return;
+    material.normalMap=normalMap;
+    material.needsUpdate=true;
+  },setNight(enabled:boolean){
     if(lampGlass){lampGlass.visible=enabled;lampNight.value=enabled?1:0;}
   }});
 }

@@ -7,17 +7,17 @@ errors=[]
 with sync_playwright() as p:
  browser=p.chromium.launch(headless=True,channel=os.getenv("PLAYWRIGHT_CHANNEL"))
  context=browser.new_context(viewport={'width':1366,'height':900})
- context.add_init_script("if(!localStorage.getItem('eiserne-front-changelog'))localStorage.setItem('eiserne-front-changelog','island-zeitreise-grafik-2026-11-26')")
+ context.add_init_script("if(!localStorage.getItem('eiserne-front-changelog'))localStorage.setItem('eiserne-front-changelog','island-zeitreise-grafik-2026-11-26-2')")
  page=context.new_page();page.on('pageerror',lambda error:errors.append(str(error)))
  page.goto('http://127.0.0.1:5173/',wait_until='networkidle')
  dialog=page.get_by_role('dialog',name='Neu in Eiserne Front',exact=True)
- expect(dialog).to_be_visible();assert dialog.locator('.release-notes-content section').count()==11
- for heading in ['Island und Zeitreise','Begehbare Harbour Road','Post vom Hafenamt','Historische Architektur','Union-Lichtspiele','Flüssigeres Umsehen']:
+ expect(dialog).to_be_visible();assert dialog.locator('.release-notes-content section').count()==12
+ for heading in ['Flüssig am Alpenpass','Island und Zeitreise','Begehbare Harbour Road','Post vom Hafenamt','Historische Architektur','Union-Lichtspiele','Flüssigeres Umsehen']:
   expect(dialog.get_by_role('heading',name=heading,exact=True)).to_have_count(1)
  assert 'unregelmäßige Schneeverwehungen' in dialog.inner_text()
  page.screenshot(path=str(output/'changelog-desktop.png'))
  page.get_by_role('button',name='Verstanden · zur App',exact=True).click();expect(dialog).to_have_count(0)
- assert page.evaluate("localStorage.getItem('eiserne-front-changelog')")=='island-zeitreise-grafik-2026-11-26-2'
+ assert page.evaluate("localStorage.getItem('eiserne-front-changelog')")=='island-zeitreise-grafik-2026-11-27'
  page.reload(wait_until='networkidle');expect(dialog).to_have_count(0)
  page.get_by_label('Benutzername',exact=True).fill('ChangelogQA'+str(int(time.time()))[-7:])
  page.get_by_label('Passwort',exact=True).fill('Local-only-Changelog-4921')
@@ -33,7 +33,7 @@ with sync_playwright() as p:
  phone.screenshot(path=str(output/'changelog-mobile.png'))
  phone.keyboard.press('Escape');expect(mobile_dialog).to_have_count(0)
  phone.reload(wait_until='networkidle');expect(mobile_dialog).to_have_count(0)
- report={'passed':['First start shows all eleven change groups','Acknowledgement persists across reload','Login does not reopen acknowledged release notes','Fresh browser profile sees release notes','Mobile dialog fits viewport with scrollable changes','Escape acknowledges the update'],'errors':errors}
+ report={'passed':['First start shows all twelve change groups','Acknowledgement persists across reload','Login does not reopen acknowledged release notes','Fresh browser profile sees release notes','Mobile dialog fits viewport with scrollable changes','Escape acknowledges the update'],'errors':errors}
  (output/'changelog-report.json').write_text(json.dumps(report,indent=2),encoding='utf-8')
  print(json.dumps(report));browser.close()
  if errors:raise SystemExit(1)

@@ -7,7 +7,7 @@ import {createBattleAudio,advanceFootstep,footstepMaterial,type StepState} from 
 import {createAnatomy} from './anatomy';
 import {createGore} from './gore';
 import {createRemainsScene} from './remainsScene';
-import {acquireWorldWeapon,retainWorldWeaponSession,worldWeaponStats} from './worldWeapons';
+import {acquireWorldWeapon,prewarmWorldWeapons,retainWorldWeaponSession,worldWeaponStats} from './worldWeapons';
 import {createOperationScene,createThrowingStarGeometry} from './operationScene';
 import {isCrawling,shotStability,eyeHeight as actorEyeHeight,eyePosition as actorEyePosition,armCount,hasLost} from '../shared/injuries';
 import {createInteriors} from './interiors';
@@ -86,6 +86,7 @@ export function createScene(
   // World and viewmodel depth live in the composer's render targets.
   const renderer = new T.WebGLRenderer({ canvas, antialias: false, depth: false, preserveDrawingBuffer, powerPreference: 'high-performance' });
   const releaseWorldWeapons=retainWorldWeaponSession();
+  if(!readOnly&&mapId!=='alpine')prewarmWorldWeapons();
   renderer.shadowMap.enabled = true;
   renderer.localClippingEnabled = true;
   renderer.shadowMap.type = T.PCFSoftShadowMap;
@@ -155,6 +156,7 @@ export function createScene(
     limestone.wrapS=limestone.wrapT=T.RepeatWrapping;
     limestone.anisotropy=Math.min(4,renderer.capabilities.getMaxAnisotropy());
     alpineGround=alpinePassGround(world,snow,mat('#8b8a7d'),stone);
+    alpineGround.setPerformance(quality==='performance');
     scene.add(alpineGround);
     addAlpineBackdrop(scene,limestone,snow.map!);
     alpineBoulders=alpineBoulderMaterial(stone,snow,limestone);
@@ -746,7 +748,7 @@ export function createScene(
       if(e.type==='hit'&&e.id===id)battleAudio.effect('confirm',undefined,.11*settings.volume);
     }
   }
-  const graphics=createGraphics(renderer,scene,camera,sun,graphicsQuality);
+  const graphics=createGraphics(renderer,scene,camera,sun,graphicsQuality,mapId==='alpine');
   renderer.initTexture(muzzleEffects.texture);
   let civilianShaderMaterial:T.Material|undefined;
   let finishCivilianShaderWarmup:(()=>void)|undefined;
@@ -773,7 +775,7 @@ export function createScene(
     if(stopped)return;
     // Bot equipment can resolve after actor preparation. Use the actual shared materials and buffers
     // before a turn first exposes a distant bot and forces the driver to link its weapon program.
-    const names=['kar98k','luger','mp40','g36'] as const;
+    const names=mapId==='alpine'?['kar98k','luger','mp40'] as const:['kar98k','luger','mp40','g36'] as const;
     const assets=readOnly?[]:await Promise.all(names.map(name=>acquireWorldWeapon(name).catch(()=>null)));
     const equipment=new T.Group();
     try{
@@ -1089,7 +1091,7 @@ export function createScene(
   let receivedAt = performance.now();
   raf = requestAnimationFrame(frame);
   return {
-    setQuality(value:GraphicsQuality){quality=value;mapDetails.setWaterDetail(value==='high'||value==='ultra');sceneAssets.setQuality(value);graphics.setQuality(value);},
+    setQuality(value:GraphicsQuality){quality=value;mapDetails.setWaterDetail(value==='high'||value==='ultra');sceneAssets.setQuality(value);alpineGround?.setPerformance(value==='performance');graphics.setQuality(value);},
     setSettings(value:GameSettings){settings=value;if(!value.volume)residentVoice.stop();if(audioOutput)audioOutput.gain.value=value.volume===0?0:1;release();},
     setEnabled(value:boolean){enabled=value;if(!value){residentVoice.stop();release();dragLook=false;if(document.pointerLockElement===canvas)document.exitPointerLock();}},
     startAudio,

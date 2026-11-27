@@ -157,6 +157,18 @@ export async function loadHuman(uniformId?:UniformId,civilian=false){
  coatSource??=fetch('/shooter/characters/greatcoat/rigged.json').then(r=>{if(!r.ok)throw Error('Mantelmodell konnte nicht geladen werden');return r.json() as Promise<CoatPiece[]>;}).catch(e=>{coatSource=null;throw e;});
  return {...data,coat:await coatSource};
 }
+let helmetSource:Promise<T.Group>|undefined;
+const sharedHelmetMeshes=new WeakSet<T.BufferGeometry>();
+function loadHelmet(){
+ helmetSource??=new GLTFLoader().loadAsync('/shooter/models/m40-helmet.glb').then(({scene})=>{
+  scene.rotation.y=Math.PI;scene.scale.setScalar(1.1);
+  scene.traverse(object=>{if(object instanceof T.Mesh)object.castShadow=true;});
+  batchWeaponMeshes(scene);
+  scene.traverse(object=>{if(object instanceof T.Mesh)sharedHelmetMeshes.add(object.geometry);});
+  return scene;
+ }).catch(error=>{helmetSource=undefined;throw error;});
+ return helmetSource;
+}
 export function createHuman(data:HumanData|BonusCharacterData|CivilianCharacterData,team:'de'|'fr',map:MapId,uniform:T.MeshStandardMaterial,uniformId:UniformId=defaultUniform(team,map),civilian=false,residentId?:string,purpose:'actor'|'remains'='actor'){
  if('civilian' in data)return createCivilianCharacter(data,residentId,purpose);
  if('character' in data)return createBonusCharacter(data,purpose);
@@ -228,10 +240,9 @@ export function createHuman(data:HumanData|BonusCharacterData|CivilianCharacterD
   const helmetColor=team==='de'?'#454c42':'#5d684b';
   const material=islandKit?detailMaterial(helmetColor):new T.MeshStandardMaterial({color:helmetColor,roughness:.85});
   if(!islandKit)ownMaterials.push(material);const helmet=new T.Mesh(new T.SphereGeometry(.17,16,islandKit?9:12,0,Math.PI*2,0,Math.PI*.6),material);helmet.castShadow=islandKit;helmet.position.y=-.025;helmet.scale.set(.75,.55,.9);headgear.add(helmet);
-  if(team==='de'&&!uniformId.startsWith('task-'))void new GLTFLoader().loadAsync('/shooter/models/m40-helmet.glb').then(gltf=>{
-    if(isDisposed){gltf.scene.traverse(o=>{if(o instanceof T.Mesh){o.geometry.dispose();for(const m of Array.isArray(o.material)?o.material:[o.material])m.dispose();}});return;}
-    helmet.visible=false;gltf.scene.rotation.y=Math.PI;gltf.scene.scale.setScalar(1.1);
-    gltf.scene.traverse(o=>{if(o instanceof T.Mesh){o.castShadow=true;for(const m of Array.isArray(o.material)?o.material:[o.material])ownMaterials.push(m);}});batchWeaponMeshes(gltf.scene);headgear.add(gltf.scene);
+  if(team==='de'&&!uniformId.startsWith('task-'))void loadHelmet().then(source=>{
+    if(isDisposed)return;
+    helmet.visible=false;headgear.add(source.clone(true));
   }).catch(error=>console.warn('Helm konnte nicht geladen werden',error));
 
  }else if(!civilian){
@@ -420,6 +431,6 @@ export function createHuman(data:HumanData|BonusCharacterData|CivilianCharacterD
   if(!civilian&&!held.mount.visible)relaxFingers();
   if(motion)bootContact.update(player.y,player.grounded&&player.hp>0&&!player.crouching&&(motion.state()==='walk'||motion.state()==='jog'),player.yaw+motion.groundYaw());
  }
- function dispose(){if(isDisposed)return;isDisposed=true;held.dispose();motion?.dispose();for(const garment of coatMeshes)(garment.material as T.Material).dispose();for(const texture of coatTextures)releaseCoatTexture(texture);releaseSurface(skinImage);if(cloth)releaseSurface(garmentImage);skeleton.dispose();ownMaterials.forEach(m=>m.dispose());group.traverse(o=>{if(o instanceof T.Mesh){o.geometry.dispose();o.userData.ownedTexture?.dispose();}});group.clear();}
+ function dispose(){if(isDisposed)return;isDisposed=true;held.dispose();motion?.dispose();for(const garment of coatMeshes)(garment.material as T.Material).dispose();for(const texture of coatTextures)releaseCoatTexture(texture);releaseSurface(skinImage);if(cloth)releaseSurface(garmentImage);skeleton.dispose();ownMaterials.forEach(m=>m.dispose());group.traverse(o=>{if(o instanceof T.Mesh){if(!sharedHelmetMeshes.has(o.geometry))o.geometry.dispose();o.userData.ownedTexture?.dispose();}});group.clear();}
  return {group,update,dispose,setHeadVisible:(visible:boolean)=>{headBone.scale.setScalar(visible?1:.001);}};
 }

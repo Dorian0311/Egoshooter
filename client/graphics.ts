@@ -32,7 +32,8 @@ class WeaponPass extends RenderPass {
 }
 
 export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
-  camera: T.PerspectiveCamera, sun: T.DirectionalLight, initialQuality: GraphicsQuality) {
+  camera: T.PerspectiveCamera, sun: T.DirectionalLight, initialQuality: GraphicsQuality,
+  alpinePass = false) {
   installPointLightCutoff();
   installDirectionalShadowCutoff();
   const composer = new EffectComposer(renderer);
@@ -113,6 +114,9 @@ export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
   function setQuality(value: GraphicsQuality) {
     quality = value;
     resetScale=true;gpuTiming.reset();timingFrame=0;shadowCadence.reset();frameCpuAverage=0;
+    // Alpine's performance profile retains contact shadows, but omits the
+    // directional shadow pass that competes with the busy outdoor view.
+    if(alpinePass)sun.castShadow=quality!=='performance';
     const preset = graphicsPresets[quality];
     // Spend the automatic/performance shadow budget near the player. Spatial
     // world batches let the smaller light frustum actually reject distant work.
@@ -196,7 +200,7 @@ export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
       const restoreDepth:(()=>void)[]=[];
       let weaponShadowDrawn=false;
       try{
-        for(const [name,property] of sources){
+        for(const [name,property] of sun.castShadow?sources:[]){
           if(warmedShadowSources.has(name))continue;
           const caster=scene.getObjectByName(name)?.getObjectByProperty(property,true);
           if(!(caster instanceof T.Mesh))continue;
@@ -216,7 +220,7 @@ export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
           }
           prepared.push(name);
         }
-        if(wound||prepared.length||(!actorsOnly&&!sun.shadow.map)){
+        if(sun.castShadow&&(wound||prepared.length||(!actorsOnly&&!sun.shadow.map))){
           renderer.shadowMap.needsUpdate=true;
           renderer.render(scene,camera);
           prepared.forEach(name=>{if(name!=='world-kar98k'||weaponShadowDrawn)warmedShadowSources.add(name);});
@@ -270,7 +274,11 @@ export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
       const adaptiveQuality=quality==='auto'||quality==='performance';
       const baseRatio=renderPixelRatio(quality,window.devicePixelRatio,w,h);
       if(resetScale||w!==width||h!==height){
-        governor.reset(initialResolutionScale(quality,baseRatio,w,h));resetScale=false;quietViewSeconds=0;
+        const initialScale=initialResolutionScale(quality,baseRatio,w,h);
+        // Start below the Alpine pass's worst outdoor load. Recovery can restore
+        // full resolution after a sustained stretch of fast, steady frames.
+        governor.reset(alpinePass&&quality==='performance'?Math.min(initialScale,.75):initialScale);
+        resetScale=false;quietViewSeconds=0;
       }
       let scale=1;
       if(adaptiveQuality&&resolutionScaling){
@@ -312,7 +320,7 @@ export function createGraphics(renderer: T.WebGLRenderer, scene: T.Scene,
       }
       // Snap in LIGHT space, not world space, so shadows remain stable while moving.
       if(cpuMs!==undefined&&Number.isFinite(cpuMs))frameCpuAverage+=(Math.min(50,cpuMs)-frameCpuAverage)*.1;
-      const updateShadow=shadowCadence.update(dt,quality,quality==='performance'||quality==='auto'&&(scale<=.9||frameCpuAverage>13));
+      const updateShadow=sun.castShadow&&shadowCadence.update(dt,quality,quality==='performance'||quality==='auto'&&(scale<=.9||frameCpuAverage>13));
       frameState.shadowUpdated=updateShadow;
       if(updateShadow){
         const texel = shadowExtent * 2 / sun.shadow.mapSize.x;

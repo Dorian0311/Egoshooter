@@ -7,7 +7,7 @@ import {createThrowingStarGeometry} from './operationScene';
 import {batchWeaponProxy} from './weaponProxy';
 import {loadCombatHands,sampleCombatHands} from './combatHands';
 import {harvestAnimation} from './remainsAnimation';
-import {acquireWorldWeapon,prewarmWorldWeapons,type WorldWeapon} from './worldWeapons';
+import {acquireWorldWeapon,type WorldWeapon} from './worldWeapons';
 
 export type ArmChain={upper:T.Object3D;lower:T.Object3D;hand:T.Object3D};
 type SavedArm=ArmChain&{rest:T.Quaternion[];reach:number;shoulder:T.Vector3;finger?:T.Object3D;gripFinger?:T.Object3D};
@@ -49,7 +49,6 @@ export function rigArm(root:T.Group,names:string[]):ArmChain|undefined{const [up
 export function createActorEquipment(root:T.Group,chains:Partial<Record<'armL'|'armR',ArmChain>>,civilian=false,embeddedSaw=false,weaponModels=true){
  void loadCombatHands();
  const armed=weaponModels;
- if(armed&&!civilian)prewarmWorldWeapons();
  root.userData.armChains=chains;
  root.updateWorldMatrix(true,true);
  const arms=Object.fromEntries(Object.entries(chains).filter(([,chain])=>!!chain).map(([key,chain])=>{const upper=root.worldToLocal(chain!.upper.getWorldPosition(new T.Vector3())),lower=root.worldToLocal(chain!.lower.getWorldPosition(new T.Vector3())),hand=root.worldToLocal(chain!.hand.getWorldPosition(new T.Vector3()));return [key,{...chain,rest:[chain!.upper.quaternion.clone(),chain!.lower.quaternion.clone(),chain!.hand.quaternion.clone()],reach:(upper.distanceTo(lower)+lower.distanceTo(hand))*.985,shoulder:upper}];})) as Partial<Record<'armL'|'armR',SavedArm>>;
